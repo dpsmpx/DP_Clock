@@ -3,18 +3,26 @@
 [versions]
 agp = "9.4.1"
 kotlin = "2.4.21"
+ksp = "2.3.12"
 compose-bom = "2026.09.00"
 activity-compose = "1.13.0"
+core-ktx = "1.19.1"
 lifecycle = "2.11.0"
+room = "2.8.5"
 junit = "4.13.2"
 
 [libraries]
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
+core-ktx = { module = "androidx.core:core-ktx", version.ref = "core-ktx" }
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity-compose" }
 lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 junit = { module = "junit:junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

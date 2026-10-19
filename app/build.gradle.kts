@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -16,8 +17,8 @@ android {
         applicationId = "com.dpsmpx.dpclock"
         minSdk = 31
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.0.0"
+        versionCode = 2
+        versionName = "0.1.0"
     }
 
     signingConfigs {
@@ -34,6 +35,8 @@ android {
 
     buildFeatures {
         compose = true
+        // Версия — в «О приложении».
+        buildConfig = true
     }
 
     compileOptions {
@@ -62,11 +65,20 @@ kotlin {
     }
 }
 
+ksp {
+    // Схемы базы — в репозитории: по ним пишутся и проверяются миграции (D-009, п. 4).
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
+    implementation(project(":core:model"))
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)
+    implementation(libs.core.ktx)
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.runtime.compose)
+    implementation(libs.room.runtime)
+    ksp(libs.room.compiler)
 
     testImplementation(libs.junit)
 }

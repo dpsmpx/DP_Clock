@@ -1,6 +1,6 @@
 # Карта экранов
 
-- **Статус:** проект интерфейса MVP ([D-006](../../DECISIONS/D-006-MVP.md)) и места для версии 1.0 ([D-007](../../DECISIONS/D-007-VERSION-1.0-SCOPE.md), [D-011](../../DECISIONS/D-011-VERSION-1.0-ADDITIONS.md)); кода ещё нет. Решения автора об интерфейсе — [D-010](../../DECISIONS/D-010-MVP-INTERFACE.md).
+- **Статус:** интерфейс MVP ([D-006](../../DECISIONS/D-006-MVP.md)) реализован в версии 0.1.0 ([D-012](../../DECISIONS/D-012-MVP-IMPLEMENTATION.md)); места для версии 1.0 ([D-007](../../DECISIONS/D-007-VERSION-1.0-SCOPE.md), [D-011](../../DECISIONS/D-011-VERSION-1.0-ADDITIONS.md)) — пометка **1.0**. Решения автора об интерфейсе — [D-010](../../DECISIONS/D-010-MVP-INTERFACE.md).
 - **Данные:** [DATA_MODEL.md](../ARCHITECTURE/DATA_MODEL.md). **Механизмы и разрешения:** [D-008](../../DECISIONS/D-008-PLATFORM-MECHANISMS.md).
 - **Оформление:** Material 3, цвета от обоев, тема как в системе (D-004). Облик — свой; приложения-ориентиры не копируются (D-003).
 

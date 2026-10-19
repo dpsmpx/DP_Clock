@@ -13,7 +13,7 @@
 | Команда | Что делает |
 |---|---|
 | `./gradlew :app:assembleDebug` | отладочный APK — `app/build/outputs/apk/debug/app-debug.apk` |
-| `./gradlew :app:testDebugUnitTest` | unit-тесты на JVM |
+| `./gradlew :core:model:test :app:testDebugUnitTest` | unit-тесты на JVM: правила времени (`:core:model`) и приложения |
 | `./gradlew :app:lintDebug` | Lint; предупреждения — ошибки |
 | `tools/debug-apk.sh` | APK из закоммиченного дерева — `build/debug-apk/debug-<коммит>.apk` и его SHA-256 |
 | `tools/debug-apk.sh --publish` | то же и новым коммитом в ветку `debug-builds` |
@@ -37,6 +37,10 @@ systemProp.org.gradle.internal.repository.initial.backoff=2000
 ```
 
 Две сборки в одном каталоге одновременно не запускать: они портят промежуточные файлы друг друга.
+
+## База
+
+Схема Room выгружается при сборке в `app/schemas/` и коммитится: по ней пишутся и проверяются миграции (D-009, п. 4). Изменилась схема — новая версия базы и миграция.
 
 ## Версии
 

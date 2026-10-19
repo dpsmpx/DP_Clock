@@ -1,0 +1,368 @@
+package com.dpsmpx.dpclock.data
+
+import android.content.Context
+import com.dpsmpx.dpclock.model.Alarm
+import com.dpsmpx.dpclock.model.AlarmRules
+import com.dpsmpx.dpclock.model.Repeat
+import com.dpsmpx.dpclock.model.Settings
+import com.dpsmpx.dpclock.model.SignalOutcome
+import com.dpsmpx.dpclock.model.SignalSource
+import com.dpsmpx.dpclock.model.StepSignal
+import com.dpsmpx.dpclock.model.Stopwatch
+import com.dpsmpx.dpclock.model.TimerPreset
+import com.dpsmpx.dpclock.model.TimerProgram
+import com.dpsmpx.dpclock.model.TimerRules
+import com.dpsmpx.dpclock.model.TimerRun
+import com.dpsmpx.dpclock.model.TimerState
+import com.dpsmpx.dpclock.platform.Clocks
+import com.dpsmpx.dpclock.platform.Notifier
+import com.dpsmpx.dpclock.platform.Ringing
+import com.dpsmpx.dpclock.platform.Scheduler
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.io.File
+import java.time.Instant
+import java.time.ZoneId
+import java.util.UUID
+
+/** Состояние срабатывания (OccurrenceEntity.state). */
+private object Occ {
+    const val SCHEDULED = "SCHEDULED"
+    const val RINGING = "RINGING"
+    const val SNOOZED = "SNOOZED"
+}
+
+/** Что делать с пришедшим будильником. */
+sealed interface AlarmFire {
+    data class Ring(val alarm: Alarm, val scheduledAt: Long) : AlarmFire
+    data object Skip : AlarmFire
+}
+
+/** Что делать с концом шага таймера. */
+data class TimerFire(val run: TimerRun, val signal: StepSignal)
+
+/**
+ * Все изменения данных и расписаний — здесь, по одному за раз: после каждого
+ * изменения будильники Android и уведомления приводятся в соответствие с базой.
+ */
+class ClockRepository(
+    context: Context,
+    db: ClockDatabase,
+    private val scheduler: Scheduler,
+    private val notifier: Notifier,
+) {
+    private val dao = db.dao()
+    private val mutex = Mutex()
+    private val runtimeMarker = File(context.deviceStorage().noBackupFilesDir, "runtime-owner")
+    private var ready = false
+
+    val alarms: Flow<List<Alarm>> = dao.alarms().map { list -> list.map { it.toModel() } }
+    val settings: Flow<Settings> = dao.settings().map { it.toModel() }
+    val presets: Flow<List<TimerPreset>> = dao.presets().map { list -> list.map { it.toModel() } }
+    val timerRuns: Flow<List<TimerRun>> = dao.timerRuns().map { list -> list.map { it.toModel() } }
+    val stopwatch: Flow<Stopwatch> = dao.stopwatch().map { it.toModel() }
+
+    /** Отложенные будильники: id → конец «Отложить». */
+    val snoozed: Flow<Map<String, Long>> = dao.occurrencesFlow().map { list ->
+        list.filter { it.state == Occ.SNOOZED && it.snoozedUntil != null }.associate { it.alarmId to it.snoozedUntil!! }
+    }
+
+    private suspend fun <T> locked(block: suspend () -> T): T = mutex.withLock {
+        if (!ready) {
+            // Копия из резервной копии или с другого устройства: идущие таймеры,
+            // секундомер и срабатывания относятся к тому устройству (DATA_MODEL.md, п. 8).
+            if (!runtimeMarker.exists()) {
+                dao.clearTimerRuns()
+                dao.clearStopwatch()
+                dao.clearOccurrences()
+                runtimeMarker.parentFile?.mkdirs()
+                runtimeMarker.createNewFile()
+            }
+            ready = true
+        }
+        block()
+    }
+
+    suspend fun currentSettings(): Settings = locked { dao.currentSettings().toModel() }
+
+    suspend fun updateSettings(change: (Settings) -> Settings) = locked {
+        dao.upsertSettings(change(dao.currentSettings().toModel()).toEntity())
+    }
+
+    // Будильники
+
+    /** Новый будильник — однократный и включённый (SCREEN_MAP.md, п. 1). Возвращает момент срабатывания. */
+    suspend fun addAlarm(hour: Int, minute: Int): Long = locked {
+        val alarm = Alarm(UUID.randomUUID().toString(), hour, minute, Repeat.Once, enabled = true, createdAt = now())
+        dao.upsertAlarm(alarm.toEntity())
+        scheduleAlarm(alarm)
+    }
+
+    /** Сохранить изменённый будильник; прежнее срабатывание и «Отложить» отменяются. */
+    suspend fun saveAlarm(alarm: Alarm): Long = locked {
+        dao.upsertAlarm(alarm.toEntity())
+        resetOccurrence(alarm.id)
+        scheduleAlarm(alarm)
+    }
+
+    suspend fun setAlarmEnabled(id: String, enabled: Boolean) = locked {
+        val alarm = dao.alarm(id)?.toModel() ?: return@locked
+        val updated = alarm.copy(enabled = enabled)
+        dao.upsertAlarm(updated.toEntity())
+        resetOccurrence(id)
+        scheduleAlarm(updated)
+    }
+
+    suspend fun deleteAlarm(id: String): Alarm? = locked {
+        val alarm = dao.alarm(id)?.toModel() ?: return@locked null
+        if (dao.occurrence(id)?.state == Occ.RINGING) return@locked null
+        dao.deleteAlarm(id)
+        dao.deleteOccurrence(id)
+        scheduler.cancelAlarm(id)
+        notifier.cancelSnoozed(id)
+        alarm
+    }
+
+    /** «Отменить» после удаления. */
+    suspend fun restoreAlarm(alarm: Alarm) = locked {
+        dao.upsertAlarm(alarm.toEntity())
+        scheduleAlarm(alarm)
+    }
+
+    /** Будильник Android пришёл: звонить, пропустить или ничего (устаревший). */
+    suspend fun onAlarmFired(id: String, scheduledAt: Long): AlarmFire = locked {
+        val alarm = dao.alarm(id)?.toModel() ?: return@locked AlarmFire.Skip
+        val occ = dao.occurrence(id)
+        val expected = when (occ?.state) {
+            Occ.SCHEDULED -> occ.scheduledAt
+            Occ.SNOOZED -> occ.snoozedUntil
+            else -> null
+        }
+        if (occ == null || expected != scheduledAt) {
+            // Устаревший интент: расписание уже другое.
+            if (occ?.state != Occ.RINGING) scheduleAlarm(alarm)
+            return@locked AlarmFire.Skip
+        }
+        val now = now()
+        if (AlarmRules.isMissed(scheduledAt, now)) {
+            missAlarm(alarm, occ.scheduledAt, now)
+            return@locked AlarmFire.Skip
+        }
+        dao.upsertOccurrence(occ.copy(state = Occ.RINGING, ringingSince = now, snoozedUntil = null))
+        // Однократный будильник выполнен — выключается сразу, «Отложить» его не возвращает в список.
+        if (alarm.repeat == Repeat.Once) dao.upsertAlarm(alarm.copy(enabled = false).toEntity())
+        notifier.cancelSnoozed(id)
+        AlarmFire.Ring(alarm, occ.scheduledAt)
+    }
+
+    /** «Отложить»: возвращает конец интервала или null, если будильник не звонит. */
+    suspend fun snoozeAlarm(id: String): Long? = locked {
+        val occ = dao.occurrence(id)?.takeIf { it.state == Occ.RINGING } ?: return@locked null
+        val now = now()
+        val until = now + dao.currentSettings().toModel().snoozeMinutes * 60_000L
+        dao.upsertOccurrence(occ.copy(state = Occ.SNOOZED, snoozedUntil = until, ringingSince = null))
+        log(SignalSource.ALARM, id, occ.scheduledAt, occ.ringingSince ?: now, SignalOutcome.SNOOZED)
+        scheduler.setAlarm(id, until)
+        dao.alarm(id)?.toModel()?.let { notifier.snoozed(it, until) }
+        until
+    }
+
+    /** «Выключить» — из сигнала или из уведомления об отложенном; автовыключение — тоже сюда. */
+    suspend fun stopAlarm(id: String, outcome: SignalOutcome) = locked {
+        val occ = dao.occurrence(id)
+        val now = now()
+        dao.deleteOccurrence(id)
+        scheduler.cancelAlarm(id)
+        notifier.cancelSnoozed(id)
+        val alarm = dao.alarm(id)?.toModel() ?: return@locked
+        if (occ != null) log(SignalSource.ALARM, id, occ.scheduledAt, occ.ringingSince ?: now, outcome)
+        if (outcome == SignalOutcome.AUTO_STOPPED) notifier.missedAlarm(alarm, occ?.scheduledAt ?: now, autoStopped = true)
+        scheduleAlarm(alarm)
+    }
+
+    /**
+     * Пересчитать все расписания (D-008, п. 5): запуск приложения, загрузка,
+     * смена времени и пояса, обновление, выдача разрешения. Идемпотентно.
+     */
+    suspend fun rescheduleAll() = locked {
+        val now = now()
+        val occurrences = dao.occurrences().associateBy { it.alarmId }
+        for (alarm in dao.allAlarms().map { it.toModel() }) {
+            val occ = occurrences[alarm.id]
+            val due = when (occ?.state) {
+                Occ.SCHEDULED -> occ.scheduledAt
+                Occ.SNOOZED -> occ.snoozedUntil
+                Occ.RINGING -> {
+                    // Звонил, но процесс умер или телефон перезагрузился — сигнал потерян.
+                    if (!Ringing.isAlarmRinging(alarm.id)) {
+                        dao.deleteOccurrence(alarm.id)
+                        missAlarm(alarm, occ.scheduledAt, now)
+                    }
+                    continue
+                }
+                else -> null
+            }
+            when {
+                // Срок прошёл, пока будильники были отменены (принудительная остановка,
+                // выключенный телефон): недавний — прозвонит сейчас, давний — пропуск.
+                due != null && due <= now && occ != null ->
+                    if (AlarmRules.isMissed(due, now)) {
+                        dao.deleteOccurrence(alarm.id)
+                        missAlarm(alarm, occ.scheduledAt, now)
+                    } else {
+                        scheduler.setAlarm(alarm.id, due)
+                    }
+                occ?.state == Occ.SNOOZED -> scheduler.setAlarm(alarm.id, due!!)
+                else -> {
+                    if (occ != null) dao.deleteOccurrence(alarm.id)
+                    scheduleAlarm(alarm)
+                }
+            }
+        }
+        syncTimers()
+        notifier.stopwatch(dao.currentStopwatch().toModel())
+    }
+
+    private suspend fun resetOccurrence(id: String) {
+        val occ = dao.occurrence(id) ?: return
+        if (occ.state == Occ.RINGING) return
+        dao.deleteOccurrence(id)
+        notifier.cancelSnoozed(id)
+    }
+
+    /** Поставить ближайшее срабатывание; возвращает его момент (0 — будильник выключен). */
+    private suspend fun scheduleAlarm(alarm: Alarm): Long {
+        val occ = dao.occurrence(alarm.id)
+        when (occ?.state) {
+            Occ.RINGING -> return 0L
+            Occ.SNOOZED -> {
+                scheduler.setAlarm(alarm.id, occ.snoozedUntil!!)
+                return occ.snoozedUntil
+            }
+        }
+        if (!alarm.enabled) {
+            dao.deleteOccurrence(alarm.id)
+            scheduler.cancelAlarm(alarm.id)
+            return 0L
+        }
+        val at = AlarmRules.nextTrigger(alarm, Instant.ofEpochMilli(now()), ZoneId.systemDefault()).toEpochMilli()
+        dao.upsertOccurrence(OccurrenceEntity(alarm.id, at, Occ.SCHEDULED, snoozedUntil = null, ringingSince = null))
+        scheduler.setAlarm(alarm.id, at)
+        return at
+    }
+
+    /** Пропуск (DATA_MODEL.md, п. 2): уведомление, однократный выключается, повторяющийся — к следующему. */
+    private suspend fun missAlarm(alarm: Alarm, scheduledAt: Long, now: Long) {
+        log(SignalSource.ALARM, alarm.id, scheduledAt, now, SignalOutcome.MISSED)
+        notifier.missedAlarm(alarm, scheduledAt, autoStopped = false)
+        val next = if (alarm.repeat == Repeat.Once) alarm.copy(enabled = false) else alarm
+        dao.upsertAlarm(next.toEntity())
+        dao.deleteOccurrence(alarm.id)
+        scheduleAlarm(next)
+    }
+
+    // Таймеры
+
+    suspend fun startTimer(program: TimerProgram, name: String, presetId: String?) = locked {
+        val run = TimerRules.start(UUID.randomUUID().toString(), presetId, name, program, Clocks.moment())
+        dao.upsertTimerRun(run.toEntity())
+        syncTimers()
+    }
+
+    suspend fun pauseTimer(id: String) = updateTimer(id) { TimerRules.pause(it, Clocks.moment()) }
+
+    suspend fun resumeTimer(id: String) = updateTimer(id) { TimerRules.resume(it, Clocks.moment()) }
+
+    suspend fun resetTimer(id: String) = updateTimer(id) { TimerRules.reset(it) }
+
+    suspend fun addMinute(id: String) = updateTimer(id) { TimerRules.addMinute(it, Clocks.moment()) }
+
+    private suspend fun updateTimer(id: String, change: (TimerRun) -> TimerRun) = locked {
+        val run = dao.timerRun(id)?.toModel() ?: return@locked
+        dao.upsertTimerRun(change(run).toEntity())
+        syncTimers()
+    }
+
+    suspend fun deleteTimer(id: String) = locked {
+        dao.deleteTimerRun(id)
+        scheduler.cancelTimer(id)
+        notifier.cancelTimer(id)
+    }
+
+    /** Звонящий таймер выключен: закончившийся удаляется, промежуточный шаг идёт дальше. */
+    suspend fun stopTimerSignal(id: String, outcome: SignalOutcome) = locked {
+        val run = dao.timerRun(id)?.toModel() ?: return@locked
+        val now = now()
+        log(SignalSource.TIMER, id, now, now, outcome)
+        if (run.state == TimerState.RINGING) {
+            dao.deleteTimerRun(id)
+            scheduler.cancelTimer(id)
+            notifier.cancelTimer(id)
+            if (outcome == SignalOutcome.AUTO_STOPPED) notifier.timerFinished(run)
+        }
+    }
+
+    /** Будильник Android на конец шага пришёл. */
+    suspend fun onTimerStepEnded(id: String): TimerFire? = locked {
+        val run = dao.timerRun(id)?.toModel()?.takeIf { it.state == TimerState.RUNNING } ?: return@locked null
+        val now = Clocks.moment()
+        val result = TimerRules.advance(run, now)
+        var signal = if (result.late) StepSignal.NONE else result.signal
+        if (result.run.state == TimerState.RINGING && result.late) {
+            // Закончился, пока телефон был выключен: только уведомление (DATA_MODEL.md, п. 5).
+            dao.deleteTimerRun(id)
+            scheduler.cancelTimer(id)
+            notifier.cancelTimer(id)
+            notifier.timerFinished(run)
+            log(SignalSource.TIMER, id, now.utc, now.utc, SignalOutcome.MISSED)
+            signal = StepSignal.NONE
+        } else {
+            dao.upsertTimerRun(result.run.toEntity())
+        }
+        syncTimers()
+        TimerFire(result.run, signal)
+    }
+
+    /** Будильники Android и уведомления — по идущим таймерам. */
+    private suspend fun syncTimers() {
+        val now = Clocks.moment()
+        for (stored in dao.allTimerRuns().map { it.toModel() }) {
+            var run = stored
+            val endsAt = run.stepEndsAt
+            if (run.state == TimerState.RUNNING && endsAt != null) {
+                val rebased = endsAt.rebasedTo(now)
+                if (rebased != endsAt) {
+                    run = run.copy(stepEndsAt = rebased)
+                    dao.upsertTimerRun(run.toEntity())
+                }
+                scheduler.setTimer(run.id, rebased.elapsed, TimerRules.signalAtStepEnd(run) == StepSignal.FULL)
+            } else {
+                scheduler.cancelTimer(run.id)
+            }
+            if (run.state == TimerState.RINGING) notifier.cancelTimer(run.id) else notifier.timer(run, now)
+        }
+    }
+
+    suspend fun savePreset(preset: TimerPreset) = locked { dao.upsertPreset(preset.toEntity()) }
+
+    suspend fun deletePreset(id: String) = locked { dao.deletePreset(id) }
+
+    // Секундомер
+
+    suspend fun updateStopwatch(change: (Stopwatch) -> Stopwatch) = locked {
+        val updated = change(dao.currentStopwatch().toModel())
+        dao.upsertStopwatch(updated.toEntity())
+        notifier.stopwatch(updated)
+    }
+
+    private suspend fun log(source: SignalSource, sourceId: String, scheduledAt: Long, firedAt: Long, outcome: SignalOutcome) {
+        dao.insertEvent(
+            SignalEventEntity(UUID.randomUUID().toString(), source.name, sourceId, scheduledAt, firedAt, outcome.name),
+        )
+        dao.trimEvents()
+    }
+
+    private fun now(): Long = System.currentTimeMillis()
+}

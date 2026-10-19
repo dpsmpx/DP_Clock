@@ -30,3 +30,4 @@ dependencyResolutionManagement {
 rootProject.name = "DP_Clock"
 
 include(":app")
+include(":core:model")

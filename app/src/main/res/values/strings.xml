@@ -1,4 +1,133 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Строки интерфейса: английский по умолчанию, русский — values-ru (D-006, п. 8). -->
 <resources>
     <string name="app_name" translatable="false">DP Clock</string>
+
+    <string name="section_alarms">Alarms</string>
+    <string name="section_timers">Timers</string>
+    <string name="section_stopwatch">Stopwatch</string>
+    <string name="section_clock">Clock</string>
+    <string name="settings">Settings</string>
+    <string name="back">Back</string>
+
+    <string name="cancel">Cancel</string>
+    <string name="done">Done</string>
+    <string name="save">Save</string>
+    <string name="delete">Delete</string>
+    <string name="edit">Edit</string>
+    <string name="undo">Undo</string>
+    <string name="fix">Fix</string>
+    <string name="allow">Allow</string>
+    <string name="not_now">Not now</string>
+    <string name="start">Start</string>
+    <string name="pause">Pause</string>
+    <string name="resume">Resume</string>
+    <string name="reset">Reset</string>
+    <string name="stop">Stop</string>
+    <string name="paused">Paused</string>
+    <string name="add_minute">+1 min</string>
+    <string name="plus_minutes">+%1$d min</string>
+    <string name="minutes_value">%1$d min</string>
+    <string name="never">Never</string>
+
+    <!-- Будильники -->
+    <string name="new_alarm">New alarm</string>
+    <string name="edit_alarm">Alarm</string>
+    <string name="alarms_empty">No alarms yet</string>
+    <string name="no_enabled_alarms">No alarms on</string>
+    <string name="next_alarm_in">Next alarm %1$s</string>
+    <string name="rings_in">Alarm rings %1$s</string>
+    <string name="in_days_hours_minutes">in %1$d d %2$d h %3$d min</string>
+    <string name="in_hours_minutes">in %1$d h %2$d min</string>
+    <string name="in_minutes">in %1$d min</string>
+    <string name="alarm_deleted">Alarm deleted</string>
+    <string name="repeat">Repeat</string>
+    <string name="repeat_once">Once</string>
+    <string name="repeat_daily">Every day</string>
+    <string name="repeat_weekdays">Mon–Fri</string>
+    <string name="alarm_order">Sort alarms</string>
+    <string name="order_time_of_day">By time of day</string>
+    <string name="order_next">By next alarm</string>
+    <string name="order_created">By creation</string>
+    <string name="input_keyboard">Type the time</string>
+    <string name="input_dial">Use the dial</string>
+    <string name="snoozed_until">Snoozed until %1$s</string>
+
+    <!-- Сигнал -->
+    <string name="ring_alarm_title">Alarm</string>
+    <string name="snooze">Snooze</string>
+    <string name="dismiss">Dismiss</string>
+    <string name="ring_timer_finished">Time\'s up</string>
+    <string name="ring_step_finished">Step finished</string>
+    <string name="ring_timer_named_finished">%1$s is done</string>
+    <string name="ring_step_named_finished">%1$s: step finished</string>
+    <string name="snoozed_title">Alarm snoozed</string>
+    <string name="missed_title">Missed alarm</string>
+    <string name="missed_auto_stop">%1$s — the alarm rang and stopped by itself</string>
+    <string name="missed_phone_off">%1$s — the phone was off or the clock moved</string>
+    <string name="signal_blocked_title">The alarm could not ring</string>
+    <string name="signal_blocked_text">Open DP Clock and check the permissions</string>
+    <string name="channel_ring">Ringing alarms and timers</string>
+    <string name="channel_missed">Missed alarms</string>
+    <string name="channel_ongoing">Running timers and stopwatch</string>
+
+    <!-- Таймеры -->
+    <string name="timer_default_name">Timer</string>
+    <string name="new_timer">New timer</string>
+    <string name="presets">Presets</string>
+    <string name="presets_empty">Save a timer you use often: tap to start, long-press to edit.</string>
+    <string name="new_preset">New preset</string>
+    <string name="edit_preset">Preset</string>
+    <string name="save_as_preset">Save as preset</string>
+    <string name="preset_name">Name</string>
+    <string name="add_step">Add step</string>
+    <string name="step_name">Step name (optional)</string>
+    <string name="signal_at_end">Signal at the end</string>
+    <string name="signal_short">Short</string>
+    <string name="signal_full">Full</string>
+    <string name="cycles">Rounds</string>
+    <string name="total_duration">Total: %1$s</string>
+    <string name="step_of">Step %1$d of %2$d</string>
+    <string name="cycle_of">Round %1$d of %2$d</string>
+    <plurals name="steps_count">
+        <item quantity="one">%1$d step</item>
+        <item quantity="other">%1$d steps</item>
+    </plurals>
+    <string name="backspace">Erase</string>
+    <string name="move_up">Move up</string>
+    <string name="move_down">Move down</string>
+
+    <!-- Секундомер -->
+    <string name="lap">Lap</string>
+    <string name="lap_number">Lap</string>
+    <string name="lap_time">Lap time</string>
+    <string name="lap_total">Total</string>
+    <string name="lap_best">best</string>
+    <string name="lap_worst">worst</string>
+
+    <!-- Настройки и надёжность -->
+    <string name="settings_alarms">Alarms</string>
+    <string name="snooze_interval">Snooze length</string>
+    <string name="auto_stop">Silence after</string>
+    <string name="settings_reliability">Permissions and reliability</string>
+    <string name="permission_ok">Allowed</string>
+    <string name="permission_notifications_title">Allow notifications?</string>
+    <string name="permission_notifications_text">Without notifications DP Clock cannot show a ringing alarm or a finished timer.</string>
+    <string name="issue_notifications">Notifications are off</string>
+    <string name="issue_notifications_text">Alarms and timers will not be shown when they ring.</string>
+    <string name="issue_full_screen">Full-screen alarms are off</string>
+    <string name="issue_full_screen_text">A ringing alarm will not appear over the lock screen.</string>
+    <string name="issue_exact">Exact alarms are off</string>
+    <string name="issue_exact_text">Alarms may ring late.</string>
+    <string name="issue_xiaomi">Set up your Xiaomi phone</string>
+    <string name="issue_xiaomi_text">Autostart and battery settings may stop alarms.</string>
+    <string name="xiaomi_title">Xiaomi, Redmi, POCO</string>
+    <string name="xiaomi_hints">In the app settings: turn on Autostart; set Battery saver to No restrictions; in Recents, lock DP Clock.</string>
+    <string name="xiaomi_done">I did it</string>
+    <string name="xiaomi_not_done">Show the reminder again</string>
+    <string name="open_app_settings">Open app settings</string>
+    <string name="about">About</string>
+    <string name="version_value">Version %1$s</string>
+    <string name="licenses">Open source libraries</string>
+    <string name="licenses_text">Jetpack Compose, Material 3, AndroidX Activity, Lifecycle and Room, Kotlin standard library and coroutines — Apache License 2.0.</string>
 </resources>

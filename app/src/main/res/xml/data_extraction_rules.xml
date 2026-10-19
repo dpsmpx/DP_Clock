@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Данных у версии 0.0.0 нет: облачная копия и перенос на новое устройство ничего не берут. -->
+<!--
+  Системная копия и перенос на новое устройство (D-006, п. 9): база в хранилище
+  устройства — будильники, пресеты и настройки. Идущие таймеры, секундомер и
+  срабатывания после восстановления сбрасываются (DATA_MODEL.md, п. 8): метка
+  в no_backup не переносится, и приложение по её отсутствию очищает их.
+-->
 <data-extraction-rules>
     <cloud-backup>
-        <exclude domain="root" path="." />
-        <exclude domain="device_root" path="." />
-        <exclude domain="external" path="." />
+        <include domain="device_database" path="dpclock.db" />
     </cloud-backup>
     <device-transfer>
-        <exclude domain="root" path="." />
-        <exclude domain="device_root" path="." />
-        <exclude domain="external" path="." />
+        <include domain="device_database" path="dpclock.db" />
     </device-transfer>
 </data-extraction-rules>

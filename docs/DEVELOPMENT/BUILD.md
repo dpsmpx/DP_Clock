@@ -27,6 +27,17 @@
 
 Поставить на телефон: открыть файл в ветке `debug-builds` на GitHub, скачать и открыть его на телефоне; при первой установке разрешить установку из этого источника.
 
+## Сбои загрузки
+
+Первая сборка скачивает Gradle, плагины и библиотеки. Maven Central иногда отвечает `429 Too Many Requests` на всплеск запросов: это сбой сети, а не кода, — сборку повторить. Чтобы Gradle сам повторял запросы дольше, в `~/.gradle/gradle.properties` (настройки машины, не репозитория):
+
+```
+systemProp.org.gradle.internal.repository.max.tentatives=8
+systemProp.org.gradle.internal.repository.initial.backoff=2000
+```
+
+Две сборки в одном каталоге одновременно не запускать: они портят промежуточные файлы друг друга.
+
 ## Версии
 
 - Зависимости и плагины — `gradle/libs.versions.toml`; новая зависимость — со строкой в [docs/PROVENANCE.md](../PROVENANCE.md).

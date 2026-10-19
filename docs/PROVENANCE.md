@@ -1,6 +1,20 @@
 # Происхождение заимствованного
 
-Здесь записан каждый файл, взятый в DP_Clock извне. Правила заимствования — решение [D-003](../DECISIONS/D-003-OWN-CODE-AND-BORROWED-FILES.md); при расхождении право оно.
+Здесь записаны каждая зависимость и каждый файл, взятые в DP_Clock извне. Правила заимствования файлов — решение [D-003](../DECISIONS/D-003-OWN-CODE-AND-BORROWED-FILES.md); при расхождении право оно.
+
+## Зависимости
+
+Версии — `gradle/libs.versions.toml`; новая зависимость добавляется вместе со строкой здесь.
+
+| Что | Откуда | Лицензия | Где |
+|---|---|---|---|
+| Jetpack Compose (BOM, Material 3) | Google Maven, `androidx.compose` | Apache 2.0 | в APK |
+| Activity Compose | Google Maven, `androidx.activity` | Apache 2.0 | в APK |
+| Lifecycle Runtime Compose | Google Maven, `androidx.lifecycle` | Apache 2.0 | в APK |
+| Стандартная библиотека Kotlin, корутины | Maven Central, `org.jetbrains.kotlin`, `org.jetbrains.kotlinx` | Apache 2.0 | в APK |
+| Android Gradle Plugin, плагин Kotlin Compose | Google Maven, Maven Central | Apache 2.0 | только сборка |
+| Gradle wrapper (`gradle/wrapper/gradle-wrapper.jar`) | Gradle, версия 9.8.2 | Apache 2.0 | только сборка |
+| JUnit 4 | Maven Central, `junit:junit` | EPL 1.0 | только тесты |
 
 ## Как взять файл из AOSP DeskClock
 

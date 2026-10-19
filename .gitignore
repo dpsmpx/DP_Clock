@@ -1,0 +1,11 @@
+# Сборка и кэши Gradle
+build/
+.gradle/
+.kotlin/
+# Путь к Android SDK — у каждой машины свой (tools/setup-android-sdk.sh)
+local.properties
+# IDE
+.idea/
+*.iml
+# APK — только в ветке debug-builds (D-005)
+*.apk

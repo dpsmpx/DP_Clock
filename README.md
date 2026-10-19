@@ -30,7 +30,7 @@
 ## Текущее состояние
 - Принято решение разрабатывать приложение с нуля.
 - Исходный код сторонних приложений не переносился.
-- Стек — Kotlin, Jetpack Compose, Material 3; Android 12+; application ID `com.dpsmpx.dpclock` (D-004). Не определены полный MVP и устройства для приёмки.
+- Стек — Kotlin, Jetpack Compose, Material 3; Android 12+; application ID `com.dpsmpx.dpclock` (D-004). MVP и первое устройство приёмки (Redmi Note 13, Android 15) — [D-006](DECISIONS/D-006-MVP.md).
 - Версия 0.0.0: на экране только текущее время в круге. Отладочные APK — в ветке `debug-builds`, файл `debug-<коммит>.apk` ([D-005](DECISIONS/D-005-DEBUG-BUILDS.md)).
 - Следующий этап — исследование требований Android, функциональных ориентиров и проектирование минимального работающего ядра.
 

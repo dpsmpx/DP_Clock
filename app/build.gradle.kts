@@ -15,7 +15,7 @@ android {
     defaultConfig {
         applicationId = "com.dpsmpx.dpclock"
         minSdk = 31
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "0.0.0"
     }
@@ -48,6 +48,9 @@ android {
     lint {
         warningsAsErrors = true
         abortOnError = true
+        // Сверяет версии с сетью: новый выпуск чужой библиотеки ронял бы сборку без
+        // изменений в коде. Версии меняются осознанно, в gradle/libs.versions.toml.
+        disable += "NewerVersionAvailable"
     }
 }
 

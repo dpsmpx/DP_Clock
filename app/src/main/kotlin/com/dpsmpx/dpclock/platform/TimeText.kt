@@ -6,6 +6,8 @@ import android.icu.text.DecimalFormatSymbols
 import android.icu.util.Calendar
 import android.icu.util.TimeZone
 import com.dpsmpx.dpclock.model.Hms
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
 import android.text.format.DateFormat as SystemTimeFormat
@@ -33,6 +35,24 @@ object TimeText {
 
     /** Момент — местным временем. */
     fun time(context: Context, epochMillis: Long): String = format(context).format(Date(epochMillis))
+
+    /** Дата по языку системы: «пн, 27 окт.»; год — если не текущий или [withYear]. */
+    fun date(context: Context, date: LocalDate, withYear: Boolean = date.year != LocalDate.now().year): String {
+        val locale = context.resources.configuration.locales[0]
+        val pattern = SystemTimeFormat.getBestDateTimePattern(locale, if (withYear) "EEEdMMMyyyy" else "EEEdMMM")
+        return DateTimeFormatter.ofPattern(pattern, locale).format(date)
+    }
+
+    /** Дата коротко, без дня недели: «27 окт.»; год — если не текущий. */
+    fun shortDate(context: Context, date: LocalDate): String {
+        val locale = context.resources.configuration.locales[0]
+        val pattern = SystemTimeFormat.getBestDateTimePattern(locale, if (date.year != LocalDate.now().year) "dMMMyyyy" else "dMMM")
+        return DateTimeFormatter.ofPattern(pattern, locale).format(date)
+    }
+
+    /** Период дат: «1 янв. – 9 янв.»; одна дата — одна. */
+    fun dateRange(context: Context, start: LocalDate, end: LocalDate): String =
+        if (start == end) shortDate(context, start) else shortDate(context, start) + " – " + shortDate(context, end)
 
     /** Обратный отсчёт: 1:05:03 или 5:03. */
     fun countdown(millis: Long): String = hms(Hms.ofCountdown(millis))

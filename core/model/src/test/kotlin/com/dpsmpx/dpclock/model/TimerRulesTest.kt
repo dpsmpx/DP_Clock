@@ -149,4 +149,49 @@ class TimerRulesTest {
         assertEquals(Hms(0, 0, 0, 0), Hms.ofCountdown(0L))
         assertEquals(Hms(1, 1, 1, 50), Hms.of(3_661_500L))
     }
+
+    @Test
+    fun programWithSoundsAndSleepRoundTrips() {
+        val program = TimerProgram(
+            listOf(
+                TimerStep(1_000L, "работа", fullSignal = false, sound = AlarmSound.Builtin("marimba")),
+                TimerStep(2_000L, "отдых", fullSignal = false),
+                TimerStep(3_000L, "", sound = AlarmSound.Default),
+                TimerStep(4_000L, "a:b;c", sound = AlarmSound.Ringtone("content://m/1?x=1;y", "Утро: ранее")),
+            ),
+            cycles = 2,
+            sound = AlarmSound.Builtin("dawn"),
+        )
+        assertEquals(program, TimerProgram.decode(program.encode()))
+        // Шаг без своего звука звучит звуком программы; «мелодия телефона» у шага — своя.
+        assertEquals(AlarmSound.Builtin("dawn"), program.soundOf(1))
+        assertEquals(AlarmSound.Default, program.soundOf(2))
+        assertEquals(TimerProgram.sleep(900_000L), TimerProgram.decode(TimerProgram.sleep(900_000L).encode()))
+    }
+
+    @Test
+    fun presetsOfVersion1StillDecode() {
+        val old = TimerProgram.decode("v1;3;30000:s:%D1%87%D0%B0%D0%B9;10000:f:")
+        assertEquals(TimerProgram(listOf(TimerStep(30_000L, "чай", fullSignal = false), TimerStep(10_000L)), cycles = 3), old)
+    }
+
+    @Test
+    fun sleepTimerEndsWithoutRinging() {
+        val run = TimerRules.start("s", null, "", TimerProgram.sleep(60_000L), t0)
+        assertEquals(StepSignal.SLEEP, TimerRules.signalAtStepEnd(run))
+        val done = TimerRules.advance(run, t0 + 60_000L)
+        assertEquals(StepSignal.SLEEP, done.signal)
+        assertEquals(TimerState.RINGING, done.run.state)
+    }
+
+    @Test
+    fun advanceReportsTheSoundOfTheEndedStep() {
+        val program = TimerProgram(
+            listOf(TimerStep(1_000L, fullSignal = false, sound = AlarmSound.Builtin("pulse")), TimerStep(1_000L)),
+            sound = AlarmSound.Builtin("chime"),
+        )
+        val run = TimerRules.start("r", null, "", program, t0)
+        assertEquals(AlarmSound.Builtin("pulse"), TimerRules.advance(run, t0 + 1_000L).sound)
+        assertEquals(AlarmSound.Builtin("chime"), TimerRules.advance(run, t0 + 2_000L).sound)
+    }
 }

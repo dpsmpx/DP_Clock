@@ -35,6 +35,12 @@ object AppIcons {
     val Up = icon("Up", "M12 19V5 M6 11l6 -6l6 6")
     val Down = icon("Down", "M12 5v14 M6 13l6 6l6 -6")
     val More = icon("More", "M12 6v0.01 M12 12v0.01 M12 18v0.01", width = 3f)
+    val Moon = icon("Moon", "M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z")
+    val Share = icon(
+        "Share",
+        "M15 5a3 3 0 1 0 6 0a3 3 0 1 0 -6 0 M3 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0 M15 19a3 3 0 1 0 6 0a3 3 0 1 0 -6 0 " +
+            "M8.6 13.5l6.8 4 M15.4 6.5l-6.8 4",
+    )
 
     private fun icon(name: String, path: String, filled: Boolean = false, width: Float = 2f): ImageVector =
         ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f)

@@ -1,0 +1,415 @@
+package com.dpsmpx.dpclock.model
+
+import java.time.DayOfWeek
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
+
+/**
+ * Что переносится файлом (D-018, п. 2): всё, что человек настроил сам. Идущие
+ * таймеры, секундомер, срабатывания и журнал — состояние телефона, их в файле нет.
+ */
+data class Backup(
+    val alarms: List<Alarm> = emptyList(),
+    val groups: List<AlarmGroup> = emptyList(),
+    val templates: List<AlarmTemplate> = emptyList(),
+    val exceptions: List<ExceptionPeriod> = emptyList(),
+    val presets: List<TimerPreset> = emptyList(),
+    /** null — в файле настроек нет. Отметка про Xiaomi относится к телефону и не переносится. */
+    val settings: Settings? = null,
+    /** Когда и какой версией приложения сохранён файл; не указано — null и пусто. */
+    val exportedAt: Instant? = null,
+    val appVersion: String = "",
+) {
+    val isEmpty: Boolean
+        get() = alarms.isEmpty() && groups.isEmpty() && templates.isEmpty() && exceptions.isEmpty() && presets.isEmpty() && settings == null
+}
+
+/** Файл не загружается (D-018, п. 5); в базе ничего не меняется. */
+class BackupException(val reason: Reason, message: String, cause: Throwable? = null) : Exception(message, cause) {
+    enum class Reason {
+        /** Не JSON или JSON не от DP_Clock. */
+        NOT_DP_CLOCK,
+
+        /** Формат новее, чем знает эта версия приложения. */
+        NEWER_FORMAT,
+
+        /** Файл DP_Clock, но данные в нём повреждены. */
+        BROKEN,
+    }
+}
+
+/**
+ * Файл экспорта (D-018, п. 3): JSON в UTF-8, поля по-английски, как в модели.
+ * Отсутствующее поле — значение по умолчанию; неизвестные поля пропускаются,
+ * неизвестное значение перечисления — по умолчанию. Формат меняется, только
+ * если старая версия приложения прочтёт файл неверно.
+ */
+object BackupFormat {
+    const val APP = "DP_Clock"
+    const val VERSION = 1
+    const val MIME = "application/json"
+
+    /** Больше файлов DP_Clock не бывает: тысяча будильников — около мегабайта. */
+    const val MAX_BYTES = 4 * 1024 * 1024
+
+    fun fileName(date: LocalDate): String = "dp-clock-$date.json"
+
+    fun encode(backup: Backup, exportedAt: Instant, appVersion: String): String {
+        val root = linkedMapOf<String, Any?>(
+            "app" to APP,
+            "format" to VERSION,
+            "appVersion" to appVersion,
+            "exportedAt" to exportedAt.toString(),
+            "alarms" to backup.alarms.map { alarm(it, blueprint = false) },
+            "groups" to backup.groups.map { mapOf("id" to it.id, "name" to it.name, "createdAt" to it.createdAt) },
+            "templates" to backup.templates.map { template ->
+                mapOf(
+                    "id" to template.id,
+                    "name" to template.name,
+                    "createdAt" to template.createdAt,
+                    "alarms" to template.alarms.map { alarm(it, blueprint = true) },
+                )
+            },
+            "exceptions" to backup.exceptions.map {
+                mapOf("id" to it.id, "name" to it.name, "start" to it.start.toString(), "end" to it.end.toString())
+            },
+            "presets" to backup.presets.map {
+                mapOf("id" to it.id, "name" to it.name, "createdAt" to it.createdAt, "program" to program(it.program))
+            },
+        )
+        backup.settings?.let { root["settings"] = settings(it) }
+        return Json.write(root)
+    }
+
+    /** Разбор файла; не получилось — [BackupException]. */
+    fun decode(text: String): Backup {
+        val root = try {
+            Json.parse(text.removePrefix("﻿"))
+        } catch (e: IllegalArgumentException) {
+            throw BackupException(BackupException.Reason.NOT_DP_CLOCK, "не JSON: ${e.message}", e)
+        }
+        if (root !is Map<*, *> || root["app"] != APP) throw BackupException(BackupException.Reason.NOT_DP_CLOCK, "нет \"app\": \"$APP\"")
+        val format = root["format"] as? Long ?: throw BackupException(BackupException.Reason.BROKEN, "нет \"format\"")
+        if (format > VERSION) throw BackupException(BackupException.Reason.NEWER_FORMAT, "формат $format")
+        if (format < 1) throw BackupException(BackupException.Reason.BROKEN, "формат $format")
+        return try {
+            val o = Obj(root, "")
+            Backup(
+                alarms = o.objs("alarms").map { alarm(it, blueprint = false) },
+                groups = o.objs("groups").map {
+                    AlarmGroup(it.string("id"), it.string("name", "").take(AlarmGroup.MAX_NAME), it.long("createdAt", 0L))
+                },
+                templates = o.objs("templates").map {
+                    AlarmTemplate(
+                        id = it.string("id"),
+                        name = it.string("name", "").take(AlarmGroup.MAX_NAME),
+                        alarms = it.objs("alarms").map { blueprint -> alarm(blueprint, blueprint = true) },
+                        createdAt = it.long("createdAt", 0L),
+                    )
+                },
+                exceptions = o.objs("exceptions").map {
+                    ExceptionPeriod(
+                        id = it.string("id"),
+                        name = it.string("name", "").take(ExceptionPeriod.MAX_NAME),
+                        start = LocalDate.parse(it.string("start")),
+                        end = LocalDate.parse(it.string("end")),
+                    )
+                },
+                presets = o.objs("presets").map {
+                    TimerPreset(it.string("id"), it.string("name", ""), program(it.obj("program") ?: it.missing("program")), it.long("createdAt", 0L))
+                },
+                settings = o.obj("settings")?.let(::settings),
+                exportedAt = o.stringOrNull("exportedAt")?.let { runCatching { Instant.parse(it) }.getOrNull() },
+                appVersion = o.string("appVersion", ""),
+            )
+        } catch (e: BackupException) {
+            throw e
+        } catch (e: RuntimeException) {
+            // Значения вне допустимого (час 25, пустой график), неверные даты.
+            throw BackupException(BackupException.Reason.BROKEN, e.message ?: e::class.simpleName.orEmpty(), e)
+        }
+    }
+
+    // Запись
+
+    /** Будильник; у будильника шаблона ([blueprint]) нет id, включения, создания, пропуска и группы. */
+    private fun alarm(alarm: Alarm, blueprint: Boolean): Map<String, Any?> {
+        val out = linkedMapOf<String, Any?>()
+        if (!blueprint) out["id"] = alarm.id
+        out["hour"] = alarm.hour
+        out["minute"] = alarm.minute
+        out["repeat"] = repeat(alarm.repeat)
+        if (!blueprint) {
+            out["enabled"] = alarm.enabled
+            out["createdAt"] = alarm.createdAt
+        }
+        out["label"] = alarm.label
+        out["sound"] = sound(alarm.sound)
+        out["vibrate"] = alarm.vibrate
+        out["rampSeconds"] = alarm.rampSeconds
+        out["snoozeMinutes"] = alarm.snoozeMinutes
+        if (!blueprint) out["skipDate"] = alarm.skipDate?.toString()
+        out["honorExceptions"] = alarm.honorExceptions
+        if (!blueprint) out["groupId"] = alarm.groupId
+        out["wakeCheck"] = alarm.wakeCheck.let {
+            mapOf(
+                "method" to it.method.name,
+                "level" to it.level.name,
+                "tasks" to it.tasks,
+                "reference" to it.reference,
+                "snoozeAllowed" to it.snoozeAllowed,
+                "recheckMinutes" to it.recheckMinutes,
+            )
+        }
+        out["gentleMinutes"] = alarm.gentleMinutes
+        out["after"] = alarm.after.let {
+            mapOf("presetId" to it.presetId, "reminder" to it.reminder, "reminderMinutes" to it.reminderMinutes, "app" to it.app)
+        }
+        return out
+    }
+
+    private fun repeat(repeat: Repeat): Map<String, Any?> = when (repeat) {
+        Repeat.Once -> mapOf("type" to "once")
+        is Repeat.Weekly -> mapOf("type" to "weekly", "days" to days(repeat.days))
+        is Repeat.OnDate -> mapOf("type" to "date", "date" to repeat.date.toString())
+        is Repeat.Cycle -> mapOf(
+            "type" to "cycle",
+            "anchor" to repeat.anchor.toString(),
+            "days" to repeat.days.map { time -> time?.let { two(it.hour) + ":" + two(it.minute) } },
+        )
+        Repeat.Workdays -> mapOf("type" to "workdays")
+    }
+
+    private fun two(value: Int) = value.toString().padStart(2, '0')
+
+    private fun days(days: Set<DayOfWeek>): List<String> = days.sorted().map { it.name }
+
+    private fun sound(sound: AlarmSound): Map<String, Any?> = when (sound) {
+        AlarmSound.Default -> mapOf("type" to "default")
+        AlarmSound.Silent -> mapOf("type" to "silent")
+        is AlarmSound.Builtin -> mapOf("type" to "builtin", "id" to sound.id)
+        is AlarmSound.Ringtone -> mapOf("type" to "ringtone", "uri" to sound.uri, "title" to sound.title)
+        is AlarmSound.File -> mapOf("type" to "file", "uri" to sound.uri, "title" to sound.title)
+    }
+
+    private fun program(program: TimerProgram): Map<String, Any?> = mapOf(
+        "cycles" to program.cycles,
+        "sleep" to program.sleep,
+        "sound" to sound(program.sound),
+        "steps" to program.steps.map {
+            // Звук шага null — как у программы.
+            mapOf("millis" to it.durationMillis, "name" to it.name, "fullSignal" to it.fullSignal, "sound" to it.sound?.let(::sound))
+        },
+    )
+
+    private fun settings(settings: Settings): Map<String, Any?> = mapOf(
+        "snoozeMinutes" to settings.snoozeMinutes,
+        "autoStopMinutes" to settings.autoStopMinutes,
+        "alarmOrder" to settings.alarmOrder.name,
+        "signalStyle" to settings.signalStyle.name,
+        "volumeButtons" to settings.volumeButtons.name,
+        "holidaysRu" to settings.holidaysRu,
+        "bedtime" to settings.bedtime.let {
+            mapOf(
+                "mode" to it.mode.name,
+                "sleepMinutes" to it.sleepMinutes,
+                "hour" to it.hour,
+                "minute" to it.minute,
+                "days" to days(it.days),
+                "leadMinutes" to it.leadMinutes,
+            )
+        },
+    )
+
+    // Чтение
+
+    private fun alarm(o: Obj, blueprint: Boolean): Alarm {
+        val wake = o.obj("wakeCheck")
+        val after = o.obj("after")
+        return Alarm(
+            id = if (blueprint) "" else o.string("id"),
+            hour = o.int("hour"),
+            minute = o.int("minute"),
+            repeat = repeat(o.obj("repeat") ?: o.missing("repeat")),
+            enabled = blueprint || o.bool("enabled", true),
+            createdAt = if (blueprint) 0L else o.long("createdAt", 0L),
+            label = o.string("label", "").take(Alarm.MAX_LABEL),
+            sound = o.obj("sound")?.let(::sound) ?: AlarmSound.Default,
+            vibrate = o.bool("vibrate", true),
+            rampSeconds = o.int("rampSeconds", 0),
+            snoozeMinutes = o.intOrNull("snoozeMinutes"),
+            skipDate = if (blueprint) null else o.stringOrNull("skipDate")?.let(LocalDate::parse),
+            honorExceptions = o.bool("honorExceptions", true),
+            groupId = if (blueprint) null else o.stringOrNull("groupId"),
+            wakeCheck = wake?.let {
+                WakeCheck(
+                    method = it.enum("method", WakeMethod.NONE),
+                    level = it.enum("level", WakeLevel.MEDIUM),
+                    tasks = it.int("tasks", 1).coerceIn(1, WakeCheck.MAX_TASKS),
+                    reference = it.string("reference", ""),
+                    snoozeAllowed = it.bool("snoozeAllowed", true),
+                    recheckMinutes = it.int("recheckMinutes", 0),
+                )
+            } ?: WakeCheck(),
+            gentleMinutes = o.int("gentleMinutes", 0),
+            after = after?.let {
+                AfterAlarm(
+                    presetId = it.stringOrNull("presetId"),
+                    reminder = it.string("reminder", "").take(AfterAlarm.MAX_REMINDER),
+                    reminderMinutes = it.int("reminderMinutes", 0).coerceAtLeast(0),
+                    app = it.string("app", ""),
+                )
+            } ?: AfterAlarm(),
+        )
+    }
+
+    private fun repeat(o: Obj): Repeat = when (val type = o.string("type")) {
+        "once" -> Repeat.Once
+        "weekly" -> Repeat.of(days(o, "days"))
+        "date" -> Repeat.OnDate(LocalDate.parse(o.string("date")))
+        "cycle" -> Repeat.Cycle(
+            LocalDate.parse(o.string("anchor")),
+            o.list("days").map { (it as String?)?.let(LocalTime::parse) },
+        )
+        "workdays" -> Repeat.Workdays
+        else -> throw BackupException(BackupException.Reason.BROKEN, "повтор «$type»")
+    }
+
+    private fun days(o: Obj, key: String): Set<DayOfWeek> = o.list(key).mapTo(mutableSetOf()) { DayOfWeek.valueOf(it as String) }
+
+    /** Неизвестный звук — мелодия по умолчанию: будильник всё равно прозвонит. */
+    private fun sound(o: Obj): AlarmSound = when (o.string("type", "default")) {
+        "silent" -> AlarmSound.Silent
+        "builtin" -> AlarmSound.Builtin(o.string("id"))
+        "ringtone" -> AlarmSound.Ringtone(o.string("uri"), o.string("title", ""))
+        "file" -> AlarmSound.File(o.string("uri"), o.string("title", ""))
+        else -> AlarmSound.Default
+    }
+
+    private fun program(o: Obj): TimerProgram = TimerProgram(
+        steps = o.objs("steps").map {
+            TimerStep(it.long("millis"), it.string("name", ""), it.bool("fullSignal", true), it.obj("sound")?.let(::sound))
+        },
+        cycles = o.int("cycles", 1).coerceIn(1, TimerProgram.MAX_CYCLES),
+        sound = o.obj("sound")?.let(::sound) ?: AlarmSound.Default,
+        sleep = o.bool("sleep", false),
+    )
+
+    private fun settings(o: Obj): Settings {
+        val defaults = Settings()
+        val bedtime = o.obj("bedtime")?.let {
+            val base = Bedtime()
+            Bedtime(
+                mode = it.enum("mode", base.mode),
+                sleepMinutes = it.int("sleepMinutes", base.sleepMinutes),
+                hour = it.int("hour", base.hour),
+                minute = it.int("minute", base.minute),
+                days = if (it.has("days")) days(it, "days") else base.days,
+                leadMinutes = it.int("leadMinutes", base.leadMinutes),
+            )
+        } ?: defaults.bedtime
+        val snooze = o.int("snoozeMinutes", defaults.snoozeMinutes)
+        // null в файле — «никогда»; поля нет — по умолчанию.
+        val autoStop = if (o.contains("autoStopMinutes")) o.intOrNull("autoStopMinutes") else defaults.autoStopMinutes
+        require(snooze in 1..MAX_MINUTES) { "«Отложить» $snooze" }
+        require(autoStop == null || autoStop in 1..MAX_MINUTES) { "автовыключение $autoStop" }
+        return Settings(
+            snoozeMinutes = snooze,
+            autoStopMinutes = autoStop,
+            alarmOrder = o.enum("alarmOrder", defaults.alarmOrder),
+            signalStyle = o.enum("signalStyle", defaults.signalStyle),
+            volumeButtons = o.enum("volumeButtons", defaults.volumeButtons),
+            holidaysRu = o.bool("holidaysRu", defaults.holidaysRu),
+            bedtime = bedtime,
+        )
+    }
+
+    private const val MAX_MINUTES = 120
+}
+
+/**
+ * Загрузка из файла (D-018, п. 4) — чистые функции.
+ */
+object BackupRules {
+    /**
+     * Копия для загрузки: у всего новые id — загруженное не задевает имеющееся,
+     * а тот же файл можно загрузить дважды. Ссылки будильников на группы и пресеты
+     * файла переводятся на новые id; на то, чего в файле нет, — снимаются.
+     */
+    fun forImport(backup: Backup, newId: () -> String): Backup {
+        val groups = backup.groups.associate { it.id to newId() }
+        val presets = backup.presets.associate { it.id to newId() }
+        fun after(after: AfterAlarm) = after.copy(presetId = after.presetId?.let(presets::get))
+        return backup.copy(
+            alarms = backup.alarms.map { it.copy(id = newId(), groupId = it.groupId?.let(groups::get), after = after(it.after)) },
+            groups = backup.groups.map { it.copy(id = groups.getValue(it.id)) },
+            templates = backup.templates.map { template ->
+                template.copy(id = newId(), alarms = template.alarms.map { it.copy(after = after(it.after)) })
+            },
+            exceptions = backup.exceptions.map { it.copy(id = newId()) },
+            presets = backup.presets.map { it.copy(id = presets.getValue(it.id)) },
+        )
+    }
+}
+
+/** Объект JSON с путём для сообщения об ошибке. */
+private class Obj(private val map: Map<*, *>, private val path: String) {
+    fun has(key: String): Boolean = map[key] != null
+
+    /** Поле есть, хотя бы и null. */
+    fun contains(key: String): Boolean = map.containsKey(key)
+
+    fun missing(key: String): Nothing = throw BackupException(BackupException.Reason.BROKEN, "нет $path/$key")
+
+    private fun wrong(key: String): Nothing = throw BackupException(BackupException.Reason.BROKEN, "неверно $path/$key")
+
+    fun string(key: String, default: String? = null): String = when (val v = map[key]) {
+        null -> default ?: missing(key)
+        is String -> v
+        else -> wrong(key)
+    }
+
+    fun stringOrNull(key: String): String? = map[key]?.let { it as? String ?: wrong(key) }
+
+    fun long(key: String, default: Long? = null): Long = when (val v = map[key]) {
+        null -> default ?: missing(key)
+        is Long -> v
+        else -> wrong(key)
+    }
+
+    fun int(key: String, default: Int? = null): Int = intOrNull(key) ?: default ?: missing(key)
+
+    fun intOrNull(key: String): Int? = when (val v = map[key]) {
+        null -> null
+        is Long -> if (v in Int.MIN_VALUE..Int.MAX_VALUE) v.toInt() else wrong(key)
+        else -> wrong(key)
+    }
+
+    fun bool(key: String, default: Boolean): Boolean = when (val v = map[key]) {
+        null -> default
+        is Boolean -> v
+        else -> wrong(key)
+    }
+
+    inline fun <reified E : Enum<E>> enum(key: String, default: E): E {
+        val name = stringOrNull(key) ?: return default
+        return enumValues<E>().firstOrNull { it.name == name } ?: default
+    }
+
+    fun obj(key: String): Obj? = when (val v = map[key]) {
+        null -> null
+        is Map<*, *> -> Obj(v, "$path/$key")
+        else -> wrong(key)
+    }
+
+    fun list(key: String): List<Any?> = when (val v = map[key]) {
+        null -> emptyList()
+        is List<*> -> v
+        else -> wrong(key)
+    }
+
+    fun objs(key: String): List<Obj> = list(key).mapIndexed { index, item ->
+        Obj(item as? Map<*, *> ?: wrong("$key[$index]"), "$path/$key[$index]")
+    }
+}

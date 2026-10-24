@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
 import com.dpsmpx.dpclock.MainActivity
+import com.dpsmpx.dpclock.NightClockActivity
 import com.dpsmpx.dpclock.R
 import com.dpsmpx.dpclock.RingActivity
 import com.dpsmpx.dpclock.Section
@@ -32,6 +33,7 @@ class Notifier(private val context: Context) {
                 },
                 NotificationChannel(CHANNEL_MISSED, text(R.string.channel_missed), NotificationManager.IMPORTANCE_DEFAULT),
                 NotificationChannel(CHANNEL_ONGOING, text(R.string.channel_ongoing), NotificationManager.IMPORTANCE_LOW),
+                NotificationChannel(CHANNEL_SLEEP, text(R.string.channel_sleep), NotificationManager.IMPORTANCE_DEFAULT),
             ),
         )
     }
@@ -43,8 +45,9 @@ class Notifier(private val context: Context) {
 
     // Сигнал
 
-    fun ringing(item: RingItem): Notification {
-        val fullScreen = PendingIntent.getActivity(
+    /** [fullScreen] — по настройке «Вид сигнала»; иначе только всплывающее уведомление с кнопками. */
+    fun ringing(item: RingItem, fullScreen: Boolean): Notification {
+        val screen = PendingIntent.getActivity(
             context,
             0,
             Intent(context, RingActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION),
@@ -54,15 +57,37 @@ class Notifier(private val context: Context) {
             .setSmallIcon(R.drawable.ic_notification)
             .setCategory(Notification.CATEGORY_ALARM)
             .setOngoing(true)
-            .setContentIntent(fullScreen)
-            .setFullScreenIntent(fullScreen, true)
+            .setContentIntent(screen)
             .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
+        if (fullScreen) builder.setFullScreenIntent(screen, true)
         when (item) {
-            is RingItem.AlarmRing -> builder
-                .setContentTitle(text(R.string.ring_alarm_title))
-                .setContentText(TimeText.time(context, item.hour, item.minute))
-                .addAction(action(text(R.string.snooze), ringAction(RingService.ACTION_SNOOZE, item.alarmId)))
-                .addAction(action(text(R.string.dismiss), ringAction(RingService.ACTION_DISMISS, item.alarmId)))
+            is RingItem.AlarmRing -> {
+                builder
+                    .setContentTitle(alarmTitle(item.label))
+                    .setContentText(TimeText.time(context, item.hour, item.minute))
+                if (item.wakeCheck.snoozeAllowed) {
+                    builder.addAction(action(context.getString(R.string.snooze_for, item.snoozeMinutes), ringAction(RingService.ACTION_SNOOZE, item.alarmId)))
+                }
+                // С проверкой пробуждения выключить можно только на экране сигнала (D-015).
+                if (item.wakeCheck.required) {
+                    builder.addAction(action(text(R.string.wake_open_check), screen))
+                } else {
+                    builder.addAction(action(text(R.string.dismiss), ringAction(RingService.ACTION_DISMISS, item.alarmId)))
+                }
+            }
+            is RingItem.GentleRing -> {
+                builder
+                    .setContentTitle(text(R.string.gentle_title))
+                    .setContentText(context.getString(R.string.gentle_text, alarmTitle(item.label), TimeText.time(context, item.alarmAt)))
+                    .addAction(action(text(R.string.gentle_close), ringAction(RingService.ACTION_GENTLE_CLOSE, item.alarmId)))
+                if (item.canDismiss) {
+                    builder.addAction(action(text(R.string.gentle_awake), ringAction(RingService.ACTION_GENTLE_AWAKE, item.alarmId)))
+                }
+            }
+            is RingItem.RecheckRing -> builder
+                .setContentTitle(text(R.string.recheck_title))
+                .setContentText(alarmTitle(item.label) + " · " + TimeText.time(context, item.hour, item.minute))
+                .addAction(action(text(R.string.recheck_awake), ringAction(RingService.ACTION_RECHECK_OK, item.alarmId)))
             is RingItem.TimerRing -> builder
                 .setContentTitle(timerTitle(item.name))
                 .setContentText(text(if (item.finished) R.string.ring_timer_finished else R.string.ring_step_finished))
@@ -97,16 +122,16 @@ class Notifier(private val context: Context) {
         ID_ALARM,
         Notification.Builder(context, CHANNEL_ONGOING)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(text(R.string.snoozed_title))
+            .setContentTitle(if (alarm.label.isBlank()) text(R.string.snoozed_title) else alarm.label)
             .setContentText(context.getString(R.string.snoozed_until, TimeText.time(context, until)))
             .setOngoing(true)
             .setContentIntent(openApp(Section.ALARMS))
-            .addAction(
-                action(
-                    text(R.string.dismiss),
-                    broadcast(ActionReceiver.ACTION_DISMISS_SNOOZED, alarm.id),
-                ),
-            )
+            .apply {
+                // С проверкой пробуждения отложенный не выключается из уведомления.
+                if (!alarm.wakeCheck.required) {
+                    addAction(action(text(R.string.dismiss), broadcast(ActionReceiver.ACTION_DISMISS_SNOOZED, alarm.id)))
+                }
+            }
             .build(),
         tag = "snoozed:${alarm.id}",
     )
@@ -117,7 +142,7 @@ class Notifier(private val context: Context) {
         ID_ALARM,
         Notification.Builder(context, CHANNEL_MISSED)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(text(R.string.missed_title))
+            .setContentTitle(if (alarm.label.isBlank()) text(R.string.missed_title) else text(R.string.missed_title) + " · " + alarm.label)
             .setContentText(
                 context.getString(
                     if (autoStopped) R.string.missed_auto_stop else R.string.missed_phone_off,
@@ -131,6 +156,65 @@ class Notifier(private val context: Context) {
             .build(),
         tag = "missed:${alarm.id}",
     )
+
+    // Сон и после будильника (D-017)
+
+    /** «Пора ложиться»: время ложиться, будильник, если посчитано от него, и сколько выйдет сна. */
+    fun bedtime(bedAt: Long, alarmAt: Long?, sleepMinutes: Int) = show(
+        ID_SLEEP,
+        Notification.Builder(context, CHANNEL_SLEEP)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(text(R.string.bedtime_title))
+            .setContentText(
+                if (alarmAt != null) {
+                    context.getString(R.string.bedtime_text_alarm, TimeText.time(context, bedAt), TimeText.time(context, alarmAt), sleepMinutes / 60, sleepMinutes % 60)
+                } else {
+                    context.getString(R.string.bedtime_text, TimeText.time(context, bedAt))
+                },
+            )
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    context,
+                    ID_SLEEP,
+                    Intent(context, NightClockActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
+            .setAutoCancel(true)
+            .build(),
+    )
+
+    /** Напоминание после будильника — текст человека. */
+    fun reminder(alarmId: String, message: String) = show(
+        ID_SLEEP,
+        Notification.Builder(context, CHANNEL_SLEEP)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(text(R.string.reminder_title))
+            .setContentText(message)
+            .setStyle(Notification.BigTextStyle().bigText(message))
+            .setContentIntent(openApp(Section.ALARMS))
+            .setAutoCancel(true)
+            .build(),
+        tag = "reminder:$alarmId",
+    )
+
+    /** Будильник выключен не на экране сигнала: приложение после него — по нажатию на уведомление. */
+    fun openAfterAlarm(packageName: String) {
+        val launch = context.packageManager.getLaunchIntentForPackage(packageName) ?: return
+        val label = runCatching {
+            context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(packageName, 0)).toString()
+        }.getOrDefault(packageName)
+        show(
+            ID_SLEEP,
+            Notification.Builder(context, CHANNEL_SLEEP)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(context.getString(R.string.after_open_app, label))
+                .setContentIntent(PendingIntent.getActivity(context, ID_SLEEP, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+                .setAutoCancel(true)
+                .build(),
+            tag = "open:$packageName",
+        )
+    }
 
     // Таймеры
 
@@ -211,6 +295,8 @@ class Notifier(private val context: Context) {
 
     private fun timerTitle(name: String): String = name.ifBlank { text(R.string.timer_default_name) }
 
+    private fun alarmTitle(label: String): String = label.ifBlank { text(R.string.ring_alarm_title) }
+
     private fun text(id: Int): String = context.getString(id)
 
     private fun action(title: String, intent: PendingIntent): Notification.Action =
@@ -242,6 +328,8 @@ class Notifier(private val context: Context) {
         private const val ID_ALARM = 2
         private const val ID_TIMER = 3
         private const val ID_STOPWATCH = 4
+        private const val ID_SLEEP = 5
+        private const val CHANNEL_SLEEP = "sleep"
         private const val CHANNEL_RING = "ring"
         private const val CHANNEL_MISSED = "missed"
         private const val CHANNEL_ONGOING = "ongoing"

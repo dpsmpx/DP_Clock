@@ -1,10 +1,12 @@
 package com.dpsmpx.dpclock.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +28,7 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -43,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -50,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
+import com.dpsmpx.dpclock.model.AlarmSound
 import com.dpsmpx.dpclock.model.DurationInput
 import com.dpsmpx.dpclock.model.TimerPreset
 import com.dpsmpx.dpclock.model.TimerProgram
@@ -72,6 +77,8 @@ fun TimersScreen(requestNotifications: () -> Unit) {
     var showInput by rememberSaveable { mutableStateOf(false) }
     var editingPreset by remember { mutableStateOf<TimerPreset?>(null) }
     var newPreset by rememberSaveable { mutableStateOf(false) }
+    var sleepOpen by rememberSaveable { mutableStateOf(false) }
+    val resources = LocalResources.current
     val now = rememberMoment(200L, active = runs.orEmpty().any { it.state == TimerState.RUNNING })
 
     val list = runs ?: return
@@ -121,6 +128,13 @@ fun TimersScreen(requestNotifications: () -> Unit) {
                 }
             }
         }
+        item(key = "sleep") {
+            OutlinedButton(onClick = { sleepOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                Icon(AppIcons.Moon, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.size(8.dp))
+                Text(stringResource(R.string.sleep_timer))
+            }
+        }
         item(key = "presets-title") {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.presets), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
@@ -146,6 +160,15 @@ fun TimersScreen(requestNotifications: () -> Unit) {
         }
     }
 
+    if (sleepOpen) {
+        SleepTimerDialog(
+            onDismiss = { sleepOpen = false },
+            onStart = { millis ->
+                sleepOpen = false
+                start(TimerProgram.sleep(millis), resources.getString(R.string.sleep_timer), null)
+            },
+        )
+    }
     if (newPreset) {
         PresetEditor(
             initial = null,
@@ -194,6 +217,9 @@ private fun TimerCard(run: TimerRun, remaining: Long) {
                 }) {
                     Icon(AppIcons.Close, contentDescription = stringResource(R.string.delete))
                 }
+            }
+            if (run.program.sleep) {
+                Text(stringResource(R.string.sleep_timer_note), style = MaterialTheme.typography.bodyMedium)
             }
             if (run.program.isChain) {
                 val step = run.step.name.ifBlank { stringResource(R.string.step_of, run.stepIndex + 1, run.program.steps.size) }
@@ -323,7 +349,10 @@ private fun PresetEditor(
     var name by rememberSaveable { mutableStateOf(initial?.name.orEmpty()) }
     var steps by remember { mutableStateOf(initialProgram?.steps ?: emptyList()) }
     var cycles by rememberSaveable { mutableIntStateOf(initialProgram?.cycles ?: 1) }
+    var sound by remember { mutableStateOf(initialProgram?.sound ?: AlarmSound.Default) }
     var stepEditing by remember { mutableStateOf<Int?>(null) }
+    /** Звук чего выбирается: -1 — пресета, иначе — шага с этим номером; null — выбора нет. */
+    var soundFor by remember { mutableStateOf<Int?>(null) }
     val canSave = name.isNotBlank() && steps.isNotEmpty()
 
     AlertDialog(
@@ -340,12 +369,20 @@ private fun PresetEditor(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
+                item {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.alarm_sound)) },
+                        supportingContent = { Text(soundName(sound)) },
+                        modifier = Modifier.clickable { soundFor = -1 },
+                    )
+                }
                 items(steps.size) { index ->
                     StepRow(
                         index = index,
                         step = steps[index],
                         count = steps.size,
                         onEdit = { stepEditing = index },
+                        onSound = { soundFor = index },
                         onChange = { updated -> steps = steps.toMutableList().also { it[index] = updated } },
                         onMove = { delta ->
                             steps = steps.toMutableList().also { list ->
@@ -388,7 +425,7 @@ private fun PresetEditor(
                     TimerPreset(
                         id = initial?.id ?: UUID.randomUUID().toString(),
                         name = name.trim(),
-                        program = TimerProgram(steps, cycles),
+                        program = TimerProgram(steps, cycles, sound),
                         createdAt = initial?.createdAt ?: System.currentTimeMillis(),
                     ),
                 )
@@ -397,6 +434,23 @@ private fun PresetEditor(
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 
+    soundFor?.let { target ->
+        SoundPicker(
+            initial = if (target < 0) sound else steps.getOrNull(target)?.sound,
+            onDismiss = { soundFor = null },
+            onPick = { picked ->
+                if (target < 0) {
+                    sound = picked ?: AlarmSound.Default
+                } else if (target < steps.size) {
+                    steps = steps.toMutableList().also { it[target] = it[target].copy(sound = picked) }
+                }
+                soundFor = null
+            },
+            inheritTitle = if (target < 0) null else stringResource(R.string.sound_as_preset),
+            // Тихий конец таймера — это таймер засыпания, а не пресет.
+            allowSilent = false,
+        )
+    }
     stepEditing?.let { index ->
         StepDurationDialog(
             initialMillis = steps.getOrNull(index)?.durationMillis,
@@ -422,6 +476,7 @@ private fun StepRow(
     step: TimerStep,
     count: Int,
     onEdit: () -> Unit,
+    onSound: () -> Unit,
     onChange: (TimerStep) -> Unit,
     onMove: (Int) -> Unit,
     onDelete: () -> Unit,
@@ -447,6 +502,10 @@ private fun StepRow(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            TextButton(onClick = onSound) {
+                val own = step.sound
+                Text(stringResource(R.string.step_sound, if (own == null) stringResource(R.string.sound_as_preset) else soundName(own)))
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.signal_at_end), modifier = Modifier.weight(1f))
                 FilterChip(
@@ -479,6 +538,42 @@ private fun StepDurationDialog(initialMillis: Long?, onDismiss: () -> Unit, onCo
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
+
+/** Таймер засыпания (D-016, п. 1): готовые длительности и своя; в конце музыка стихает, сигнала нет. */
+@Composable
+private fun SleepTimerDialog(onDismiss: () -> Unit, onStart: (Long) -> Unit) {
+    var custom by rememberSaveable { mutableStateOf(false) }
+    var input by rememberSaveable(stateSaver = DurationInputSaver) { mutableStateOf(DurationInput()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.sleep_timer)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.sleep_timer_text), style = MaterialTheme.typography.bodyMedium)
+                if (custom) {
+                    DurationEntry(input, onChange = { input = it })
+                } else {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (minutes in SLEEP_CHOICES) {
+                            FilledTonalButton(onClick = { onStart(minutes * 60_000L) }) {
+                                Text(stringResource(R.string.minutes_value, minutes))
+                            }
+                        }
+                        OutlinedButton(onClick = { custom = true }) { Text(stringResource(R.string.sleep_timer_custom)) }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (custom) {
+                TextButton(enabled = !input.isEmpty, onClick = { onStart(input.millis) }) { Text(stringResource(R.string.start)) }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
+    )
+}
+
+private val SLEEP_CHOICES = listOf(15, 30, 45, 60, 90)
 
 private val DurationInputSaver = Saver<DurationInput, String>(
     save = { it.digits },

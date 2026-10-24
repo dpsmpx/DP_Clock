@@ -19,10 +19,77 @@ data class AlarmEntity(
     @PrimaryKey val id: String,
     val hour: Int,
     val minute: Int,
-    /** Дни повтора битами (Repeat.bits); 0 — однократно. */
+    /** Дни повтора битами (Repeat.bits); 0 — однократно или на дату. */
     val repeatDays: Int,
     val enabled: Boolean,
     val createdAt: Long,
+    val label: String,
+    /** AlarmSound.encode(). */
+    val sound: String,
+    /** Название мелодии телефона или файла. */
+    val soundTitle: String,
+    val vibrate: Boolean,
+    val rampSeconds: Int,
+    /** null — общий интервал из настроек. */
+    val snoozeMinutes: Int?,
+    /** Пропускаемая дата, день от эпохи (LocalDate.toEpochDay). */
+    val skipDate: Long?,
+    /** Будильник на дату: день от эпохи; null — однократно или по дням недели. */
+    val repeatDate: Long?,
+    /** Не звонить в исключения (D-014, п. 4). */
+    val honorExceptions: Boolean,
+    /** Группа; null — без группы. */
+    val groupId: String?,
+    /** Сменный график: первый день цикла, день от эпохи; null — не график. */
+    val cycleAnchor: Long?,
+    /** Сменный график: Repeat.Cycle.encodeDays(). */
+    val cycleDays: String?,
+    /** Рабочие дни по производственному календарю России. */
+    val workdays: Boolean,
+    /** WakeMethod. */
+    val wakeMethod: String,
+    /** WakeLevel. */
+    val wakeLevel: String,
+    val wakeTasks: Int,
+    /** Образец: текст QR-кода или подпись снимка места. */
+    val wakeReference: String,
+    val wakeSnooze: Boolean,
+    /** Повторная проверка «Не спите?» через столько минут; 0 — нет. */
+    val recheckMinutes: Int,
+    /** Мягкое пробуждение за столько минут; 0 — нет (D-017). */
+    val gentleMinutes: Int,
+    /** После будильника: пресет таймера, напоминание, приложение (D-017). */
+    val afterPresetId: String?,
+    val afterReminder: String,
+    val afterReminderMinutes: Int,
+    val afterApp: String,
+)
+
+/** Группа будильников (D-014, п. 5). */
+@Entity(tableName = "alarm_group")
+data class GroupEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val createdAt: Long,
+)
+
+/** Шаблон — набор будильников (D-014, п. 6). */
+@Entity(tableName = "alarm_template")
+data class TemplateEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    /** AlarmTemplate.encodeAlarms(). */
+    val alarms: String,
+    val createdAt: Long,
+)
+
+/** Период общего списка исключений (D-014, п. 4); дни от эпохи, оба входят. */
+@Entity(tableName = "exception_period")
+data class ExceptionEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val startDay: Long,
+    val endDay: Long,
 )
 
 /** Текущее срабатывание будильника (DATA_MODEL.md, п. 3). */
@@ -31,10 +98,12 @@ data class OccurrenceEntity(
     @PrimaryKey val alarmId: String,
     /** Расчётное время срабатывания, мс UTC. */
     val scheduledAt: Long,
-    /** SCHEDULED, RINGING или SNOOZED. */
+    /** SCHEDULED, RINGING, SNOOZED или RECHECK. */
     val state: String,
     val snoozedUntil: Long?,
     val ringingSince: Long?,
+    /** Момент повторной проверки «Не спите?» (D-015, п. 4). */
+    val recheckAt: Long?,
 )
 
 @Entity(tableName = "timer_preset")
@@ -85,6 +154,20 @@ data class SettingsEntity(
     val autoStopMinutes: Int?,
     val alarmOrder: String,
     val xiaomiHintsDone: Boolean,
+    /** SignalStyle. */
+    val signalStyle: String,
+    /** VolumeButtons. */
+    val volumeButtons: String,
+    /** Праздники и переносы по производственному календарю России — в исключениях. */
+    val holidaysRu: Boolean,
+    /** Время сна (D-017): BedtimeMode, сколько спать, расписание, напомнить заранее. */
+    val bedtimeMode: String,
+    val sleepMinutes: Int,
+    val bedtimeHour: Int,
+    val bedtimeMinute: Int,
+    /** Дни расписания битами, как у будильника. */
+    val bedtimeDays: Int,
+    val bedtimeLeadMinutes: Int,
 )
 
 /** Журнал срабатываний (DATA_MODEL.md, п. 7), последние [ClockDao.LOG_LIMIT] событий. */
@@ -117,6 +200,54 @@ interface ClockDao {
     @Query("DELETE FROM alarm WHERE id = :id")
     suspend fun deleteAlarm(id: String)
 
+    @Query("SELECT * FROM alarm WHERE groupId = :groupId")
+    suspend fun alarmsInGroup(groupId: String): List<AlarmEntity>
+
+    @Query("UPDATE alarm SET groupId = NULL WHERE groupId = :groupId")
+    suspend fun ungroup(groupId: String)
+
+    @Query("SELECT * FROM alarm_group ORDER BY createdAt")
+    fun groups(): Flow<List<GroupEntity>>
+
+    @Query("SELECT * FROM alarm_group WHERE id = :id")
+    suspend fun group(id: String): GroupEntity?
+
+    @Query("SELECT * FROM alarm_group ORDER BY createdAt")
+    suspend fun allGroups(): List<GroupEntity>
+
+    @Upsert
+    suspend fun upsertGroup(group: GroupEntity)
+
+    @Query("DELETE FROM alarm_group WHERE id = :id")
+    suspend fun deleteGroup(id: String)
+
+    @Query("SELECT * FROM alarm_template ORDER BY createdAt")
+    fun templates(): Flow<List<TemplateEntity>>
+
+    @Query("SELECT * FROM alarm_template WHERE id = :id")
+    suspend fun template(id: String): TemplateEntity?
+
+    @Query("SELECT * FROM alarm_template ORDER BY createdAt")
+    suspend fun allTemplates(): List<TemplateEntity>
+
+    @Upsert
+    suspend fun upsertTemplate(template: TemplateEntity)
+
+    @Query("DELETE FROM alarm_template WHERE id = :id")
+    suspend fun deleteTemplate(id: String)
+
+    @Query("SELECT * FROM exception_period ORDER BY startDay")
+    fun exceptionsFlow(): Flow<List<ExceptionEntity>>
+
+    @Query("SELECT * FROM exception_period ORDER BY startDay")
+    suspend fun allExceptions(): List<ExceptionEntity>
+
+    @Upsert
+    suspend fun upsertException(period: ExceptionEntity)
+
+    @Query("DELETE FROM exception_period WHERE id = :id")
+    suspend fun deleteException(id: String)
+
     @Query("SELECT * FROM alarm_occurrence")
     suspend fun occurrences(): List<OccurrenceEntity>
 
@@ -134,6 +265,12 @@ interface ClockDao {
 
     @Query("SELECT * FROM timer_preset ORDER BY createdAt")
     fun presets(): Flow<List<PresetEntity>>
+
+    @Query("SELECT * FROM timer_preset WHERE id = :id")
+    suspend fun preset(id: String): PresetEntity?
+
+    @Query("SELECT * FROM timer_preset ORDER BY createdAt")
+    suspend fun allPresets(): List<PresetEntity>
 
     @Upsert
     suspend fun upsertPreset(preset: PresetEntity)
@@ -193,6 +330,19 @@ interface ClockDao {
     @Query("DELETE FROM alarm_occurrence")
     suspend fun clearOccurrences()
 
+    /** «Заменить всё» при загрузке из файла (D-018, п. 4). */
+    @Query("DELETE FROM alarm_group")
+    suspend fun clearGroups()
+
+    @Query("DELETE FROM alarm_template")
+    suspend fun clearTemplates()
+
+    @Query("DELETE FROM exception_period")
+    suspend fun clearExceptions()
+
+    @Query("DELETE FROM timer_preset")
+    suspend fun clearPresets()
+
     companion object {
         const val LOG_LIMIT = 1000
     }
@@ -207,8 +357,11 @@ interface ClockDao {
         StopwatchEntity::class,
         SettingsEntity::class,
         SignalEventEntity::class,
+        GroupEntity::class,
+        TemplateEntity::class,
+        ExceptionEntity::class,
     ],
-    version = 1,
+    version = ClockDatabase.VERSION,
     exportSchema = true,
 )
 abstract class ClockDatabase : RoomDatabase() {
@@ -216,6 +369,12 @@ abstract class ClockDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "dpclock.db"
+
+        /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
+        const val VERSION = 5
+
+        /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки
@@ -225,6 +384,7 @@ abstract class ClockDatabase : RoomDatabase() {
             Room.databaseBuilder(context.deviceStorage(), ClockDatabase::class.java, NAME)
                 // Без журнала WAL всё лежит в одном файле — его и берёт системная копия.
                 .setJournalMode(JournalMode.TRUNCATE)
+                .addMigrations(*MIGRATIONS.toTypedArray())
                 .build()
     }
 }

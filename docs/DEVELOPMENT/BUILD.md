@@ -13,7 +13,7 @@
 | Команда | Что делает |
 |---|---|
 | `./gradlew :app:assembleDebug` | отладочный APK — `app/build/outputs/apk/debug/app-debug.apk` |
-| `./gradlew :core:model:test :app:testDebugUnitTest` | unit-тесты на JVM: правила времени (`:core:model`) и приложения |
+| `./gradlew :core:model:test :app:testDebugUnitTest` | unit-тесты на JVM: правила времени (`:core:model`), приложения и миграций базы |
 | `./gradlew :app:lintDebug` | Lint; предупреждения — ошибки |
 | `tools/debug-apk.sh` | APK из закоммиченного дерева — `build/debug-apk/debug-<коммит>.apk` и его SHA-256 |
 | `tools/debug-apk.sh --publish` | то же и новым коммитом в ветку `debug-builds` |
@@ -36,11 +36,28 @@ systemProp.org.gradle.internal.repository.max.tentatives=8
 systemProp.org.gradle.internal.repository.initial.backoff=2000
 ```
 
+Если 429 и ложные 404 не проходят, Maven Central можно брать с зеркала Google — тоже настройкой машины, файлом `~/.gradle/init.d/maven-central-mirror.gradle`:
+
+```groovy
+def mirror = 'https://maven-central.storage-download.googleapis.com/maven2/'
+def redirect = { RepositoryHandler repos ->
+    repos.withType(MavenArtifactRepository).configureEach { repo ->
+        if (repo.url.toString().startsWith('https://repo.maven.apache.org/maven2')) repo.url = mirror
+    }
+}
+settingsEvaluated { settings ->
+    redirect(settings.pluginManagement.repositories)
+    redirect(settings.dependencyResolutionManagement.repositories)
+}
+```
+
+После неудачных загрузок Gradle помнит «не найдено»: первая сборка после смены — с `--refresh-dependencies`.
+
 Две сборки в одном каталоге одновременно не запускать: они портят промежуточные файлы друг друга.
 
 ## База
 
-Схема Room выгружается при сборке в `app/schemas/` и коммитится: по ней пишутся и проверяются миграции (D-009, п. 4). Изменилась схема — новая версия базы и миграция.
+Схема Room выгружается при сборке в `app/schemas/` и коммитится: по ней пишутся и проверяются миграции (D-009, п. 4). Изменилась схема — новая версия `ClockDatabase.VERSION`, миграция в `ClockDatabase.MIGRATIONS` (`data/Migrations.kt`) и проверки данных в `MigrationTest`; сверку со схемой тест делает сам для каждой миграции.
 
 ## Версии
 

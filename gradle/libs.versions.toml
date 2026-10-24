@@ -9,6 +9,11 @@ activity-compose = "1.13.0"
 core-ktx = "1.19.1"
 lifecycle = "2.11.0"
 room = "2.8.5"
+# androidx.sqlite — та же, что у Room: тесты миграций идут на той версии, что в APK
+# (исключение для Lint — app/lint.xml).
+sqlite = "2.6.2"
+camerax = "1.6.2"
+zxing = "3.5.4"
 junit = "4.13.2"
 
 [libraries]
@@ -19,6 +24,12 @@ activity-compose = { module = "androidx.activity:activity-compose", version.ref 
 lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+sqlite-bundled-jvm = { module = "androidx.sqlite:sqlite-bundled-jvm", version.ref = "sqlite" }
+camera-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
+camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 junit = { module = "junit:junit", version.ref = "junit" }
 
 [plugins]

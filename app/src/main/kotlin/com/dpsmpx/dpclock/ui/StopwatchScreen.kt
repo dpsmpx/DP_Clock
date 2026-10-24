@@ -1,5 +1,7 @@
 package com.dpsmpx.dpclock.ui
 
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -30,11 +33,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
+import com.dpsmpx.dpclock.model.LapRow
 import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
 import com.dpsmpx.dpclock.persistLater
 import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.platform.TimeText
+import java.util.Locale
 
 /** Раздел «Секундомер» (SCREEN_MAP.md, п. 7). Идёт и при свёрнутом приложении: время считается от момента старта. */
 @Composable
@@ -83,6 +88,12 @@ fun StopwatchScreen() {
         Spacer(Modifier.size(24.dp))
         val rows = stopwatch.lapRows()
         if (rows.isNotEmpty()) {
+            val context = LocalContext.current
+            TextButton(onClick = { context.shareLaps(rows, elapsed, locale) }) {
+                Icon(AppIcons.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.size(8.dp))
+                Text(stringResource(R.string.share_laps))
+            }
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
                 Text(stringResource(R.string.lap_number), Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
                 Text(stringResource(R.string.lap_time), Modifier.weight(2f), style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.End)
@@ -110,4 +121,20 @@ fun StopwatchScreen() {
             }
         }
     }
+}
+
+/** «Поделиться кругами» (D-011, п. 6): текстом через системное окно — копировать, сообщение, заметки. */
+private fun Context.shareLaps(rows: List<LapRow>, total: Long, locale: Locale) {
+    val lines = rows.sortedBy { it.number }.joinToString("\n") { row ->
+        val mark = when {
+            row.isBest -> " — " + getString(R.string.lap_best)
+            row.isWorst -> " — " + getString(R.string.lap_worst)
+            else -> ""
+        }
+        getString(R.string.share_lap_row, row.number, TimeText.stopwatch(row.lapMillis, locale), TimeText.stopwatch(row.totalMillis, locale)) + mark
+    }
+    val text = getString(R.string.share_laps_title) + "\n" +
+        getString(R.string.share_laps_total, TimeText.stopwatch(total, locale)) + "\n" + lines
+    val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+    startActivity(Intent.createChooser(send, getString(R.string.share_laps)))
 }

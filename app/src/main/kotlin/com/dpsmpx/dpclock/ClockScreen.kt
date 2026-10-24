@@ -1,19 +1,24 @@
 package com.dpsmpx.dpclock
 
+import android.content.Intent
 import android.icu.text.DateFormat
 import android.icu.util.TimeZone
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,13 +30,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import com.dpsmpx.dpclock.ui.AppIcons
 import kotlinx.coroutines.delay
 import java.util.Date
 import android.text.format.DateFormat as SystemTimeFormat
@@ -42,9 +50,10 @@ private const val CIRCLE_FRACTION = 0.7f
 /** Ширина строки времени — доля диаметра: так углы строки остаются внутри круга. */
 private const val TEXT_FRACTION = 0.75f
 
-/** Текущее время в круге по центру окна — и больше ничего (D-004). */
+/** Текущее время в круге по центру окна (D-004); внизу — «Ночные часы» (D-017, п. 4). */
 @Composable
 fun ClockScreen(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
     val text = currentTimeText()
     Surface(modifier = modifier.fillMaxSize()) {
         BoxWithConstraints(
@@ -73,6 +82,13 @@ fun ClockScreen(modifier: Modifier = Modifier) {
                         autoSize = TextAutoSize.StepBased(maxFontSize = 400.sp),
                     )
                 }
+            }
+            TextButton(
+                onClick = { context.startActivity(Intent(context, NightClockActivity::class.java)) },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+            ) {
+                Icon(AppIcons.Moon, contentDescription = null)
+                Text(stringResource(R.string.night_clock), modifier = Modifier.padding(start = 8.dp))
             }
         }
     }

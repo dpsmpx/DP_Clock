@@ -38,8 +38,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.model.AlarmOrder
 import com.dpsmpx.dpclock.model.Settings
+import com.dpsmpx.dpclock.ui.AlarmsDialog
+import com.dpsmpx.dpclock.ui.AlarmsMenu
 import com.dpsmpx.dpclock.ui.AlarmsScreen
 import com.dpsmpx.dpclock.ui.AppIcons
+import com.dpsmpx.dpclock.ui.ExceptionsScreen
 import com.dpsmpx.dpclock.ui.SettingsScreen
 import com.dpsmpx.dpclock.ui.StopwatchScreen
 import com.dpsmpx.dpclock.ui.TimersScreen
@@ -100,6 +103,8 @@ private val SECTION_TITLES = mapOf(
 @Composable
 private fun AppRoot(request: SectionRequest) {
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var exceptionsOpen by rememberSaveable { mutableStateOf(false) }
+    var alarmsDialog by rememberSaveable { mutableStateOf<AlarmsDialog?>(null) }
     val pager = rememberPagerState(initialPage = request.section.ordinal) { Section.entries.size }
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -108,12 +113,18 @@ private fun AppRoot(request: SectionRequest) {
     LaunchedEffect(request) {
         if (request.serial < 0) return@LaunchedEffect
         settingsOpen = false
+        exceptionsOpen = false
         pager.scrollToPage(request.section.ordinal)
     }
 
     if (settingsOpen) {
         BackHandler { settingsOpen = false }
         SettingsScreen(onBack = { settingsOpen = false })
+        return
+    }
+    if (exceptionsOpen) {
+        BackHandler { exceptionsOpen = false }
+        ExceptionsScreen(onBack = { exceptionsOpen = false })
         return
     }
 
@@ -123,7 +134,10 @@ private fun AppRoot(request: SectionRequest) {
             TopAppBar(
                 title = { Text(stringResource(SECTION_TITLES.getValue(section))) },
                 actions = {
-                    if (section == Section.ALARMS) AlarmOrderMenu()
+                    if (section == Section.ALARMS) {
+                        AlarmOrderMenu()
+                        AlarmsMenu(openExceptions = { exceptionsOpen = true }, onDialog = { alarmsDialog = it })
+                    }
                     IconButton(onClick = { settingsOpen = true }) {
                         Icon(AppIcons.Settings, contentDescription = stringResource(R.string.settings))
                     }
@@ -160,7 +174,13 @@ private fun AppRoot(request: SectionRequest) {
             beyondViewportPageCount = 1,
         ) { page ->
             when (Section.entries[page]) {
-                Section.ALARMS -> AlarmsScreen(snackbar, requestNotifications, openSettings = { settingsOpen = true })
+                Section.ALARMS -> AlarmsScreen(
+                    snackbar,
+                    requestNotifications,
+                    openSettings = { settingsOpen = true },
+                    dialog = alarmsDialog,
+                    onDialog = { alarmsDialog = it },
+                )
                 Section.TIMERS -> TimersScreen(requestNotifications)
                 Section.STOPWATCH -> StopwatchScreen()
                 Section.CLOCK -> ClockScreen()

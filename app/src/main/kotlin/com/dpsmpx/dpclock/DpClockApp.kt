@@ -2,6 +2,8 @@ package com.dpsmpx.dpclock
 
 import android.app.Application
 import android.content.Context
+import androidx.camera.camera2.Camera2Config
+import androidx.camera.core.CameraXConfig
 import com.dpsmpx.dpclock.data.ClockDatabase
 import com.dpsmpx.dpclock.data.ClockRepository
 import com.dpsmpx.dpclock.platform.Clocks
@@ -23,12 +25,15 @@ class AppGraph(context: Context) {
     val repository = ClockRepository(context, ClockDatabase.open(context), scheduler, notifier)
 }
 
-class DpClockApp : Application() {
+class DpClockApp : Application(), CameraXConfig.Provider {
     override fun onCreate() {
         super.onCreate()
         Clocks.init(this)
         graph(this).notifier.createChannels()
     }
+
+    /** Настройки камеры — отсюда, а не из метаданных службы: так камера открывается и до первой разблокировки. */
+    override fun getCameraXConfig(): CameraXConfig = Camera2Config.defaultConfig()
 
     companion object {
         /** Работа, которая должна закончиться, даже если экран закрыли. */

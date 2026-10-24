@@ -88,7 +88,9 @@ class RingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // Каждый запуск через startForegroundService обязан сразу показать уведомление.
-        goForeground()
+        // «Тише» шлёт открытый экран сигнала обычным startService на каждое нажатие —
+        // уведомление сигнала заново не публикуется.
+        if (intent?.action != ACTION_QUIET) goForeground()
         pending++
         DpClockApp.scope.launch(Dispatchers.Main) {
             try {

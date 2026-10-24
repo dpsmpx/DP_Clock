@@ -293,4 +293,16 @@
     <string name="wake_level_easy">Низкая</string>
     <string name="wake_level_medium">Средняя</string>
     <string name="wake_level_hard">Высокая</string>
+
+    <!-- Таймеры и секундомер (D-016) -->
+    <string name="sleep_timer">Таймер засыпания</string>
+    <string name="sleep_timer_text">В конце музыка и видео в других приложениях плавно стихнут и остановятся. Сигнала не будет.</string>
+    <string name="sleep_timer_custom">Своё время…</string>
+    <string name="sleep_timer_note">В конце музыка и видео остановятся</string>
+    <string name="sound_as_preset">Как у пресета</string>
+    <string name="step_sound">Звук: %1$s</string>
+    <string name="share_laps">Поделиться кругами</string>
+    <string name="share_laps_title">Секундомер DP Clock</string>
+    <string name="share_laps_total">Всего: %1$s</string>
+    <string name="share_lap_row">Круг %1$d: %2$s (на %3$s)</string>
 </resources>

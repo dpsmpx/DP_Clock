@@ -4,6 +4,7 @@ import android.content.Context
 import com.dpsmpx.dpclock.model.Alarm
 import com.dpsmpx.dpclock.model.AlarmGroup
 import com.dpsmpx.dpclock.model.AlarmRules
+import com.dpsmpx.dpclock.model.AlarmSound
 import com.dpsmpx.dpclock.model.AlarmTemplate
 import com.dpsmpx.dpclock.model.ExceptionPeriod
 import com.dpsmpx.dpclock.model.Exceptions
@@ -53,7 +54,7 @@ sealed interface AlarmFire {
 }
 
 /** Что делать с концом шага таймера. */
-data class TimerFire(val run: TimerRun, val signal: StepSignal)
+data class TimerFire(val run: TimerRun, val signal: StepSignal, val sound: AlarmSound = AlarmSound.Default)
 
 /**
  * Все изменения данных и расписаний — здесь, по одному за раз: после каждого
@@ -512,7 +513,13 @@ class ClockRepository(
         val now = Clocks.moment()
         val result = TimerRules.advance(run, now)
         var signal = if (result.late) StepSignal.NONE else result.signal
-        if (result.run.state == TimerState.RINGING && result.late) {
+        if (result.run.state == TimerState.RINGING && run.program.sleep) {
+            // Таймер засыпания закончился: без сигнала, музыку останавливает приёмник (D-016, п. 1).
+            dao.deleteTimerRun(id)
+            scheduler.cancelTimer(id)
+            notifier.cancelTimer(id)
+            log(SignalSource.TIMER, id, now.utc, now.utc, if (result.late) SignalOutcome.MISSED else SignalOutcome.DISMISSED)
+        } else if (result.run.state == TimerState.RINGING && result.late) {
             // Закончился, пока телефон был выключен: только уведомление (DATA_MODEL.md, п. 5).
             dao.deleteTimerRun(id)
             scheduler.cancelTimer(id)
@@ -524,7 +531,7 @@ class ClockRepository(
             dao.upsertTimerRun(result.run.toEntity())
         }
         syncTimers()
-        TimerFire(result.run, signal)
+        TimerFire(result.run, signal, result.sound)
     }
 
     /** Будильники Android и уведомления — по идущим таймерам. */

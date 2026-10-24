@@ -9,6 +9,8 @@ data class TimerStep(
     val name: String = "",
     /** Полный сигнал — как будильник; короткий — звук и сразу следующий шаг. */
     val fullSignal: Boolean = true,
+    /** Свой звук шага (D-016, п. 2); null — звук программы. */
+    val sound: AlarmSound? = null,
 ) {
     init {
         require(durationMillis > 0) { "длительность $durationMillis" }
@@ -17,43 +19,98 @@ data class TimerStep(
 
 /**
  * Одна модель для одиночного таймера, пресета, цепочки и цикла (DATA_MODEL.md, п. 5).
- * Одиночный таймер — один шаг с полным сигналом.
+ * Одиночный таймер — один шаг с полным сигналом. [sound] — звук программы
+ * (D-016, п. 2); [sleep] — таймер засыпания: в конце без сигнала
+ * останавливает музыку и видео (D-016, п. 1).
  */
-data class TimerProgram(val steps: List<TimerStep>, val cycles: Int = 1) {
+data class TimerProgram(
+    val steps: List<TimerStep>,
+    val cycles: Int = 1,
+    val sound: AlarmSound = AlarmSound.Default,
+    val sleep: Boolean = false,
+) {
     init {
         require(steps.isNotEmpty()) { "программа без шагов" }
         require(cycles >= 1) { "кругов $cycles" }
+        require(!sleep || (steps.size == 1 && cycles == 1)) { "таймер засыпания — один шаг" }
     }
 
     val totalMillis: Long get() = steps.sumOf { it.durationMillis } * cycles
 
     val isChain: Boolean get() = steps.size > 1 || cycles > 1
 
-    /** Строка для базы: `v1;<круги>;<мс>:<f|s>:<название>;…`, название — в URL-кодировке. */
+    /** Звук в конце шага [index]: свой у шага или звук программы. */
+    fun soundOf(index: Int): AlarmSound = steps[index].sound ?: sound
+
+    /**
+     * Строка для базы: `v2;<круги>;<z|->;<звук>;<название звука>;<мс>:<f|s>:<название>:<звук шага>:<название>;…`,
+     * текст — в URL-кодировке. Звук шага: пусто — как у программы, `default` — мелодия телефона.
+     */
     fun encode(): String = buildString {
-        append("v1;").append(cycles)
+        append("v2;").append(cycles)
+        append(';').append(if (sleep) 'z' else '-')
+        append(';').append(url(sound.encode())).append(';').append(url(sound.title))
         for (step in steps) {
             append(';').append(step.durationMillis)
             append(':').append(if (step.fullSignal) 'f' else 's')
-            append(':').append(URLEncoder.encode(step.name, Charsets.UTF_8))
+            append(':').append(url(step.name))
+            val code = when (val own = step.sound) {
+                null -> ""
+                AlarmSound.Default -> STEP_DEFAULT
+                else -> own.encode()
+            }
+            append(':').append(url(code)).append(':').append(url(step.sound?.title.orEmpty()))
         }
     }
 
     companion object {
         const val MAX_CYCLES = 99
+        private const val STEP_DEFAULT = "default"
 
         fun single(durationMillis: Long, name: String = ""): TimerProgram =
             TimerProgram(listOf(TimerStep(durationMillis, name, fullSignal = true)))
 
+        /** Таймер засыпания на [durationMillis]. */
+        fun sleep(durationMillis: Long): TimerProgram = TimerProgram(listOf(TimerStep(durationMillis)), sleep = true)
+
+        /** Читает и `v1` — пресеты версий до 0.5.0. */
         fun decode(text: String): TimerProgram {
             val parts = text.split(';')
-            require(parts.size >= 3 && parts[0] == "v1") { "формат программы: $text" }
-            val steps = parts.drop(2).map { part ->
-                val (millis, signal, name) = part.split(':', limit = 3)
-                TimerStep(millis.toLong(), URLDecoder.decode(name, Charsets.UTF_8), signal == "f")
+            return when (parts.firstOrNull()) {
+                "v1" -> {
+                    require(parts.size >= 3) { "формат программы: $text" }
+                    val steps = parts.drop(2).map { part ->
+                        val (millis, signal, name) = part.split(':', limit = 3)
+                        TimerStep(millis.toLong(), unurl(name), signal == "f")
+                    }
+                    TimerProgram(steps, parts[1].toInt())
+                }
+                "v2" -> {
+                    require(parts.size >= 6) { "формат программы: $text" }
+                    val steps = parts.drop(5).map { part ->
+                        val f = part.split(':')
+                        val code = unurl(f[3])
+                        val sound = when (code) {
+                            "" -> null
+                            STEP_DEFAULT -> AlarmSound.Default
+                            else -> AlarmSound.decode(code, unurl(f[4]))
+                        }
+                        TimerStep(f[0].toLong(), unurl(f[2]), f[1] == "f", sound)
+                    }
+                    TimerProgram(
+                        steps = steps,
+                        cycles = parts[1].toInt(),
+                        sound = AlarmSound.decode(unurl(parts[3]), unurl(parts[4])),
+                        sleep = parts[2] == "z",
+                    )
+                }
+                else -> throw IllegalArgumentException("формат программы: $text")
             }
-            return TimerProgram(steps, parts[1].toInt())
         }
+
+        private fun url(text: String) = URLEncoder.encode(text, Charsets.UTF_8)
+
+        private fun unurl(text: String) = URLDecoder.decode(text, Charsets.UTF_8)
     }
 }
 
@@ -99,7 +156,8 @@ data class TimerRun(
 }
 
 /** Чем отметить конец шага. */
-enum class StepSignal { NONE, SHORT, FULL }
+/** [SLEEP] — конец таймера засыпания: без сигнала, остановить музыку и видео. */
+enum class StepSignal { NONE, SHORT, FULL, SLEEP }
 
 /** Итог проверки идущего таймера: новое состояние и сигнал за последний закончившийся шаг. */
 data class TimerAdvance(
@@ -109,6 +167,8 @@ data class TimerAdvance(
     val late: Boolean,
     /** Сколько шагов закончилось с прошлой проверки. */
     val endedSteps: Int,
+    /** Звук сигнала: последнего закончившегося шага (D-016, п. 2). */
+    val sound: AlarmSound = AlarmSound.Default,
 )
 
 /** Переходы таймера — чистые функции от «сейчас» (D-009, п. 5). */
@@ -161,6 +221,7 @@ object TimerRules {
     fun advance(run: TimerRun, now: Moment): TimerAdvance {
         var current = run
         var signal = StepSignal.NONE
+        var sound: AlarmSound = AlarmSound.Default
         var ended = 0
         var lateness = 0L
         while (current.state == TimerState.RUNNING) {
@@ -169,7 +230,8 @@ object TimerRules {
             if (left > 0) break
             ended++
             lateness = -left
-            signal = if (current.step.fullSignal || current.isLastStep) StepSignal.FULL else StepSignal.SHORT
+            signal = signalAtStepEnd(current)
+            sound = current.program.soundOf(current.stepIndex)
             current = if (current.isLastStep) {
                 current.copy(state = TimerState.RINGING, stepEndsAt = null, remainingMillis = 0L)
             } else {
@@ -183,10 +245,13 @@ object TimerRules {
                 )
             }
         }
-        return TimerAdvance(current, signal, lateness > AlarmRules.MISSED_AFTER_MILLIS, ended)
+        return TimerAdvance(current, signal, lateness > AlarmRules.MISSED_AFTER_MILLIS, ended, sound)
     }
 
     /** Какой сигнал будет в конце текущего шага идущего таймера. */
-    fun signalAtStepEnd(run: TimerRun): StepSignal =
-        if (run.step.fullSignal || run.isLastStep) StepSignal.FULL else StepSignal.SHORT
+    fun signalAtStepEnd(run: TimerRun): StepSignal = when {
+        run.program.sleep && run.isLastStep -> StepSignal.SLEEP
+        run.step.fullSignal || run.isLastStep -> StepSignal.FULL
+        else -> StepSignal.SHORT
+    }
 }

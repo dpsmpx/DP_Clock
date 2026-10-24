@@ -24,10 +24,11 @@ class AlarmReceiver : BroadcastReceiver() {
                     runAsync {
                         val fire = DpClockApp.graph(context).repository.onTimerStepEnded(id)
                         when (fire?.signal) {
-                            StepSignal.SHORT -> Sounds.shortBeep()
+                            StepSignal.SHORT -> Sounds.shortSignal(context, fire.sound)
                             // Шаг стал последним после «+1 мин» на паузе — сигнал полный.
-                            StepSignal.FULL -> RingService.ringTimer(context, id, fire.run.name, fire.run.state == TimerState.RINGING)
-                            else -> Unit
+                            StepSignal.FULL -> RingService.ringTimer(context, id, fire.run.name, fire.run.state == TimerState.RINGING, fire.sound)
+                            StepSignal.SLEEP -> MediaStop.fadeAndPause(context)
+                            StepSignal.NONE, null -> Unit
                         }
                     }
                 }

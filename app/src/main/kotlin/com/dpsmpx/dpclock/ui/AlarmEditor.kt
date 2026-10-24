@@ -394,7 +394,7 @@ fun AlarmEditor(
             initial = sound,
             onDismiss = { dialog = null },
             onPick = {
-                sound = it
+                sound = it ?: AlarmSound.Default
                 dialog = null
             },
         )

@@ -50,9 +50,15 @@ sealed interface RingItem {
     }
 
     /** [finished] — таймер закончился; иначе — полный сигнал промежуточного шага. */
-    data class TimerRing(val runId: String, val name: String, val finished: Boolean, override val since: Long) : RingItem {
+    data class TimerRing(
+        val runId: String,
+        val name: String,
+        val finished: Boolean,
+        override val since: Long,
+        /** Звук закончившегося шага или пресета (D-016, п. 2). */
+        override val sound: RingSound = RingSound(),
+    ) : RingItem {
         override val key: String get() = "timer:$runId"
-        override val sound: RingSound get() = RingSound()
     }
 }
 
@@ -123,9 +129,10 @@ class RingService : Service() {
                 val fire = repository.onTimerStepEnded(id) ?: return
                 when (fire.signal) {
                     StepSignal.FULL -> ring(
-                        RingItem.TimerRing(id, fire.run.name, fire.run.state == TimerState.RINGING, System.currentTimeMillis()),
+                        RingItem.TimerRing(id, fire.run.name, fire.run.state == TimerState.RINGING, System.currentTimeMillis(), RingSound(fire.sound)),
                     )
-                    StepSignal.SHORT -> Sounds.shortBeep()
+                    StepSignal.SHORT -> Sounds.shortSignal(this, fire.sound)
+                    StepSignal.SLEEP -> MediaStop.fadeAndPause(this)
                     StepSignal.NONE -> Unit
                 }
             }
@@ -135,6 +142,7 @@ class RingService : Service() {
                     intent.getStringExtra(EXTRA_NAME).orEmpty(),
                     intent.getBooleanExtra(EXTRA_FINISHED, true),
                     System.currentTimeMillis(),
+                    RingSound(AlarmSound.decode(intent.getStringExtra(EXTRA_SOUND).orEmpty(), intent.getStringExtra(EXTRA_SOUND_TITLE).orEmpty())),
                 ),
             )
             ACTION_SNOOZE -> {
@@ -267,6 +275,8 @@ class RingService : Service() {
         private const val EXTRA_SCHEDULED_AT = "scheduledAt"
         private const val EXTRA_NAME = "name"
         private const val EXTRA_FINISHED = "finished"
+        private const val EXTRA_SOUND = "sound"
+        private const val EXTRA_SOUND_TITLE = "soundTitle"
 
         fun fireAlarm(context: Context, alarmId: String, scheduledAt: Long) = startForeground(
             context,
@@ -276,9 +286,13 @@ class RingService : Service() {
         fun fireTimer(context: Context, runId: String) =
             startForeground(context, intent(context, ACTION_FIRE_TIMER, runId))
 
-        fun ringTimer(context: Context, runId: String, name: String = "", finished: Boolean = true) = startForeground(
+        fun ringTimer(context: Context, runId: String, name: String, finished: Boolean, sound: AlarmSound) = startForeground(
             context,
-            intent(context, ACTION_RING_TIMER, runId).putExtra(EXTRA_NAME, name).putExtra(EXTRA_FINISHED, finished),
+            intent(context, ACTION_RING_TIMER, runId)
+                .putExtra(EXTRA_NAME, name)
+                .putExtra(EXTRA_FINISHED, finished)
+                .putExtra(EXTRA_SOUND, sound.encode())
+                .putExtra(EXTRA_SOUND_TITLE, sound.title),
         )
 
         /** Интент кнопки сигнала: экран сигнала и уведомление. */

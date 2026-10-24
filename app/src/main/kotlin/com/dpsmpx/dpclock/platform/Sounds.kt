@@ -27,6 +27,22 @@ import kotlin.math.pow
 object Sounds {
     private val main = Handler(Looper.getMainLooper())
 
+    /**
+     * Короткий сигнал конца шага: мелодия телефона по умолчанию — писк; свой
+     * звук шага или пресета — его первые секунды (D-016, п. 2).
+     */
+    fun shortSignal(context: Context, sound: AlarmSound) {
+        if (sound == AlarmSound.Default || sound == AlarmSound.Silent) {
+            if (sound == AlarmSound.Default) shortBeep()
+            return
+        }
+        val player = AlarmPlayer(context.applicationContext)
+        player.play(RingSound(sound, vibrate = false))
+        main.postDelayed({ player.stop() }, SHORT_SIGNAL_MILLIS)
+    }
+
+    private const val SHORT_SIGNAL_MILLIS = 2_500L
+
     /** Короткий сигнал конца шага цепочки. */
     fun shortBeep() {
         val tone = runCatching { ToneGenerator(AudioManager.STREAM_ALARM, ToneGenerator.MAX_VOLUME) }.getOrNull() ?: return

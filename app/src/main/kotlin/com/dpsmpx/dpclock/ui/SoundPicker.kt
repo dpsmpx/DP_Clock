@@ -42,21 +42,28 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Выбор звука будильника (D-013, п. 2): звуки DP_Clock, мелодия будильника
- * телефона, мелодии телефона, свой файл, без звука. Нажатие — предпрослушивание
- * через поток будильника, с той громкостью, с какой прозвучит сигнал.
+ * Выбор звука будильника (D-013, п. 2) и таймера (D-016, п. 2): звуки DP_Clock,
+ * мелодия будильника телефона, мелодии телефона, свой файл, без звука.
+ * [inheritTitle] — строка «как у пресета» сверху: выбор null. Нажатие —
+ * предпрослушивание через поток будильника, с той громкостью, с какой прозвучит сигнал.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SoundPicker(initial: AlarmSound, onDismiss: () -> Unit, onPick: (AlarmSound) -> Unit) {
+fun SoundPicker(
+    initial: AlarmSound?,
+    onDismiss: () -> Unit,
+    onPick: (AlarmSound?) -> Unit,
+    inheritTitle: String? = null,
+    allowSilent: Boolean = true,
+) {
     val context = LocalContext.current
     var selected by remember { mutableStateOf(initial) }
     val player = remember { AlarmPlayer(context.applicationContext, holdWakeLock = false) }
     DisposableEffect(player) { onDispose { player.stop() } }
 
-    fun choose(sound: AlarmSound) {
+    fun choose(sound: AlarmSound?) {
         selected = sound
-        if (sound == AlarmSound.Silent) player.stop() else player.play(RingSound(sound, vibrate = false))
+        if (sound == null || sound == AlarmSound.Silent) player.stop() else player.play(RingSound(sound, vibrate = false))
     }
 
     val phone by produceState<Pair<List<Ringtones.Entry>, List<Ringtones.Entry>>?>(null) {
@@ -81,6 +88,9 @@ fun SoundPicker(initial: AlarmSound, onDismiss: () -> Unit, onPick: (AlarmSound)
             },
         ) { padding ->
             LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
+                if (inheritTitle != null) {
+                    item(key = "inherit") { SoundRow(inheritTitle, selected == null) { choose(null) } }
+                }
                 header(R.string.sounds_dp_clock)
                 items(Synth.catalog, key = { "builtin:" + it.id }) { sound ->
                     SoundRow(stringResource(builtinName(sound.id)), selected == AlarmSound.Builtin(sound.id)) {
@@ -114,8 +124,10 @@ fun SoundPicker(initial: AlarmSound, onDismiss: () -> Unit, onPick: (AlarmSound)
                         if (file != null && selected !is AlarmSound.File) choose(file) else pickFile.launch(arrayOf("audio/*"))
                     }
                 }
-                item(key = "silent") {
-                    SoundRow(stringResource(R.string.sound_silent), selected == AlarmSound.Silent) { choose(AlarmSound.Silent) }
+                if (allowSilent) {
+                    item(key = "silent") {
+                        SoundRow(stringResource(R.string.sound_silent), selected == AlarmSound.Silent) { choose(AlarmSound.Silent) }
+                    }
                 }
             }
         }

@@ -1,16 +1,16 @@
 # Архитектурный обзор DP_Clock
 
-- **Статус:** предварительные целевые границы; существующий код — раздел «Код версии 0.5.0».
+- **Статус:** предварительные целевые границы; существующий код — раздел «Код версии 0.6.0».
 - **Подход:** собственная реализация с нуля с опорой на официальные Android APIs.
 
-## Код версии 0.5.0
+## Код версии 0.6.0
 
-MVP ([D-012](../../DECISIONS/D-012-MVP-IMPLEMENTATION.md)), будильник целиком ([D-013](../../DECISIONS/D-013-FULL-ALARM.md)), графики и исключения ([D-014](../../DECISIONS/D-014-SCHEDULES-AND-EXCEPTIONS.md)), подтверждение пробуждения ([D-015](../../DECISIONS/D-015-WAKE-CHECK.md)), дополнения таймеров ([D-016](../../DECISIONS/D-016-TIMER-ADDITIONS.md)), два модуля:
+MVP ([D-012](../../DECISIONS/D-012-MVP-IMPLEMENTATION.md)), будильник целиком ([D-013](../../DECISIONS/D-013-FULL-ALARM.md)), графики и исключения ([D-014](../../DECISIONS/D-014-SCHEDULES-AND-EXCEPTIONS.md)), подтверждение пробуждения ([D-015](../../DECISIONS/D-015-WAKE-CHECK.md)), дополнения таймеров ([D-016](../../DECISIONS/D-016-TIMER-ADDITIONS.md)), сон и пробуждение ([D-017](../../DECISIONS/D-017-SLEEP-AND-WAKE.md)), два модуля:
 
-- `:core:model` (пакет `com.dpsmpx.dpclock.model`, чистый Kotlin) — модель и правила времени: `AlarmRules` (следующее срабатывание, пропуск, порядок списка), `TimerRules` (переходы таймера и цепочки), `Stopwatch`, `DurationInput`, `Moment` (монотонные часы и UTC), `AlarmSound` (звук будильника), `RuCalendar` (производственный календарь России), `Exceptions` (общий список исключений), `AlarmGroup` и `AlarmTemplate`, `WakeCheck` с задачами, счётчиком встряхиваний и подписью снимка (`PhotoSignature`). Покрыт unit-тестами.
+- `:core:model` (пакет `com.dpsmpx.dpclock.model`, чистый Kotlin) — модель и правила времени: `AlarmRules` (следующее срабатывание, пропуск, порядок списка), `TimerRules` (переходы таймера и цепочки), `Stopwatch`, `DurationInput`, `Moment` (монотонные часы и UTC), `AlarmSound` (звук будильника), `RuCalendar` (производственный календарь России), `Exceptions` (общий список исключений), `AlarmGroup` и `AlarmTemplate`, `WakeCheck` с задачами, счётчиком встряхиваний и подписью снимка (`PhotoSignature`), `SleepRules` (время ложиться, рассвет), `Bedtime`, `AfterAlarm`. Покрыт unit-тестами.
 - `:app` (пакет `com.dpsmpx.dpclock`):
   - `data` — база Room в хранилище устройства и `ClockRepository`: все изменения по одному, после каждого — пересчёт будильников Android и уведомлений; `Migrations` — миграции схемы списками SQL, общими для телефона и теста на JVM;
-  - `platform` — `Scheduler` (`setAlarmClock`, точные будильники таймеров), `RingService` (служба сигнала `systemExempted`), приёмники будильников, событий системы и кнопок уведомлений, `Notifier`; звук — `AlarmPlayer` (мелодия, файл или звук DP_Clock, нарастание, вибрация), `Synth` (звуки DP_Clock кодом), `Ringtones` (мелодии телефона и файлы); `CodeReader` — QR-коды и штрихкоды (ZXing); `MediaStop` — конец таймера засыпания;
+  - `platform` — `Scheduler` (`setAlarmClock`, точные будильники таймеров), `RingService` (служба сигнала `systemExempted`), приёмники будильников, событий системы и кнопок уведомлений, `Notifier`; звук — `AlarmPlayer` (мелодия, файл или звук DP_Clock, нарастание, вибрация), `Synth` (звуки DP_Clock кодом), `Ringtones` (мелодии телефона и файлы); `CodeReader` — QR-коды и штрихкоды (ZXing); `MediaStop` — конец таймера засыпания; `NightClockActivity` и `NightDream` — ночные часы и заставка;
   - `ui` и `MainActivity` — разделы в нижней панели со свайпом, настройки, редактор будильника (с графиком) и выбор мелодии, группы и шаблоны в «Будильниках», экран исключений; `WakeCheckEditor`, `WakeChallenge` (проверка пробуждения) и `CameraScanner` (CameraX); `RingActivity` — экран сигнала поверх блокировки и кнопки громкости; `ClockScreen` — экран версии 0.0.0.
 
 Слой операций для ИИ (п. 2 ниже) ещё не выделен: интерфейс вызывает `ClockRepository` напрямую.

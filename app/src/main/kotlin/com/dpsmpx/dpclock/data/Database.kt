@@ -56,6 +56,13 @@ data class AlarmEntity(
     val wakeSnooze: Boolean,
     /** Повторная проверка «Не спите?» через столько минут; 0 — нет. */
     val recheckMinutes: Int,
+    /** Мягкое пробуждение за столько минут; 0 — нет (D-017). */
+    val gentleMinutes: Int,
+    /** После будильника: пресет таймера, напоминание, приложение (D-017). */
+    val afterPresetId: String?,
+    val afterReminder: String,
+    val afterReminderMinutes: Int,
+    val afterApp: String,
 )
 
 /** Группа будильников (D-014, п. 5). */
@@ -153,6 +160,14 @@ data class SettingsEntity(
     val volumeButtons: String,
     /** Праздники и переносы по производственному календарю России — в исключениях. */
     val holidaysRu: Boolean,
+    /** Время сна (D-017): BedtimeMode, сколько спать, расписание, напомнить заранее. */
+    val bedtimeMode: String,
+    val sleepMinutes: Int,
+    val bedtimeHour: Int,
+    val bedtimeMinute: Int,
+    /** Дни расписания битами, как у будильника. */
+    val bedtimeDays: Int,
+    val bedtimeLeadMinutes: Int,
 )
 
 /** Журнал срабатываний (DATA_MODEL.md, п. 7), последние [ClockDao.LOG_LIMIT] событий. */
@@ -245,6 +260,9 @@ interface ClockDao {
     @Query("SELECT * FROM timer_preset ORDER BY createdAt")
     fun presets(): Flow<List<PresetEntity>>
 
+    @Query("SELECT * FROM timer_preset WHERE id = :id")
+    suspend fun preset(id: String): PresetEntity?
+
     @Upsert
     suspend fun upsertPreset(preset: PresetEntity)
 
@@ -331,10 +349,10 @@ abstract class ClockDatabase : RoomDatabase() {
         const val NAME = "dpclock.db"
 
         /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
-        const val VERSION = 4
+        const val VERSION = 5
 
         /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
-        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки

@@ -1,6 +1,9 @@
 package com.dpsmpx.dpclock.ui
 
+import android.content.Intent
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -35,10 +40,14 @@ import com.dpsmpx.dpclock.BuildConfig
 import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
 import com.dpsmpx.dpclock.model.AlarmOrder
+import com.dpsmpx.dpclock.model.Bedtime
+import com.dpsmpx.dpclock.model.BedtimeMode
 import com.dpsmpx.dpclock.model.Settings
 import com.dpsmpx.dpclock.model.SignalStyle
 import com.dpsmpx.dpclock.model.VolumeButtons
 import com.dpsmpx.dpclock.persistLater
+import com.dpsmpx.dpclock.platform.TimeText
+import java.time.format.TextStyle
 
 /** Настройки MVP (SCREEN_MAP.md, п. 9). */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,6 +58,8 @@ fun SettingsScreen(onBack: () -> Unit) {
     val settings by repository.settings.collectAsStateWithLifecycle(Settings())
     val reliability = rememberReliability()
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
+    var noDream by rememberSaveable { mutableStateOf(false) }
+    val locale = LocalConfiguration.current.locales[0]
 
     fun update(change: (Settings) -> Settings) = persistLater { repository.updateSettings(change) }
 
@@ -98,6 +109,60 @@ fun SettingsScreen(onBack: () -> Unit) {
                     headlineContent = { Text(stringResource(R.string.volume_buttons)) },
                     supportingContent = { Text(stringResource(volumeButtonsTitle(settings.volumeButtons))) },
                     modifier = Modifier.clickable { dialog = "volume" },
+                )
+            }
+            item { Header(R.string.settings_sleep) }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.bedtime_reminder)) },
+                    supportingContent = { Text(stringResource(bedtimeModeTitle(settings.bedtime.mode))) },
+                    modifier = Modifier.clickable { dialog = "bedtimeMode" },
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.sleep_goal)) },
+                    supportingContent = { Text(sleepText(settings.bedtime.sleepMinutes)) },
+                    modifier = Modifier.clickable { dialog = "sleep" },
+                )
+            }
+            if (settings.bedtime.mode == BedtimeMode.SCHEDULE) {
+                item {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.bedtime_at)) },
+                        supportingContent = { Text(TimeText.time(context, settings.bedtime.hour, settings.bedtime.minute)) },
+                        modifier = Modifier.clickable { dialog = "bedtimeTime" },
+                    )
+                }
+                item {
+                    FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        for (day in orderedDays(locale)) {
+                            val days = settings.bedtime.days
+                            FilterChip(
+                                selected = day in days,
+                                onClick = { update { it.copy(bedtime = it.bedtime.copy(days = if (day in days) days - day else days + day)) } },
+                                label = { Text(day.getDisplayName(TextStyle.NARROW_STANDALONE, locale)) },
+                            )
+                        }
+                    }
+                }
+            }
+            if (settings.bedtime.mode != BedtimeMode.OFF) {
+                item {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.bedtime_lead)) },
+                        supportingContent = { Text(leadText(settings.bedtime.leadMinutes)) },
+                        modifier = Modifier.clickable { dialog = "lead" },
+                    )
+                }
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.night_dream)) },
+                    supportingContent = { Text(stringResource(if (noDream) R.string.night_dream_missing else R.string.night_dream_text)) },
+                    modifier = Modifier.clickable {
+                        noDream = runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_DREAM_SETTINGS)) }.isFailure
+                    },
                 )
             }
             item { Header(R.string.settings_reliability) }
@@ -187,6 +252,39 @@ fun SettingsScreen(onBack: () -> Unit) {
             onDismiss = { dialog = null },
             onSelect = { value -> update { it.copy(signalStyle = value) } },
         )
+        "bedtimeMode" -> ChoiceDialog(
+            title = stringResource(R.string.bedtime_reminder),
+            choices = BedtimeMode.entries,
+            selected = settings.bedtime.mode,
+            label = { stringResource(bedtimeModeTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(bedtime = it.bedtime.copy(mode = value)) } },
+        )
+        "sleep" -> ChoiceDialog(
+            title = stringResource(R.string.sleep_goal),
+            choices = Bedtime.SLEEP_CHOICES,
+            selected = settings.bedtime.sleepMinutes,
+            label = { sleepText(it) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(bedtime = it.bedtime.copy(sleepMinutes = value)) } },
+        )
+        "lead" -> ChoiceDialog(
+            title = stringResource(R.string.bedtime_lead),
+            choices = Bedtime.LEAD_CHOICES,
+            selected = settings.bedtime.leadMinutes,
+            label = { leadText(it) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(bedtime = it.bedtime.copy(leadMinutes = value)) } },
+        )
+        "bedtimeTime" -> TimePickerDialog(
+            initialHour = settings.bedtime.hour,
+            initialMinute = settings.bedtime.minute,
+            onDismiss = { dialog = null },
+            onConfirm = { h, m ->
+                dialog = null
+                update { it.copy(bedtime = it.bedtime.copy(hour = h, minute = m)) }
+            },
+        )
         "volume" -> ChoiceDialog(
             title = stringResource(R.string.volume_buttons),
             choices = VolumeButtons.entries,
@@ -223,6 +321,21 @@ private fun PermissionRow(issue: Issue, granted: Boolean) {
 @Composable
 private fun autoStopText(minutes: Int?): String =
     if (minutes == null) stringResource(R.string.never) else stringResource(R.string.minutes_value, minutes)
+
+private fun bedtimeModeTitle(mode: BedtimeMode): Int = when (mode) {
+    BedtimeMode.OFF -> R.string.ramp_off
+    BedtimeMode.FROM_ALARM -> R.string.bedtime_from_alarm
+    BedtimeMode.SCHEDULE -> R.string.bedtime_schedule
+}
+
+@Composable
+fun sleepText(minutes: Int): String =
+    if (minutes % 60 == 0) stringResource(R.string.hours_value, minutes / 60)
+    else stringResource(R.string.hours_minutes_value, minutes / 60, minutes % 60)
+
+@Composable
+private fun leadText(minutes: Int): String =
+    if (minutes == 0) stringResource(R.string.bedtime_lead_none) else stringResource(R.string.bedtime_lead_value, minutes)
 
 private fun styleTitle(style: SignalStyle): Int = when (style) {
     SignalStyle.FULL_SCREEN -> R.string.signal_style_full_screen

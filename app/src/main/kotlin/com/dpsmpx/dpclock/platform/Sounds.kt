@@ -56,6 +56,8 @@ data class RingSound(
     val sound: AlarmSound = AlarmSound.Default,
     val vibrate: Boolean = true,
     val rampSeconds: Int = 0,
+    /** Предел громкости от 0 до 1: тихий звук мягкого пробуждения (D-017, п. 3). */
+    val volume: Float = 1f,
 )
 
 /**
@@ -215,10 +217,11 @@ class AlarmPlayer(private val context: Context, private val holdWakeLock: Boolea
         val progress = if (rampSeconds <= 0) 1.0 else min(1.0, (SystemClock.elapsedRealtime() - startedAt) / (rampSeconds * 1000.0))
         // Равномерно в децибелах: от −36 дБ до полной — на слух нарастает ровно.
         val quiet = SystemClock.elapsedRealtime() < quietUntil
+        val limit = current?.volume ?: 1f
         val gain = when {
             quiet -> 0f
-            progress >= 1.0 -> 1f
-            else -> 10.0.pow(-36.0 * (1 - progress) / 20).toFloat()
+            progress >= 1.0 -> limit
+            else -> limit * 10.0.pow(-36.0 * (1 - progress) / 20).toFloat()
         }
         media?.setVolume(gain, gain)
         track?.setVolume(gain)

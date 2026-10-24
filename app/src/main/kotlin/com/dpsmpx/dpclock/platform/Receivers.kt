@@ -12,8 +12,25 @@ import kotlinx.coroutines.launch
 /** Будильник Android пришёл: конец будильника, «Отложить» или шага таймера. */
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        when (intent.action) {
+            ACTION_BEDTIME -> {
+                val bedAt = intent.getLongExtra(EXTRA_BED_AT, 0L)
+                val alarmAt = intent.getLongExtra(EXTRA_ALARM_AT, 0L).takeIf { it > 0 }
+                runAsync {
+                    val graph = DpClockApp.graph(context)
+                    graph.notifier.bedtime(bedAt, alarmAt, graph.repository.currentSettings().bedtime.sleepMinutes)
+                    graph.repository.syncBedtime()
+                }
+                return
+            }
+            ACTION_REMINDER -> {
+                DpClockApp.graph(context).notifier.reminder(intent.getStringExtra(EXTRA_ID).orEmpty(), intent.getStringExtra(EXTRA_TEXT).orEmpty())
+                return
+            }
+        }
         val id = intent.getStringExtra(EXTRA_ID) ?: return
         when (intent.action) {
+            ACTION_GENTLE -> RingService.fireGentle(context, id, intent.getLongExtra(EXTRA_ALARM_AT, 0L))
             // Службу сигнала — сразу, пока действует разрешение точного будильника
             // на запуск службы переднего плана; разбор — уже в ней.
             ACTION_ALARM -> RingService.fireAlarm(context, id, intent.getLongExtra(EXTRA_SCHEDULED_AT, 0L))
@@ -38,6 +55,12 @@ class AlarmReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_ALARM = "com.dpsmpx.dpclock.action.ALARM"
         const val ACTION_TIMER = "com.dpsmpx.dpclock.action.TIMER"
+        const val ACTION_GENTLE = "com.dpsmpx.dpclock.action.GENTLE"
+        const val ACTION_BEDTIME = "com.dpsmpx.dpclock.action.BEDTIME"
+        const val ACTION_REMINDER = "com.dpsmpx.dpclock.action.REMINDER"
+        const val EXTRA_ALARM_AT = "alarmAt"
+        const val EXTRA_BED_AT = "bedAt"
+        const val EXTRA_TEXT = "text"
         const val EXTRA_ID = "id"
         const val EXTRA_SCHEDULED_AT = "scheduledAt"
         const val EXTRA_FULL = "full"

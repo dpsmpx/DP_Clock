@@ -13,6 +13,7 @@ import com.dpsmpx.dpclock.data.AlarmFire
 import com.dpsmpx.dpclock.model.SignalOutcome
 import com.dpsmpx.dpclock.model.AlarmSound
 import com.dpsmpx.dpclock.model.SignalStyle
+import com.dpsmpx.dpclock.model.SleepRules
 import com.dpsmpx.dpclock.model.WakeCheck
 import com.dpsmpx.dpclock.model.StepSignal
 import com.dpsmpx.dpclock.model.TimerState
@@ -38,8 +39,27 @@ sealed interface RingItem {
         override val since: Long,
         /** Без проверки «Выключить» не выключает (D-015). */
         val wakeCheck: WakeCheck = WakeCheck(),
+        /** Приложение, которое открыть после выключения (D-017, п. 5). */
+        val afterApp: String = "",
     ) : RingItem {
         override val key: String get() = "alarm:$alarmId"
+    }
+
+    /**
+     * Мягкое пробуждение (D-017, п. 3): с [startsAt] до будильника в [alarmAt]
+     * экран светлеет, в последние минуты — тихий звук. [canDismiss] — «Я уже
+     * проснулся» выключает это срабатывание (без проверки пробуждения).
+     */
+    data class GentleRing(
+        val alarmId: String,
+        val label: String,
+        val startsAt: Long,
+        val alarmAt: Long,
+        val canDismiss: Boolean,
+        override val since: Long,
+        override val sound: RingSound = RingSound(AlarmSound.Silent, vibrate = false),
+    ) : RingItem {
+        override val key: String get() = "gentle:$alarmId"
     }
 
     /** «Не спите?» через несколько минут после выключения (D-011, п. 3): без ответа — снова сигнал. */
@@ -86,6 +106,7 @@ class RingService : Service() {
     private val main = Handler(Looper.getMainLooper())
     private val player by lazy { AlarmPlayer(this) }
     private val autoStops = mutableMapOf<String, Runnable>()
+    private val gentleTasks = mutableMapOf<String, List<Runnable>>()
     private var pending = 0
     /** Вид сигнала из настроек на момент последнего сигнала (D-007, п. 2). */
     private var fullScreen = true
@@ -120,6 +141,25 @@ class RingService : Service() {
                 )
                 AlarmFire.Skip -> Unit
             }
+            ACTION_FIRE_GENTLE -> {
+                val alarmAt = intent.getLongExtra(EXTRA_SCHEDULED_AT, 0L)
+                val alarm = repository.onGentleFired(id, alarmAt) ?: return
+                ring(
+                    RingItem.GentleRing(
+                        alarmId = id,
+                        label = alarm.label,
+                        startsAt = System.currentTimeMillis(),
+                        alarmAt = alarmAt,
+                        canDismiss = !alarm.wakeCheck.required,
+                        since = System.currentTimeMillis(),
+                    ),
+                )
+            }
+            ACTION_GENTLE_CLOSE -> silence("gentle:$id")
+            ACTION_GENTLE_AWAKE -> {
+                repository.dismissEarly(id)
+                silence("gentle:$id")
+            }
             ACTION_RECHECK_OK -> {
                 repository.recheckPassed(id)
                 silence("recheck:$id")
@@ -150,8 +190,13 @@ class RingService : Service() {
                 silence("alarm:$id")
             }
             ACTION_DISMISS -> {
+                val item = Ringing.items.value.firstOrNull { it.key == "alarm:$id" } as? RingItem.AlarmRing
                 repository.stopAlarm(id, SignalOutcome.DISMISSED)
                 silence("alarm:$id")
+                // Выключен не на экране сигнала — приложение открывается из уведомления (D-017, п. 5).
+                if (item != null && item.afterApp.isNotEmpty() && !intent.getBooleanExtra(EXTRA_FROM_SCREEN, false)) {
+                    DpClockApp.graph(this).notifier.openAfterAlarm(item.afterApp)
+                }
             }
             ACTION_TIMER_STOP -> {
                 repository.stopTimerSignal(id, SignalOutcome.DISMISSED)
@@ -175,15 +220,22 @@ class RingService : Service() {
             sound = RingSound(alarm.sound, alarm.vibrate, alarm.rampSeconds),
             since = System.currentTimeMillis(),
             wakeCheck = alarm.wakeCheck,
+            afterApp = alarm.after.app,
         )
     }
 
     private suspend fun ring(item: RingItem) {
         val settings = DpClockApp.graph(this).repository.currentSettings()
         fullScreen = settings.signalStyle == SignalStyle.FULL_SCREEN
+        // Будильник зазвонил — его мягкое пробуждение закончилось.
+        if (item is RingItem.AlarmRing) silence("gentle:${item.alarmId}")
         Ringing.add(item)
         player.play(item.sound)
         goForeground()
+        if (item is RingItem.GentleRing) {
+            scheduleGentle(item)
+            return
+        }
         if (item is RingItem.RecheckRing) {
             // Минута на ответ; потом — снова будильник с той же проверкой.
             val timeout = Runnable {
@@ -205,7 +257,7 @@ class RingService : Service() {
                 when (item) {
                     is RingItem.AlarmRing -> repository.stopAlarm(item.alarmId, SignalOutcome.AUTO_STOPPED)
                     is RingItem.TimerRing -> repository.stopTimerSignal(item.runId, SignalOutcome.AUTO_STOPPED)
-                    is RingItem.RecheckRing -> Unit
+                    is RingItem.RecheckRing, is RingItem.GentleRing -> Unit
                 }
                 silence(item.key)
                 stopIfIdle()
@@ -215,7 +267,28 @@ class RingService : Service() {
         main.postDelayed(autoStop, minutes * 60_000L)
     }
 
+    /** Тихий звук — в последние минуты; не пришёл будильник — через 2 мин после его времени рассвет гаснет сам. */
+    private fun scheduleGentle(item: RingItem.GentleRing) {
+        val now = System.currentTimeMillis()
+        val soundAt = item.alarmAt - SleepRules.GENTLE_SOUND_MINUTES * 60_000L
+        val withSound = item.copy(sound = RingSound(AlarmSound.Builtin("dawn"), vibrate = false, rampSeconds = SleepRules.GENTLE_SOUND_MINUTES * 60, volume = 0.35f))
+        val startSound = Runnable {
+            if (Ringing.items.value.any { it.key == item.key }) {
+                Ringing.add(withSound)
+                if (Ringing.items.value.lastOrNull()?.key == item.key) player.play(withSound.sound)
+            }
+        }
+        val end = Runnable {
+            silence(item.key)
+            stopIfIdle()
+        }
+        main.postDelayed(startSound, (soundAt - now).coerceAtLeast(0L))
+        main.postDelayed(end, item.alarmAt - now + 2 * 60_000L)
+        gentleTasks[item.key] = listOf(startSound, end)
+    }
+
     private fun silence(key: String) {
+        gentleTasks.remove(key)?.forEach(main::removeCallbacks)
         autoStops.remove(key)?.let(main::removeCallbacks)
         Ringing.remove(key)
         // Остался другой сигнал — звучит его звук.
@@ -253,6 +326,8 @@ class RingService : Service() {
     override fun onDestroy() {
         autoStops.values.forEach(main::removeCallbacks)
         autoStops.clear()
+        gentleTasks.values.flatten().forEach(main::removeCallbacks)
+        gentleTasks.clear()
         player.stop()
         super.onDestroy()
     }
@@ -266,6 +341,12 @@ class RingService : Service() {
         const val ACTION_TIMER_STOP = "com.dpsmpx.dpclock.ring.TIMER_STOP"
         const val ACTION_TIMER_ADD_MINUTE = "com.dpsmpx.dpclock.ring.TIMER_ADD_MINUTE"
         const val ACTION_RECHECK_OK = "com.dpsmpx.dpclock.ring.RECHECK_OK"
+        private const val ACTION_FIRE_GENTLE = "com.dpsmpx.dpclock.ring.FIRE_GENTLE"
+        const val ACTION_GENTLE_CLOSE = "com.dpsmpx.dpclock.ring.GENTLE_CLOSE"
+        const val ACTION_GENTLE_AWAKE = "com.dpsmpx.dpclock.ring.GENTLE_AWAKE"
+
+        /** «Выключить» нажато на экране сигнала: приложение после будильника он открывает сам. */
+        const val EXTRA_FROM_SCREEN = "fromScreen"
 
         /** Человек решает проверку пробуждения: сигнал молчит [QUIET_MILLIS] с последнего действия (D-015, п. 2). */
         const val ACTION_QUIET = "com.dpsmpx.dpclock.ring.QUIET"
@@ -281,6 +362,11 @@ class RingService : Service() {
         fun fireAlarm(context: Context, alarmId: String, scheduledAt: Long) = startForeground(
             context,
             intent(context, ACTION_FIRE_ALARM, alarmId).putExtra(EXTRA_SCHEDULED_AT, scheduledAt),
+        )
+
+        fun fireGentle(context: Context, alarmId: String, alarmAt: Long) = startForeground(
+            context,
+            intent(context, ACTION_FIRE_GENTLE, alarmId).putExtra(EXTRA_SCHEDULED_AT, alarmAt),
         )
 
         fun fireTimer(context: Context, runId: String) =

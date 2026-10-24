@@ -12,6 +12,8 @@ data class Settings(
     val volumeButtons: VolumeButtons = VolumeButtons.SNOOZE,
     /** Праздники и переносы производственного календаря России — в общем списке исключений (D-014, п. 3). */
     val holidaysRu: Boolean = false,
+    /** Время сна и напоминание ложиться (D-017, п. 2). */
+    val bedtime: Bedtime = Bedtime(),
 ) {
     companion object {
         const val DEFAULT_SNOOZE = 10

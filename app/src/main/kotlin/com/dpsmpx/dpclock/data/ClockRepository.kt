@@ -10,6 +10,7 @@ import com.dpsmpx.dpclock.model.ExceptionPeriod
 import com.dpsmpx.dpclock.model.Exceptions
 import com.dpsmpx.dpclock.model.Repeat
 import com.dpsmpx.dpclock.model.Settings
+import com.dpsmpx.dpclock.model.SleepRules
 import com.dpsmpx.dpclock.model.SignalOutcome
 import com.dpsmpx.dpclock.model.SignalSource
 import com.dpsmpx.dpclock.model.StepSignal
@@ -71,6 +72,9 @@ class ClockRepository(
     private val runtimeMarker = File(context.deviceStorage().noBackupFilesDir, "runtime-owner")
     private var ready = false
 
+    /** Расписание будильников менялось в этом изменении — напоминание ложиться пересчитывается в конце. */
+    private var alarmsChanged = false
+
     val alarms: Flow<List<Alarm>> = dao.alarms().map { list -> list.map { it.toModel() } }
     val settings: Flow<Settings> = dao.settings().map { it.toModel() }
     val presets: Flow<List<TimerPreset>> = dao.presets().map { list -> list.map { it.toModel() } }
@@ -102,7 +106,12 @@ class ClockRepository(
             }
             ready = true
         }
-        block()
+        val result = block()
+        if (alarmsChanged) {
+            alarmsChanged = false
+            syncBedtimeLocked()
+        }
+        result
     }
 
     suspend fun currentSettings(): Settings = locked { dao.currentSettings().toModel() }
@@ -113,6 +122,7 @@ class ClockRepository(
         dao.upsertSettings(new.toEntity())
         // Праздники включили или выключили — у будильников другие даты.
         if (old.holidaysRu != new.holidaysRu) rescheduleAllLocked()
+        if (old.bedtime != new.bedtime) alarmsChanged = true
     }
 
     // Будильники
@@ -155,6 +165,7 @@ class ClockRepository(
                 scheduler.cancelAlarm(alarm.id)
                 notifier.cancelSnoozed(alarm.id)
             }
+            alarmsChanged = true
         }
         dao.ungroup(id)
         dao.deleteGroup(id)
@@ -238,6 +249,7 @@ class ClockRepository(
         dao.deleteOccurrence(id)
         scheduler.cancelAlarm(id)
         notifier.cancelSnoozed(id)
+        alarmsChanged = true
         alarm
     }
 
@@ -301,6 +313,9 @@ class ClockRepository(
         val occ = dao.occurrence(id)
         val now = now()
         val recheck = dao.alarm(id)?.toModel()?.wakeCheck?.recheckMinutes ?: 0
+        if (outcome == SignalOutcome.DISMISSED && occ != null && occ.state != Occ.RECHECK) {
+            dao.alarm(id)?.toModel()?.let { runAfterActions(it) }
+        }
         if (outcome == SignalOutcome.DISMISSED && recheck > 0 && occ != null && occ.state != Occ.RECHECK) {
             // Выключен, но через несколько минут — «Не спите?» (D-011, п. 3; D-015, п. 4).
             val at = now + recheck * 60_000L
@@ -308,6 +323,7 @@ class ClockRepository(
             log(SignalSource.ALARM, id, occ.scheduledAt, occ.ringingSince ?: now, outcome)
             notifier.cancelSnoozed(id)
             scheduler.setAlarm(id, at)
+            alarmsChanged = true
             return@locked
         }
         dao.deleteOccurrence(id)
@@ -317,6 +333,67 @@ class ClockRepository(
         if (occ != null) log(SignalSource.ALARM, id, occ.scheduledAt, occ.ringingSince ?: now, outcome)
         if (outcome == SignalOutcome.AUTO_STOPPED) notifier.missedAlarm(alarm, occ?.scheduledAt ?: now, autoStopped = true)
         scheduleAlarm(alarm)
+    }
+
+    /** Пришло время мягкого пробуждения (D-017, п. 3): будильник ещё ждёт этого срабатывания — его данные, иначе null. */
+    suspend fun onGentleFired(id: String, alarmAt: Long): Alarm? = locked {
+        val occ = dao.occurrence(id)?.takeIf { it.state == Occ.SCHEDULED && it.scheduledAt == alarmAt } ?: return@locked null
+        dao.alarm(id)?.toModel()?.takeIf { it.enabled && occ.scheduledAt > now() }
+    }
+
+    /**
+     * «Я уже проснулся» во время мягкого пробуждения: это срабатывание не звонит.
+     * Повторяющийся пропускает его дату, однократный и на дату выключаются.
+     */
+    suspend fun dismissEarly(id: String) = locked {
+        val occ = dao.occurrence(id)?.takeIf { it.state == Occ.SCHEDULED } ?: return@locked
+        val alarm = dao.alarm(id)?.toModel() ?: return@locked
+        dao.deleteOccurrence(id)
+        scheduler.cancelAlarm(id)
+        log(SignalSource.ALARM, id, occ.scheduledAt, now(), SignalOutcome.DISMISSED)
+        runAfterActions(alarm)
+        val zone = ZoneId.systemDefault()
+        val next = if (alarm.repeat.isRepeating) {
+            alarm.copy(skipDate = Instant.ofEpochMilli(occ.scheduledAt).atZone(zone).toLocalDate())
+        } else {
+            alarm.copy(enabled = false)
+        }
+        dao.upsertAlarm(next.toEntity())
+        scheduleAlarm(next)
+    }
+
+    /** Напоминание ложиться — по настройкам и ближайшему срабатыванию (D-017, п. 2). */
+    suspend fun syncBedtime() = locked { syncBedtimeLocked() }
+
+    private suspend fun syncBedtimeLocked() {
+        val bedtime = dao.currentSettings().toModel().bedtime
+        val nearest = dao.occurrences().filter { it.state == Occ.SCHEDULED }.minOfOrNull { it.scheduledAt }
+        val reminder = SleepRules.nextReminder(bedtime, nearest?.let(Instant::ofEpochMilli), Instant.ofEpochMilli(now()), ZoneId.systemDefault())
+        if (reminder == null) {
+            scheduler.cancelBedtime()
+        } else {
+            scheduler.setBedtime(reminder.remindAt.toEpochMilli(), reminder.bedAt.toEpochMilli(), reminder.alarmAt?.toEpochMilli())
+        }
+    }
+
+    /** После выключения (D-017, п. 5): пресет таймера и напоминание; приложение открывает экран сигнала. */
+    private suspend fun runAfterActions(alarm: Alarm) {
+        val after = alarm.after
+        after.presetId?.let { presetId ->
+            val preset = dao.preset(presetId)?.toModel()
+            if (preset != null) {
+                val run = TimerRules.start(UUID.randomUUID().toString(), preset.id, preset.name, preset.program, Clocks.moment())
+                dao.upsertTimerRun(run.toEntity())
+                syncTimers()
+            }
+        }
+        if (after.reminder.isNotBlank()) {
+            if (after.reminderMinutes == 0) {
+                notifier.reminder(alarm.id, after.reminder)
+            } else {
+                scheduler.setReminder(alarm.id, now() + after.reminderMinutes * 60_000L, after.reminder)
+            }
+        }
     }
 
     /** «Я не сплю» — проверка пройдена: будильник идёт к следующему срабатыванию. */
@@ -417,6 +494,7 @@ class ClockRepository(
 
     /** Поставить ближайшее срабатывание; возвращает его момент (0 — будильник выключен или больше не сработает). */
     private suspend fun scheduleAlarm(stored: Alarm, knownExceptions: Exceptions? = null): Long {
+        alarmsChanged = true
         val zone = ZoneId.systemDefault()
         val nowInstant = Instant.ofEpochMilli(now())
         var alarm = stored
@@ -428,6 +506,7 @@ class ClockRepository(
         when (occ?.state) {
             Occ.RINGING -> return 0L
             Occ.SNOOZED -> {
+                scheduler.cancelGentle(alarm.id)
                 scheduler.setAlarm(alarm.id, occ.snoozedUntil!!)
                 return occ.snoozedUntil
             }
@@ -453,6 +532,9 @@ class ClockRepository(
         }
         dao.upsertOccurrence(OccurrenceEntity(alarm.id, at, Occ.SCHEDULED, snoozedUntil = null, ringingSince = null, recheckAt = null))
         scheduler.setAlarm(alarm.id, at)
+        // Мягкое пробуждение — только если до будильника ещё есть всё его время.
+        val gentleAt = at - alarm.gentleMinutes * 60_000L
+        if (alarm.gentleMinutes > 0 && gentleAt > nowInstant.toEpochMilli()) scheduler.setGentle(alarm.id, gentleAt, at) else scheduler.cancelGentle(alarm.id)
         return at
     }
 

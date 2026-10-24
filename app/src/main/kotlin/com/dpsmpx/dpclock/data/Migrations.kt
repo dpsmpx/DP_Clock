@@ -70,3 +70,22 @@ val MIGRATION_3_4 = SqlMigration(
         "ALTER TABLE `alarm_occurrence` ADD COLUMN `recheckAt` INTEGER",
     ),
 )
+
+/** 0.6.0 (D-017): мягкое пробуждение, действие после будильника, время сна. */
+val MIGRATION_4_5 = SqlMigration(
+    4,
+    5,
+    listOf(
+        "ALTER TABLE `alarm` ADD COLUMN `gentleMinutes` INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE `alarm` ADD COLUMN `afterPresetId` TEXT",
+        "ALTER TABLE `alarm` ADD COLUMN `afterReminder` TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE `alarm` ADD COLUMN `afterReminderMinutes` INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE `alarm` ADD COLUMN `afterApp` TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE `settings` ADD COLUMN `bedtimeMode` TEXT NOT NULL DEFAULT 'OFF'",
+        "ALTER TABLE `settings` ADD COLUMN `sleepMinutes` INTEGER NOT NULL DEFAULT 480",
+        "ALTER TABLE `settings` ADD COLUMN `bedtimeHour` INTEGER NOT NULL DEFAULT 23",
+        "ALTER TABLE `settings` ADD COLUMN `bedtimeMinute` INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE `settings` ADD COLUMN `bedtimeDays` INTEGER NOT NULL DEFAULT 127",
+        "ALTER TABLE `settings` ADD COLUMN `bedtimeLeadMinutes` INTEGER NOT NULL DEFAULT 15",
+    ),
+)

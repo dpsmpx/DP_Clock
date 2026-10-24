@@ -87,6 +87,7 @@ class MigrationTest {
             snoozeMinutes = null, skipDate = null, repeatDate = null,
             honorExceptions = true, groupId = null, cycleAnchor = null, cycleDays = null, workdays = false,
             wakeMethod = "NONE", wakeLevel = "MEDIUM", wakeTasks = 1, wakeReference = "", wakeSnooze = true, recheckMinutes = 0,
+            gentleMinutes = 0, afterPresetId = null, afterReminder = "", afterReminderMinutes = 0, afterApp = "",
         ).toModel()
         assertEquals(com.dpsmpx.dpclock.model.Alarm("a", 7, 30, com.dpsmpx.dpclock.model.Repeat.fromBits(31), true, 1000), model)
     }
@@ -145,6 +146,35 @@ class MigrationTest {
         val occurrence = row(db, "SELECT * FROM alarm_occurrence")
         assertEquals("SCHEDULED", occurrence["state"])
         assertEquals(null, occurrence["recheckAt"])
+    }
+
+    @Test
+    fun migration4To5AddsSleepAndAfterAlarmOff() = withDb { db ->
+        SchemaFile.read(4).create(db)
+        db.execSQL(
+            "INSERT INTO alarm (id, hour, minute, repeatDays, enabled, createdAt, label, sound, soundTitle, vibrate, rampSeconds, " +
+                "honorExceptions, workdays, wakeMethod, wakeLevel, wakeTasks, wakeReference, wakeSnooze, recheckMinutes) " +
+                "VALUES ('a', 6, 0, 0, 1, 1, '', '', '', 1, 0, 1, 0, 'MATH', 'HARD', 3, '', 0, 5)",
+        )
+        db.execSQL(
+            "INSERT INTO settings (id, snoozeMinutes, autoStopMinutes, alarmOrder, xiaomiHintsDone, signalStyle, volumeButtons, holidaysRu) " +
+                "VALUES (0, 10, 10, 'TIME_OF_DAY', 0, 'FULL_SCREEN', 'SNOOZE', 1)",
+        )
+        MIGRATION_4_5.migrate(db)
+
+        val alarm = row(db, "SELECT * FROM alarm")
+        assertEquals("MATH", alarm["wakeMethod"])
+        assertEquals("5", alarm["recheckMinutes"])
+        assertEquals("0", alarm["gentleMinutes"])
+        assertEquals(null, alarm["afterPresetId"])
+        assertEquals("", alarm["afterReminder"])
+        assertEquals("", alarm["afterApp"])
+        val settings = row(db, "SELECT * FROM settings")
+        assertEquals("1", settings["holidaysRu"])
+        assertEquals("OFF", settings["bedtimeMode"])
+        assertEquals("480", settings["sleepMinutes"])
+        assertEquals("127", settings["bedtimeDays"])
+        assertEquals("15", settings["bedtimeLeadMinutes"])
     }
 
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)

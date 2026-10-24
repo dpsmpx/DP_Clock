@@ -22,6 +22,14 @@
         android:name="android.hardware.camera"
         android:required="false" />
 
+    <!-- «После будильника — открыть приложение» (D-017): список приложений с иконкой на рабочем столе. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <!-- Будильники, пресеты и настройки — в системной копии и при переносе на новое устройство (D-006, п. 9). -->
     <application
         android:name=".DpClockApp"
@@ -51,6 +59,24 @@
             android:showWhenLocked="true"
             android:taskAffinity=""
             android:turnScreenOn="true" />
+
+        <!-- Ночные часы (D-017): из раздела «Часы» и заставкой Android на зарядке. -->
+        <activity
+            android:name=".NightClockActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:showWhenLocked="true" />
+
+        <service
+            android:name=".NightDream"
+            android:exported="true"
+            android:label="@string/night_clock"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
 
         <service
             android:name=".platform.RingService"

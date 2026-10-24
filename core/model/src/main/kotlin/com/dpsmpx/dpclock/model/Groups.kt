@@ -36,6 +36,11 @@ data class AlarmTemplate(val id: String, val name: String, val alarms: List<Alar
             "wr" to alarm.wakeCheck.reference,
             "ws" to if (alarm.wakeCheck.snoozeAllowed) "1" else "0",
             "rc" to alarm.wakeCheck.recheckMinutes.toString(),
+            "gm" to alarm.gentleMinutes.toString(),
+            "ap" to alarm.after.presetId.orEmpty(),
+            "ar" to alarm.after.reminder,
+            "am" to alarm.after.reminderMinutes.toString(),
+            "aa" to alarm.after.app,
         ).joinToString("&") { (k, v) -> k + "=" + URLEncoder.encode(v, Charsets.UTF_8) }
     }
 
@@ -71,6 +76,13 @@ data class AlarmTemplate(val id: String, val name: String, val alarms: List<Alar
                         reference = f["wr"].orEmpty(),
                         snoozeAllowed = f["ws"] != "0",
                         recheckMinutes = f["rc"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0,
+                    ),
+                    gentleMinutes = f["gm"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0,
+                    after = AfterAlarm(
+                        presetId = f["ap"]?.takeIf { it.isNotEmpty() },
+                        reminder = f["ar"].orEmpty(),
+                        reminderMinutes = f["am"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0,
+                        app = f["aa"].orEmpty(),
                     ),
                 )
             }

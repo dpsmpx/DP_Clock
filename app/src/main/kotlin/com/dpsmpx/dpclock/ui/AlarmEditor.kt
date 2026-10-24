@@ -51,6 +51,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
 import com.dpsmpx.dpclock.model.Alarm
 import com.dpsmpx.dpclock.model.AlarmGroup
@@ -61,6 +63,7 @@ import com.dpsmpx.dpclock.model.Exceptions
 import com.dpsmpx.dpclock.model.Repeat
 import com.dpsmpx.dpclock.model.RuCalendar
 import com.dpsmpx.dpclock.model.Settings
+import com.dpsmpx.dpclock.model.SleepRules
 import com.dpsmpx.dpclock.model.days
 import com.dpsmpx.dpclock.model.isRepeating
 import com.dpsmpx.dpclock.platform.TimeText
@@ -125,6 +128,9 @@ fun AlarmEditor(
     var honorExceptions by rememberSaveable { mutableStateOf(alarm.honorExceptions) }
     var groupId by rememberSaveable { mutableStateOf(alarm.groupId?.takeIf { id -> groups.any { it.id == id } }) }
     var wakeCheck by remember { mutableStateOf(alarm.wakeCheck) }
+    var gentleMinutes by rememberSaveable { mutableIntStateOf(alarm.gentleMinutes) }
+    var after by remember { mutableStateOf(alarm.after) }
+    val presets by DpClockApp.graph(context).repository.presets.collectAsStateWithLifecycle(emptyList())
     var advanced by rememberSaveable { mutableStateOf(hasAdvanced(alarm)) }
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -154,6 +160,8 @@ fun AlarmEditor(
             honorExceptions = honorExceptions,
             groupId = groupId,
             wakeCheck = wakeCheck,
+            gentleMinutes = gentleMinutes,
+            after = after,
         )
         val now = Instant.now()
         // Пропуск — дата ближайшего срабатывания по новым правилам (D-013, п. 3).
@@ -308,6 +316,18 @@ fun AlarmEditor(
                         )
                     }
                     ListItem(
+                        headlineContent = { Text(stringResource(R.string.gentle_wake)) },
+                        supportingContent = {
+                            Text(if (gentleMinutes == 0) stringResource(R.string.ramp_off) else stringResource(R.string.gentle_before, gentleMinutes))
+                        },
+                        modifier = Modifier.clickable { dialog = "gentle" },
+                    )
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.after_alarm)) },
+                        supportingContent = { Text(afterSummary(after, presets.firstOrNull { it.id == after.presetId }?.name)) },
+                        modifier = Modifier.clickable { dialog = "after" },
+                    )
+                    ListItem(
                         headlineContent = { Text(stringResource(R.string.wake_check)) },
                         supportingContent = { Text(wakeSummary(wakeCheck)) },
                         modifier = Modifier.clickable { dialog = "wake" },
@@ -379,6 +399,22 @@ fun AlarmEditor(
             onDismiss = { dialog = null },
             onPick = {
                 anchorDay = it
+                dialog = null
+            },
+        )
+        current == "gentle" -> ChoiceDialog(
+            title = stringResource(R.string.gentle_wake),
+            choices = SleepRules.GENTLE_CHOICES,
+            selected = gentleMinutes,
+            label = { if (it == 0) stringResource(R.string.ramp_off) else stringResource(R.string.gentle_before, it) },
+            onDismiss = { dialog = null },
+            onSelect = { gentleMinutes = it },
+        )
+        current == "after" -> AfterAlarmEditor(
+            initial = after,
+            onDismiss = { dialog = null },
+            onDone = {
+                after = it
                 dialog = null
             },
         )
@@ -538,7 +574,7 @@ private fun exceptionsSummary(exceptions: Exceptions): String = when {
 private fun hasAdvanced(alarm: Alarm): Boolean =
     alarm.sound != AlarmSound.Default || !alarm.vibrate || alarm.rampSeconds > 0 || alarm.snoozeMinutes != null ||
         alarm.skipDate != null || !alarm.honorExceptions || alarm.groupId != null ||
-        alarm.wakeCheck.required || alarm.wakeCheck.recheckMinutes > 0
+        alarm.wakeCheck.required || alarm.wakeCheck.recheckMinutes > 0 || alarm.gentleMinutes > 0 || !alarm.after.isEmpty
 
 @Composable
 fun rampText(seconds: Int): String = when {

@@ -79,6 +79,18 @@ fun untilText(resources: Resources, millis: Long): String {
     }
 }
 
+/** «7 ч 45 мин» — длительность без «через». */
+fun durationText(resources: Resources, millis: Long): String {
+    val c = Countdown.of(millis)
+    val hours = (c.days * 24 + c.hours).toInt()
+    val minutes = c.minutes.toInt()
+    return when {
+        hours == 0 -> resources.getString(R.string.minutes_value, minutes)
+        minutes == 0 -> resources.getString(R.string.hours_value, hours)
+        else -> resources.getString(R.string.hours_minutes_value, hours, minutes)
+    }
+}
+
 /** Проблема надёжности: что не так и где это исправить (SCREEN_MAP.md, п. 1, 10). */
 enum class Issue(val title: Int, val text: Int) {
     NOTIFICATIONS(R.string.issue_notifications, R.string.issue_notifications_text),

@@ -306,4 +306,45 @@
     <string name="share_laps_title">DP Clock stopwatch</string>
     <string name="share_laps_total">Total: %1$s</string>
     <string name="share_lap_row">Lap %1$d: %2$s (at %3$s)</string>
+
+    <!-- Сон и пробуждение (D-017) -->
+    <string name="channel_sleep">Sleep and reminders</string>
+    <string name="gentle_title">Gentle wake-up</string>
+    <string name="gentle_text">%1$s at %2$s</string>
+    <string name="gentle_close">Close the light</string>
+    <string name="gentle_awake">I\'m up — skip this alarm</string>
+    <string name="gentle_wake">Gentle wake-up</string>
+    <string name="gentle_before">Light and a quiet sound %1$d min before</string>
+    <string name="bedtime_title">Time for bed</string>
+    <string name="bedtime_text_alarm">Go to bed at %1$s: alarm at %2$s, %3$d h %4$d min of sleep</string>
+    <string name="bedtime_text">Go to bed at %1$s</string>
+    <string name="reminder_title">Reminder</string>
+    <string name="after_open_app">Open %1$s</string>
+    <string name="after_alarm">After the alarm</string>
+    <string name="after_timer">Start a timer</string>
+    <string name="after_none">Nothing</string>
+    <string name="after_no_presets">Presets appear here once you save some in Timers.</string>
+    <string name="after_reminder">Remind</string>
+    <string name="after_reminder_text">Reminder text</string>
+    <string name="after_now">Right away</string>
+    <string name="after_in_minutes">In %1$d min</string>
+    <string name="after_app">Open an app</string>
+    <string name="after_app_hint">Opens when you dismiss the alarm on its screen, after unlocking; otherwise — from a notification.</string>
+    <string name="night_clock">Night clock</string>
+    <string name="night_next_alarm">Alarm at %1$s</string>
+    <string name="night_dream">Night clock as a screen saver</string>
+    <string name="night_dream_text">Choose “Night clock” in the phone\'s screen saver settings: it turns on while charging.</string>
+    <string name="night_dream_missing">This phone has no screen saver settings: use the Night clock button in Clock.</string>
+    <string name="settings_sleep">Sleep</string>
+    <string name="bedtime_reminder">Bedtime reminder</string>
+    <string name="bedtime_from_alarm">From the next alarm</string>
+    <string name="bedtime_schedule">On my schedule</string>
+    <string name="sleep_goal">How long to sleep</string>
+    <string name="bedtime_at">Go to bed at</string>
+    <string name="bedtime_lead">Remind</string>
+    <string name="bedtime_lead_none">At bedtime</string>
+    <string name="bedtime_lead_value">%1$d min before</string>
+    <string name="hours_value">%1$d h</string>
+    <string name="hours_minutes_value">%1$d h %2$d min</string>
+    <string name="sleep_if_now">If you go to bed now — about %1$s of sleep (goal %2$s)</string>
 </resources>

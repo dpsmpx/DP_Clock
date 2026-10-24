@@ -62,10 +62,12 @@ import com.dpsmpx.dpclock.model.Alarm
 import com.dpsmpx.dpclock.model.AlarmGroup
 import com.dpsmpx.dpclock.model.AlarmRules
 import com.dpsmpx.dpclock.model.AlarmTemplate
+import com.dpsmpx.dpclock.model.BedtimeMode
 import com.dpsmpx.dpclock.model.Exceptions
 import com.dpsmpx.dpclock.model.Repeat
 import com.dpsmpx.dpclock.model.RepeatKind
 import com.dpsmpx.dpclock.model.Settings
+import com.dpsmpx.dpclock.model.SleepRules
 import com.dpsmpx.dpclock.model.days
 import com.dpsmpx.dpclock.model.isRepeating
 import com.dpsmpx.dpclock.model.kind
@@ -79,6 +81,9 @@ import java.time.ZoneId
 import java.time.format.TextStyle
 import java.time.temporal.WeekFields
 import java.util.Locale
+
+/** «Если лечь сейчас» — когда до будильника не больше стольких часов. */
+private const val SLEEP_HINT_MILLIS = 16 * 3_600_000L
 
 /** Окно раздела «Будильники», которое открывает меню верхней панели (D-014). */
 enum class AlarmsDialog { NEW_GROUP, FROM_TEMPLATE }
@@ -188,6 +193,18 @@ fun AlarmsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
+                // Время сна включено и будильник скоро — сколько выйдет сна (D-017, п. 2).
+                if (nearest != null && settings.bedtime.mode != BedtimeMode.OFF && nearest.toEpochMilli() - now <= SLEEP_HINT_MILLIS) {
+                    Text(
+                        stringResource(
+                            R.string.sleep_if_now,
+                            durationText(resources, SleepRules.sleepIfNow(nowInstant, nearest)),
+                            sleepText(settings.bedtime.sleepMinutes),
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             if (list.isEmpty() && groups.isEmpty()) {
                 item(key = "empty") {

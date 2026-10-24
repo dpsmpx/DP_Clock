@@ -33,7 +33,62 @@ class Scheduler(private val context: Context) {
         }
     }
 
-    fun cancelAlarm(alarmId: String) = alarmManager.cancel(alarmIntent(alarmId, 0L))
+    fun cancelAlarm(alarmId: String) {
+        alarmManager.cancel(alarmIntent(alarmId, 0L))
+        cancelGentle(alarmId)
+    }
+
+    /** Мягкое пробуждение (D-017, п. 3): в [at] — свет и тихий звук до будильника в [alarmAt]. */
+    fun setGentle(alarmId: String, at: Long, alarmAt: Long) = setExact(at, gentleIntent(alarmId, alarmAt))
+
+    fun cancelGentle(alarmId: String) = alarmManager.cancel(gentleIntent(alarmId, 0L))
+
+    /** Напоминание ложиться (D-017, п. 2); одно на приложение. */
+    fun setBedtime(at: Long, bedAt: Long, alarmAt: Long?) = setExact(
+        at,
+        broadcast(
+            Intent(context, AlarmReceiver::class.java)
+                .setAction(AlarmReceiver.ACTION_BEDTIME)
+                .setData("dpclock://bedtime".toUri())
+                .putExtra(AlarmReceiver.EXTRA_BED_AT, bedAt)
+                .putExtra(AlarmReceiver.EXTRA_ALARM_AT, alarmAt ?: 0L),
+        ),
+    )
+
+    fun cancelBedtime() = alarmManager.cancel(
+        broadcast(Intent(context, AlarmReceiver::class.java).setAction(AlarmReceiver.ACTION_BEDTIME).setData("dpclock://bedtime".toUri())),
+    )
+
+    /** Напоминание после будильника [alarmId] (D-017, п. 5). */
+    fun setReminder(alarmId: String, at: Long, text: String) = setExact(
+        at,
+        broadcast(
+            Intent(context, AlarmReceiver::class.java)
+                .setAction(AlarmReceiver.ACTION_REMINDER)
+                .setData("dpclock://reminder/$alarmId".toUri())
+                .putExtra(AlarmReceiver.EXTRA_ID, alarmId)
+                .putExtra(AlarmReceiver.EXTRA_TEXT, text),
+        ),
+    )
+
+    private fun setExact(at: Long, operation: PendingIntent) {
+        if (canScheduleExact()) {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, operation)
+        } else {
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, operation)
+        }
+    }
+
+    private fun gentleIntent(alarmId: String, alarmAt: Long): PendingIntent = broadcast(
+        Intent(context, AlarmReceiver::class.java)
+            .setAction(AlarmReceiver.ACTION_GENTLE)
+            .setData("dpclock://gentle/$alarmId".toUri())
+            .putExtra(AlarmReceiver.EXTRA_ID, alarmId)
+            .putExtra(AlarmReceiver.EXTRA_ALARM_AT, alarmAt),
+    )
+
+    private fun broadcast(intent: Intent): PendingIntent =
+        PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
     fun setTimer(runId: String, atElapsed: Long, fullSignal: Boolean) {
         val operation = timerIntent(runId, fullSignal)

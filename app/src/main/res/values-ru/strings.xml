@@ -305,4 +305,45 @@
     <string name="share_laps_title">Секундомер DP Clock</string>
     <string name="share_laps_total">Всего: %1$s</string>
     <string name="share_lap_row">Круг %1$d: %2$s (на %3$s)</string>
+
+    <!-- Сон и пробуждение (D-017) -->
+    <string name="channel_sleep">Сон и напоминания</string>
+    <string name="gentle_title">Мягкое пробуждение</string>
+    <string name="gentle_text">%1$s в %2$s</string>
+    <string name="gentle_close">Погасить рассвет</string>
+    <string name="gentle_awake">Я уже проснулся — не звонить</string>
+    <string name="gentle_wake">Мягкое пробуждение</string>
+    <string name="gentle_before">Свет и тихий звук за %1$d мин</string>
+    <string name="bedtime_title">Пора ложиться</string>
+    <string name="bedtime_text_alarm">Ложитесь в %1$s: будильник в %2$s, сна %3$d ч %4$d мин</string>
+    <string name="bedtime_text">Ложитесь в %1$s</string>
+    <string name="reminder_title">Напоминание</string>
+    <string name="after_open_app">Открыть %1$s</string>
+    <string name="after_alarm">После будильника</string>
+    <string name="after_timer">Запустить таймер</string>
+    <string name="after_none">Ничего</string>
+    <string name="after_no_presets">Здесь появятся пресеты, когда вы сохраните их в «Таймерах».</string>
+    <string name="after_reminder">Напомнить</string>
+    <string name="after_reminder_text">Текст напоминания</string>
+    <string name="after_now">Сразу</string>
+    <string name="after_in_minutes">Через %1$d мин</string>
+    <string name="after_app">Открыть приложение</string>
+    <string name="after_app_hint">Открывается, когда будильник выключен на его экране, после разблокировки; иначе — из уведомления.</string>
+    <string name="night_clock">Ночные часы</string>
+    <string name="night_next_alarm">Будильник в %1$s</string>
+    <string name="night_dream">Ночные часы заставкой</string>
+    <string name="night_dream_text">Выберите «Ночные часы» в настройках заставки телефона: она включается на зарядке.</string>
+    <string name="night_dream_missing">У этого телефона нет настроек заставки: откройте ночные часы кнопкой в разделе «Часы».</string>
+    <string name="settings_sleep">Сон</string>
+    <string name="bedtime_reminder">Напоминание ложиться</string>
+    <string name="bedtime_from_alarm">От ближайшего будильника</string>
+    <string name="bedtime_schedule">По своему расписанию</string>
+    <string name="sleep_goal">Сколько спать</string>
+    <string name="bedtime_at">Ложиться в</string>
+    <string name="bedtime_lead">Напомнить</string>
+    <string name="bedtime_lead_none">В само время</string>
+    <string name="bedtime_lead_value">За %1$d мин</string>
+    <string name="hours_value">%1$d ч</string>
+    <string name="hours_minutes_value">%1$d ч %2$d мин</string>
+    <string name="sleep_if_now">Если лечь сейчас — сна около %1$s (цель — %2$s)</string>
 </resources>

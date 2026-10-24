@@ -1,10 +1,13 @@
 package com.dpsmpx.dpclock.data
 
+import com.dpsmpx.dpclock.model.AfterAlarm
 import com.dpsmpx.dpclock.model.Alarm
 import com.dpsmpx.dpclock.model.AlarmGroup
 import com.dpsmpx.dpclock.model.AlarmOrder
 import com.dpsmpx.dpclock.model.AlarmSound
 import com.dpsmpx.dpclock.model.AlarmTemplate
+import com.dpsmpx.dpclock.model.Bedtime
+import com.dpsmpx.dpclock.model.BedtimeMode
 import com.dpsmpx.dpclock.model.ExceptionPeriod
 import com.dpsmpx.dpclock.model.Moment
 import com.dpsmpx.dpclock.model.Repeat
@@ -21,6 +24,7 @@ import com.dpsmpx.dpclock.model.WakeCheck
 import com.dpsmpx.dpclock.model.WakeLevel
 import com.dpsmpx.dpclock.model.WakeMethod
 import com.dpsmpx.dpclock.model.bits
+import com.dpsmpx.dpclock.model.days
 import java.time.LocalDate
 
 // Строки базы ↔ модель :core:model.
@@ -53,6 +57,8 @@ fun AlarmEntity.toModel() = Alarm(
         snoozeAllowed = wakeSnooze,
         recheckMinutes = recheckMinutes.coerceAtLeast(0),
     ),
+    gentleMinutes = gentleMinutes.coerceAtLeast(0),
+    after = AfterAlarm(afterPresetId, afterReminder, afterReminderMinutes.coerceAtLeast(0), afterApp),
 )
 
 fun Alarm.toEntity() = AlarmEntity(
@@ -81,6 +87,11 @@ fun Alarm.toEntity() = AlarmEntity(
     wakeReference = wakeCheck.reference,
     wakeSnooze = wakeCheck.snoozeAllowed,
     recheckMinutes = wakeCheck.recheckMinutes,
+    gentleMinutes = gentleMinutes,
+    afterPresetId = after.presetId,
+    afterReminder = after.reminder,
+    afterReminderMinutes = after.reminderMinutes,
+    afterApp = after.app,
 )
 
 fun GroupEntity.toModel() = AlarmGroup(id, name, createdAt)
@@ -151,6 +162,16 @@ fun SettingsEntity?.toModel(): Settings = if (this == null) Settings() else Sett
     signalStyle = enumOr(signalStyle, SignalStyle.FULL_SCREEN),
     volumeButtons = enumOr(volumeButtons, VolumeButtons.SNOOZE),
     holidaysRu = holidaysRu,
+    bedtime = runCatching {
+        Bedtime(
+            mode = enumOr(bedtimeMode, BedtimeMode.OFF),
+            sleepMinutes = sleepMinutes,
+            hour = bedtimeHour,
+            minute = bedtimeMinute,
+            days = Repeat.fromBits(bedtimeDays).days,
+            leadMinutes = bedtimeLeadMinutes,
+        )
+    }.getOrDefault(Bedtime()),
 )
 
 fun Settings.toEntity() = SettingsEntity(
@@ -161,6 +182,12 @@ fun Settings.toEntity() = SettingsEntity(
     signalStyle = signalStyle.name,
     volumeButtons = volumeButtons.name,
     holidaysRu = holidaysRu,
+    bedtimeMode = bedtime.mode.name,
+    sleepMinutes = bedtime.sleepMinutes,
+    bedtimeHour = bedtime.hour,
+    bedtimeMinute = bedtime.minute,
+    bedtimeDays = Repeat.of(bedtime.days).bits,
+    bedtimeLeadMinutes = bedtime.leadMinutes,
 )
 
 /** Неизвестное значение (например, из копии новой версии) — значение по умолчанию. */

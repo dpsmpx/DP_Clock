@@ -33,12 +33,17 @@ data class Alarm(
     val groupId: String? = null,
     /** Подтверждение пробуждения и повторная проверка (D-015). */
     val wakeCheck: WakeCheck = WakeCheck(),
+    /** Мягкое пробуждение: свет и тихий звук за столько минут до будильника; 0 — нет (D-017, п. 3). */
+    val gentleMinutes: Int = 0,
+    /** Что сделать после выключения (D-017, п. 5). */
+    val after: AfterAlarm = AfterAlarm(),
 ) {
     init {
         require(hour in 0..23) { "час $hour" }
         require(minute in 0..59) { "минута $minute" }
         require(rampSeconds >= 0) { "нарастание $rampSeconds" }
         require(snoozeMinutes == null || snoozeMinutes > 0) { "«Отложить» $snoozeMinutes" }
+        require(gentleMinutes >= 0) { "мягкое пробуждение $gentleMinutes" }
     }
 
     /** Минута суток: ключ сортировки «по времени суток». */

@@ -17,6 +17,9 @@ import com.dpsmpx.dpclock.model.TimerProgram
 import com.dpsmpx.dpclock.model.TimerRun
 import com.dpsmpx.dpclock.model.TimerState
 import com.dpsmpx.dpclock.model.VolumeButtons
+import com.dpsmpx.dpclock.model.WakeCheck
+import com.dpsmpx.dpclock.model.WakeLevel
+import com.dpsmpx.dpclock.model.WakeMethod
 import com.dpsmpx.dpclock.model.bits
 import java.time.LocalDate
 
@@ -42,6 +45,14 @@ fun AlarmEntity.toModel() = Alarm(
     skipDate = skipDate?.let(LocalDate::ofEpochDay),
     honorExceptions = honorExceptions,
     groupId = groupId,
+    wakeCheck = WakeCheck(
+        method = enumOr(wakeMethod, WakeMethod.NONE),
+        level = enumOr(wakeLevel, WakeLevel.MEDIUM),
+        tasks = wakeTasks.coerceIn(1, WakeCheck.MAX_TASKS),
+        reference = wakeReference,
+        snoozeAllowed = wakeSnooze,
+        recheckMinutes = recheckMinutes.coerceAtLeast(0),
+    ),
 )
 
 fun Alarm.toEntity() = AlarmEntity(
@@ -64,6 +75,12 @@ fun Alarm.toEntity() = AlarmEntity(
     cycleAnchor = (repeat as? Repeat.Cycle)?.anchor?.toEpochDay(),
     cycleDays = (repeat as? Repeat.Cycle)?.encodeDays(),
     workdays = repeat == Repeat.Workdays,
+    wakeMethod = wakeCheck.method.name,
+    wakeLevel = wakeCheck.level.name,
+    wakeTasks = wakeCheck.tasks,
+    wakeReference = wakeCheck.reference,
+    wakeSnooze = wakeCheck.snoozeAllowed,
+    recheckMinutes = wakeCheck.recheckMinutes,
 )
 
 fun GroupEntity.toModel() = AlarmGroup(id, name, createdAt)

@@ -31,6 +31,8 @@ data class Alarm(
     val honorExceptions: Boolean = true,
     /** Группа (D-014, п. 5); null — без группы. */
     val groupId: String? = null,
+    /** Подтверждение пробуждения и повторная проверка (D-015). */
+    val wakeCheck: WakeCheck = WakeCheck(),
 ) {
     init {
         require(hour in 0..23) { "час $hour" }

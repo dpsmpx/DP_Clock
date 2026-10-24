@@ -38,11 +38,17 @@ private object Occ {
     const val SCHEDULED = "SCHEDULED"
     const val RINGING = "RINGING"
     const val SNOOZED = "SNOOZED"
+
+    /** Выключен; ждёт повторной проверки «Не спите?» в recheckAt (D-015, п. 4). */
+    const val RECHECK = "RECHECK"
 }
 
 /** Что делать с пришедшим будильником. */
 sealed interface AlarmFire {
     data class Ring(val alarm: Alarm, val scheduledAt: Long, val snoozeMinutes: Int) : AlarmFire
+
+    /** Пора спросить «Не спите?». */
+    data class Recheck(val alarm: Alarm) : AlarmFire
     data object Skip : AlarmFire
 }
 
@@ -247,6 +253,7 @@ class ClockRepository(
         val expected = when (occ?.state) {
             Occ.SCHEDULED -> occ.scheduledAt
             Occ.SNOOZED -> occ.snoozedUntil
+            Occ.RECHECK -> occ.recheckAt
             else -> null
         }
         if (occ == null || expected != scheduledAt) {
@@ -255,6 +262,15 @@ class ClockRepository(
             return@locked AlarmFire.Skip
         }
         val now = now()
+        if (occ.state == Occ.RECHECK) {
+            // Телефон был выключен дольше 10 минут — проверять поздно, будильник идёт дальше.
+            if (AlarmRules.isMissed(scheduledAt, now)) {
+                dao.deleteOccurrence(id)
+                scheduleAlarm(alarm)
+                return@locked AlarmFire.Skip
+            }
+            return@locked AlarmFire.Recheck(alarm)
+        }
         if (AlarmRules.isMissed(scheduledAt, now)) {
             missAlarm(alarm, occ.scheduledAt, now)
             return@locked AlarmFire.Skip
@@ -283,6 +299,16 @@ class ClockRepository(
     suspend fun stopAlarm(id: String, outcome: SignalOutcome) = locked {
         val occ = dao.occurrence(id)
         val now = now()
+        val recheck = dao.alarm(id)?.toModel()?.wakeCheck?.recheckMinutes ?: 0
+        if (outcome == SignalOutcome.DISMISSED && recheck > 0 && occ != null && occ.state != Occ.RECHECK) {
+            // Выключен, но через несколько минут — «Не спите?» (D-011, п. 3; D-015, п. 4).
+            val at = now + recheck * 60_000L
+            dao.upsertOccurrence(occ.copy(state = Occ.RECHECK, snoozedUntil = null, ringingSince = null, recheckAt = at))
+            log(SignalSource.ALARM, id, occ.scheduledAt, occ.ringingSince ?: now, outcome)
+            notifier.cancelSnoozed(id)
+            scheduler.setAlarm(id, at)
+            return@locked
+        }
         dao.deleteOccurrence(id)
         scheduler.cancelAlarm(id)
         notifier.cancelSnoozed(id)
@@ -290,6 +316,23 @@ class ClockRepository(
         if (occ != null) log(SignalSource.ALARM, id, occ.scheduledAt, occ.ringingSince ?: now, outcome)
         if (outcome == SignalOutcome.AUTO_STOPPED) notifier.missedAlarm(alarm, occ?.scheduledAt ?: now, autoStopped = true)
         scheduleAlarm(alarm)
+    }
+
+    /** «Я не сплю» — проверка пройдена: будильник идёт к следующему срабатыванию. */
+    suspend fun recheckPassed(id: String) = locked {
+        val occ = dao.occurrence(id)?.takeIf { it.state == Occ.RECHECK } ?: return@locked
+        dao.deleteOccurrence(id)
+        scheduler.cancelAlarm(id)
+        dao.alarm(id)?.toModel()?.let { scheduleAlarm(it) }
+        log(SignalSource.ALARM, id, occ.scheduledAt, now(), SignalOutcome.DISMISSED)
+    }
+
+    /** На «Не спите?» не ответили: будильник звонит снова. null — звонить нечему. */
+    suspend fun recheckFailed(id: String): AlarmFire.Ring? = locked {
+        val occ = dao.occurrence(id)?.takeIf { it.state == Occ.RECHECK } ?: return@locked null
+        val alarm = dao.alarm(id)?.toModel() ?: return@locked null
+        dao.upsertOccurrence(occ.copy(state = Occ.RINGING, ringingSince = now(), recheckAt = null))
+        AlarmFire.Ring(alarm, occ.scheduledAt, snoozeMinutes(alarm))
     }
 
     /**
@@ -312,6 +355,19 @@ class ClockRepository(
                     if (!Ringing.isAlarmRinging(alarm.id)) {
                         dao.deleteOccurrence(alarm.id)
                         missAlarm(alarm, occ.scheduledAt, now)
+                    }
+                    continue
+                }
+                Occ.RECHECK -> {
+                    val at = occ.recheckAt ?: now
+                    when {
+                        Ringing.isRecheckShowing(alarm.id) -> Unit
+                        // Проверка должна была быть давно — телефон был выключен; будильник идёт дальше.
+                        AlarmRules.isMissed(at, now) -> {
+                            dao.deleteOccurrence(alarm.id)
+                            scheduleAlarm(alarm, exceptions)
+                        }
+                        else -> scheduler.setAlarm(alarm.id, at)
                     }
                     continue
                 }
@@ -374,6 +430,11 @@ class ClockRepository(
                 scheduler.setAlarm(alarm.id, occ.snoozedUntil!!)
                 return occ.snoozedUntil
             }
+            Occ.RECHECK -> {
+                val at = occ.recheckAt ?: return 0L
+                scheduler.setAlarm(alarm.id, at)
+                return 0L
+            }
         }
         if (!alarm.enabled) {
             dao.deleteOccurrence(alarm.id)
@@ -389,7 +450,7 @@ class ClockRepository(
             scheduler.cancelAlarm(alarm.id)
             return 0L
         }
-        dao.upsertOccurrence(OccurrenceEntity(alarm.id, at, Occ.SCHEDULED, snoozedUntil = null, ringingSince = null))
+        dao.upsertOccurrence(OccurrenceEntity(alarm.id, at, Occ.SCHEDULED, snoozedUntil = null, ringingSince = null, recheckAt = null))
         scheduler.setAlarm(alarm.id, at)
         return at
     }

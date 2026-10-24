@@ -167,7 +167,7 @@
     <string name="about">О приложении</string>
     <string name="version_value">Версия %1$s</string>
     <string name="licenses">Библиотеки с открытым кодом</string>
-    <string name="licenses_text">Jetpack Compose, Material 3, AndroidX Activity, Lifecycle и Room, стандартная библиотека Kotlin и корутины — Apache License 2.0.</string>
+    <string name="licenses_text">Jetpack Compose, Material 3, AndroidX Activity, Lifecycle, Room и CameraX, ZXing, стандартная библиотека Kotlin и корутины — Apache License 2.0; libyuv в составе CameraX — BSD 3-Clause.</string>
 
     <!-- Графики, исключения, группы и шаблоны (D-014) -->
     <string name="more">Ещё</string>
@@ -235,4 +235,62 @@
         <item quantity="many">%1$d периодов</item>
         <item quantity="other">%1$d периода</item>
     </plurals>
+
+    <!-- Подтверждение пробуждения (D-015) -->
+    <string name="wake_open_check">Открыть, чтобы выключить</string>
+    <string name="wake_dismiss_with_check">Выключить — с проверкой</string>
+    <string name="recheck_title">Не спите?</string>
+    <string name="recheck_awake">Я не сплю</string>
+    <string name="recheck_hint">Нажмите в течение минуты, иначе будильник зазвонит снова.</string>
+    <string name="wake_title">Докажите, что проснулись</string>
+    <string name="wake_fallback_note">Вместо этого — примеры: камера, датчик или образец недоступны.</string>
+    <string name="wake_cannot">Не получается — решить примеры</string>
+    <string name="wake_task_of">Задача %1$d из %2$d</string>
+    <string name="wake_type_code">Наберите код</string>
+    <string name="wake_solve">Решите пример</string>
+    <string name="wake_wrong">Неверно — вот новая задача</string>
+    <string name="wake_shake">Встряхните телефон</string>
+    <string name="wake_scan_code">Наведите камеру на свой код</string>
+    <string name="wake_scan_place">Наведите камеру на место из образца</string>
+    <string name="wake_other_code">Это другой код</string>
+    <string name="wake_check">Подтверждение пробуждения</string>
+    <string name="wake_no_camera">Без доступа к камере этот способ недоступен.</string>
+    <string name="wake_level">Настойчивость</string>
+    <string name="wake_tasks">Задач подряд</string>
+    <string name="wake_reference_code">Образец кода</string>
+    <string name="wake_reference_photo">Образец снимка</string>
+    <string name="wake_reference_missing">Ещё не снят</string>
+    <string name="wake_reference_photo_ready">Снят. Хранится сетка яркости 16×16, а не снимок.</string>
+    <string name="wake_scan">Сканировать</string>
+    <string name="wake_take">Снять</string>
+    <string name="wake_snooze_free">«Отложить» без проверки</string>
+    <string name="recheck">Повторная проверка «Не спите?»</string>
+    <string name="recheck_text">Через несколько минут после выключения. Нет ответа за минуту — будильник звонит снова.</string>
+    <string name="recheck_in">повтор: %1$d мин</string>
+    <string name="wake_try">Попробовать</string>
+    <string name="wake_reference_code_hint">Наведите камеру на QR-код или штрихкод — например, распечатанный и приклеенный на кухне.</string>
+    <string name="wake_reference_photo_hint">Наведите камеру на место, до которого придётся дойти, — с деталями и при хорошем свете — и нажмите «Снять».</string>
+    <string name="wake_camera_failed">Камера не открылась.</string>
+    <string name="wake_reference_flat">Слишком однотонно: выберите место с деталями.</string>
+    <string name="wake_none">Нет</string>
+    <string name="wake_none_text">Выключить одним нажатием</string>
+    <string name="wake_math">Пример</string>
+    <string name="wake_math_text">Решить примеры на клавиатуре</string>
+    <string name="wake_code">Код</string>
+    <string name="wake_code_text">Набрать показанные цифры</string>
+    <string name="wake_shake_title">Встряхнуть</string>
+    <string name="wake_shake_text">Встряхнуть телефон нужное число раз</string>
+    <string name="wake_qr">QR-код или штрихкод</string>
+    <string name="wake_qr_text">Отсканировать свой код: положите его туда, куда придётся дойти</string>
+    <string name="wake_photo">Снимок места</string>
+    <string name="wake_photo_text">Навести камеру на место из образца</string>
+    <string name="wake_shakes_easy">20 раз</string>
+    <string name="wake_shakes_medium">40 раз</string>
+    <string name="wake_shakes_hard">70 раз</string>
+    <string name="wake_code_easy">4 цифры</string>
+    <string name="wake_code_medium">6 цифр</string>
+    <string name="wake_code_hard">8 цифр</string>
+    <string name="wake_level_easy">Низкая</string>
+    <string name="wake_level_medium">Средняя</string>
+    <string name="wake_level_hard">Высокая</string>
 </resources>

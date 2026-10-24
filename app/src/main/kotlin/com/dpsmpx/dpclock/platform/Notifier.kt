@@ -59,11 +59,24 @@ class Notifier(private val context: Context) {
             .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
         if (fullScreen) builder.setFullScreenIntent(screen, true)
         when (item) {
-            is RingItem.AlarmRing -> builder
-                .setContentTitle(alarmTitle(item.label))
-                .setContentText(TimeText.time(context, item.hour, item.minute))
-                .addAction(action(context.getString(R.string.snooze_for, item.snoozeMinutes), ringAction(RingService.ACTION_SNOOZE, item.alarmId)))
-                .addAction(action(text(R.string.dismiss), ringAction(RingService.ACTION_DISMISS, item.alarmId)))
+            is RingItem.AlarmRing -> {
+                builder
+                    .setContentTitle(alarmTitle(item.label))
+                    .setContentText(TimeText.time(context, item.hour, item.minute))
+                if (item.wakeCheck.snoozeAllowed) {
+                    builder.addAction(action(context.getString(R.string.snooze_for, item.snoozeMinutes), ringAction(RingService.ACTION_SNOOZE, item.alarmId)))
+                }
+                // С проверкой пробуждения выключить можно только на экране сигнала (D-015).
+                if (item.wakeCheck.required) {
+                    builder.addAction(action(text(R.string.wake_open_check), screen))
+                } else {
+                    builder.addAction(action(text(R.string.dismiss), ringAction(RingService.ACTION_DISMISS, item.alarmId)))
+                }
+            }
+            is RingItem.RecheckRing -> builder
+                .setContentTitle(text(R.string.recheck_title))
+                .setContentText(alarmTitle(item.label) + " · " + TimeText.time(context, item.hour, item.minute))
+                .addAction(action(text(R.string.recheck_awake), ringAction(RingService.ACTION_RECHECK_OK, item.alarmId)))
             is RingItem.TimerRing -> builder
                 .setContentTitle(timerTitle(item.name))
                 .setContentText(text(if (item.finished) R.string.ring_timer_finished else R.string.ring_step_finished))
@@ -102,12 +115,12 @@ class Notifier(private val context: Context) {
             .setContentText(context.getString(R.string.snoozed_until, TimeText.time(context, until)))
             .setOngoing(true)
             .setContentIntent(openApp(Section.ALARMS))
-            .addAction(
-                action(
-                    text(R.string.dismiss),
-                    broadcast(ActionReceiver.ACTION_DISMISS_SNOOZED, alarm.id),
-                ),
-            )
+            .apply {
+                // С проверкой пробуждения отложенный не выключается из уведомления.
+                if (!alarm.wakeCheck.required) {
+                    addAction(action(text(R.string.dismiss), broadcast(ActionReceiver.ACTION_DISMISS_SNOOZED, alarm.id)))
+                }
+            }
             .build(),
         tag = "snoozed:${alarm.id}",
     )

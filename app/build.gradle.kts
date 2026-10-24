@@ -17,8 +17,8 @@ android {
         applicationId = "com.dpsmpx.dpclock"
         minSdk = 31
         targetSdk = 37
-        versionCode = 4
-        versionName = "0.3.0"
+        versionCode = 5
+        versionName = "0.4.0"
     }
 
     signingConfigs {
@@ -79,6 +79,12 @@ dependencies {
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.room.runtime)
     ksp(libs.room.compiler)
+    // Подтверждение пробуждения QR-кодом и снимком (D-015): камера и распознавание кодов.
+    implementation(libs.camera.core)
+    implementation(libs.camera.camera2)
+    implementation(libs.camera.lifecycle)
+    implementation(libs.camera.view)
+    implementation(libs.zxing.core)
 
     testImplementation(libs.junit)
     testImplementation(libs.sqlite.bundled.jvm)

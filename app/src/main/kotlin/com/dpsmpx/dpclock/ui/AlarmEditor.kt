@@ -124,6 +124,7 @@ fun AlarmEditor(
     var skipNext by rememberSaveable { mutableStateOf(alarm.skipDate != null) }
     var honorExceptions by rememberSaveable { mutableStateOf(alarm.honorExceptions) }
     var groupId by rememberSaveable { mutableStateOf(alarm.groupId?.takeIf { id -> groups.any { it.id == id } }) }
+    var wakeCheck by remember { mutableStateOf(alarm.wakeCheck) }
     var advanced by rememberSaveable { mutableStateOf(hasAdvanced(alarm)) }
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -152,6 +153,7 @@ fun AlarmEditor(
             skipDate = null,
             honorExceptions = honorExceptions,
             groupId = groupId,
+            wakeCheck = wakeCheck,
         )
         val now = Instant.now()
         // Пропуск — дата ближайшего срабатывания по новым правилам (D-013, п. 3).
@@ -306,6 +308,11 @@ fun AlarmEditor(
                         )
                     }
                     ListItem(
+                        headlineContent = { Text(stringResource(R.string.wake_check)) },
+                        supportingContent = { Text(wakeSummary(wakeCheck)) },
+                        modifier = Modifier.clickable { dialog = "wake" },
+                    )
+                    ListItem(
                         headlineContent = { Text(stringResource(R.string.group)) },
                         supportingContent = { Text(groups.firstOrNull { it.id == groupId }?.name ?: stringResource(R.string.no_group)) },
                         modifier = Modifier.clickable { dialog = "group" },
@@ -372,6 +379,14 @@ fun AlarmEditor(
             onDismiss = { dialog = null },
             onPick = {
                 anchorDay = it
+                dialog = null
+            },
+        )
+        current == "wake" -> WakeCheckEditor(
+            initial = wakeCheck,
+            onDismiss = { dialog = null },
+            onDone = {
+                wakeCheck = it
                 dialog = null
             },
         )
@@ -522,7 +537,8 @@ private fun exceptionsSummary(exceptions: Exceptions): String = when {
 /** Блок «Дополнительно» раскрыт сразу, если в нём уже что-то изменено. */
 private fun hasAdvanced(alarm: Alarm): Boolean =
     alarm.sound != AlarmSound.Default || !alarm.vibrate || alarm.rampSeconds > 0 || alarm.snoozeMinutes != null ||
-        alarm.skipDate != null || !alarm.honorExceptions || alarm.groupId != null
+        alarm.skipDate != null || !alarm.honorExceptions || alarm.groupId != null ||
+        alarm.wakeCheck.required || alarm.wakeCheck.recheckMinutes > 0
 
 @Composable
 fun rampText(seconds: Int): String = when {

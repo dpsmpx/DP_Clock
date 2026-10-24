@@ -46,6 +46,16 @@ data class AlarmEntity(
     val cycleDays: String?,
     /** Рабочие дни по производственному календарю России. */
     val workdays: Boolean,
+    /** WakeMethod. */
+    val wakeMethod: String,
+    /** WakeLevel. */
+    val wakeLevel: String,
+    val wakeTasks: Int,
+    /** Образец: текст QR-кода или подпись снимка места. */
+    val wakeReference: String,
+    val wakeSnooze: Boolean,
+    /** Повторная проверка «Не спите?» через столько минут; 0 — нет. */
+    val recheckMinutes: Int,
 )
 
 /** Группа будильников (D-014, п. 5). */
@@ -81,10 +91,12 @@ data class OccurrenceEntity(
     @PrimaryKey val alarmId: String,
     /** Расчётное время срабатывания, мс UTC. */
     val scheduledAt: Long,
-    /** SCHEDULED, RINGING или SNOOZED. */
+    /** SCHEDULED, RINGING, SNOOZED или RECHECK. */
     val state: String,
     val snoozedUntil: Long?,
     val ringingSince: Long?,
+    /** Момент повторной проверки «Не спите?» (D-015, п. 4). */
+    val recheckAt: Long?,
 )
 
 @Entity(tableName = "timer_preset")
@@ -319,10 +331,10 @@ abstract class ClockDatabase : RoomDatabase() {
         const val NAME = "dpclock.db"
 
         /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
-        const val VERSION = 3
+        const val VERSION = 4
 
         /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
-        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3)
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки

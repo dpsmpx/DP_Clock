@@ -55,3 +55,18 @@ val MIGRATION_2_3 = SqlMigration(
         "ALTER TABLE `settings` ADD COLUMN `holidaysRu` INTEGER NOT NULL DEFAULT 0",
     ),
 )
+
+/** 0.4.0 (D-015): подтверждение пробуждения и повторная проверка «Не спите?». */
+val MIGRATION_3_4 = SqlMigration(
+    3,
+    4,
+    listOf(
+        "ALTER TABLE `alarm` ADD COLUMN `wakeMethod` TEXT NOT NULL DEFAULT 'NONE'",
+        "ALTER TABLE `alarm` ADD COLUMN `wakeLevel` TEXT NOT NULL DEFAULT 'MEDIUM'",
+        "ALTER TABLE `alarm` ADD COLUMN `wakeTasks` INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE `alarm` ADD COLUMN `wakeReference` TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE `alarm` ADD COLUMN `wakeSnooze` INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE `alarm` ADD COLUMN `recheckMinutes` INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE `alarm_occurrence` ADD COLUMN `recheckAt` INTEGER",
+    ),
+)

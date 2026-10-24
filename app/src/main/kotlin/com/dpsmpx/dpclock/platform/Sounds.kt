@@ -61,6 +61,13 @@ class AlarmPlayer(private val context: Context, private val holdWakeLock: Boolea
     private var wakeLock: PowerManager.WakeLock? = null
     private var current: RingSound? = null
     private var startedAt = 0L
+    private var quietUntil = 0L
+
+    private val unquiet = Runnable {
+        val sound = current ?: return@Runnable
+        if (!applyVolume()) main.postDelayed(ramp, RAMP_STEP_MILLIS)
+        if (sound.vibrate) vibrate()
+    }
 
     private val beepLoop = object : Runnable {
         override fun run() {
@@ -95,8 +102,20 @@ class AlarmPlayer(private val context: Context, private val holdWakeLock: Boolea
         if (sound.vibrate) vibrate() else vibratorManager.defaultVibrator.cancel()
     }
 
+    /** Замолчать на [millis] мс, без вибрации; потом — как было. Повторный вызов продлевает тишину. */
+    fun quiet(millis: Long) {
+        if (current == null) return
+        quietUntil = SystemClock.elapsedRealtime() + millis
+        applyVolume()
+        vibratorManager.defaultVibrator.cancel()
+        main.removeCallbacks(unquiet)
+        main.postDelayed(unquiet, millis)
+    }
+
     fun stop() {
         stopAudio()
+        main.removeCallbacks(unquiet)
+        quietUntil = 0L
         current = null
         vibratorManager.defaultVibrator.cancel()
         focus?.let(audioManager::abandonAudioFocusRequest)
@@ -179,7 +198,12 @@ class AlarmPlayer(private val context: Context, private val holdWakeLock: Boolea
         val rampSeconds = current?.rampSeconds ?: 0
         val progress = if (rampSeconds <= 0) 1.0 else min(1.0, (SystemClock.elapsedRealtime() - startedAt) / (rampSeconds * 1000.0))
         // Равномерно в децибелах: от −36 дБ до полной — на слух нарастает ровно.
-        val gain = if (progress >= 1.0) 1f else 10.0.pow(-36.0 * (1 - progress) / 20).toFloat()
+        val quiet = SystemClock.elapsedRealtime() < quietUntil
+        val gain = when {
+            quiet -> 0f
+            progress >= 1.0 -> 1f
+            else -> 10.0.pow(-36.0 * (1 - progress) / 20).toFloat()
+        }
         media?.setVolume(gain, gain)
         track?.setVolume(gain)
         return progress >= 1.0

@@ -86,6 +86,7 @@ class MigrationTest {
             vibrate = alarm["vibrate"] == "1", rampSeconds = alarm.getValue("rampSeconds")!!.toInt(),
             snoozeMinutes = null, skipDate = null, repeatDate = null,
             honorExceptions = true, groupId = null, cycleAnchor = null, cycleDays = null, workdays = false,
+            wakeMethod = "NONE", wakeLevel = "MEDIUM", wakeTasks = 1, wakeReference = "", wakeSnooze = true, recheckMinutes = 0,
         ).toModel()
         assertEquals(com.dpsmpx.dpclock.model.Alarm("a", 7, 30, com.dpsmpx.dpclock.model.Repeat.fromBits(31), true, 1000), model)
     }
@@ -121,6 +122,29 @@ class MigrationTest {
         for (table in listOf("alarm_group", "alarm_template", "exception_period")) {
             assertEquals(table, "0", row(db, "SELECT COUNT(*) AS n FROM `$table`")["n"])
         }
+    }
+
+    @Test
+    fun migration3To4AddsWakeCheckOff() = withDb { db ->
+        SchemaFile.read(3).create(db)
+        db.execSQL(
+            "INSERT INTO alarm (id, hour, minute, repeatDays, enabled, createdAt, label, sound, soundTitle, vibrate, rampSeconds, " +
+                "honorExceptions, workdays) VALUES ('a', 6, 0, 0, 1, 1, '', '', '', 1, 0, 1, 1)",
+        )
+        db.execSQL("INSERT INTO alarm_occurrence (alarmId, scheduledAt, state) VALUES ('a', 100, 'SCHEDULED')")
+        MIGRATION_3_4.migrate(db)
+
+        val alarm = row(db, "SELECT * FROM alarm")
+        assertEquals("1", alarm["workdays"])
+        assertEquals("NONE", alarm["wakeMethod"])
+        assertEquals("MEDIUM", alarm["wakeLevel"])
+        assertEquals("1", alarm["wakeTasks"])
+        assertEquals("", alarm["wakeReference"])
+        assertEquals("1", alarm["wakeSnooze"])
+        assertEquals("0", alarm["recheckMinutes"])
+        val occurrence = row(db, "SELECT * FROM alarm_occurrence")
+        assertEquals("SCHEDULED", occurrence["state"])
+        assertEquals(null, occurrence["recheckAt"])
     }
 
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)

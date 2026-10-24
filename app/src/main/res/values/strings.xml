@@ -174,7 +174,7 @@
     <string name="about">About</string>
     <string name="version_value">Version %1$s</string>
     <string name="licenses">Open source libraries</string>
-    <string name="licenses_text">Jetpack Compose, Material 3, AndroidX Activity, Lifecycle and Room, Kotlin standard library and coroutines — Apache License 2.0.</string>
+    <string name="licenses_text">Jetpack Compose, Material 3, AndroidX Activity, Lifecycle, Room and CameraX, ZXing, Kotlin standard library and coroutines — Apache License 2.0; libyuv inside CameraX — BSD 3-Clause.</string>
 
     <!-- Графики, исключения, группы и шаблоны (D-014) -->
     <string name="more">More</string>
@@ -236,4 +236,62 @@
         <item quantity="one">%1$d period</item>
         <item quantity="other">%1$d periods</item>
     </plurals>
+
+    <!-- Подтверждение пробуждения (D-015) -->
+    <string name="wake_open_check">Open to dismiss</string>
+    <string name="wake_dismiss_with_check">Dismiss — check first</string>
+    <string name="recheck_title">Are you awake?</string>
+    <string name="recheck_awake">I\'m awake</string>
+    <string name="recheck_hint">Tap within a minute, or the alarm rings again.</string>
+    <string name="wake_title">Prove you are awake</string>
+    <string name="wake_fallback_note">Examples instead: the camera, the sensor or the sample is not available.</string>
+    <string name="wake_cannot">Can\'t do it — solve examples</string>
+    <string name="wake_task_of">Task %1$d of %2$d</string>
+    <string name="wake_type_code">Type the code</string>
+    <string name="wake_solve">Solve the example</string>
+    <string name="wake_wrong">Wrong — here is a new one</string>
+    <string name="wake_shake">Shake the phone</string>
+    <string name="wake_scan_code">Point the camera at your code</string>
+    <string name="wake_scan_place">Point the camera at the place from the sample</string>
+    <string name="wake_other_code">This is a different code</string>
+    <string name="wake_check">Wake-up check</string>
+    <string name="wake_no_camera">Without camera access this method is unavailable.</string>
+    <string name="wake_level">Persistence</string>
+    <string name="wake_tasks">Tasks in a row</string>
+    <string name="wake_reference_code">Sample code</string>
+    <string name="wake_reference_photo">Sample photo</string>
+    <string name="wake_reference_missing">Not taken yet</string>
+    <string name="wake_reference_photo_ready">Taken. Only a 16×16 grid of brightness is kept, not the photo.</string>
+    <string name="wake_scan">Scan</string>
+    <string name="wake_take">Take</string>
+    <string name="wake_snooze_free">Snooze without the check</string>
+    <string name="recheck">Are-you-awake re-check</string>
+    <string name="recheck_text">A few minutes after you dismiss the alarm. No answer within a minute — the alarm rings again.</string>
+    <string name="recheck_in">re-check: %1$d min</string>
+    <string name="wake_try">Try it</string>
+    <string name="wake_reference_code_hint">Point the camera at a QR code or a barcode — for example, one printed and stuck in the kitchen.</string>
+    <string name="wake_reference_photo_hint">Point the camera at a place you will have to walk to, with details and in good light, and tap Take.</string>
+    <string name="wake_camera_failed">The camera did not open.</string>
+    <string name="wake_reference_flat">Too plain: choose a place with more detail.</string>
+    <string name="wake_none">None</string>
+    <string name="wake_none_text">Dismiss with one tap</string>
+    <string name="wake_math">Example</string>
+    <string name="wake_math_text">Solve examples on the keypad</string>
+    <string name="wake_code">Code</string>
+    <string name="wake_code_text">Type the digits shown</string>
+    <string name="wake_shake_title">Shake</string>
+    <string name="wake_shake_text">Shake the phone a number of times</string>
+    <string name="wake_qr">QR code or barcode</string>
+    <string name="wake_qr_text">Scan your code: put it where you have to walk to</string>
+    <string name="wake_photo">Photo of a place</string>
+    <string name="wake_photo_text">Aim the camera at the place from the sample</string>
+    <string name="wake_shakes_easy">20 times</string>
+    <string name="wake_shakes_medium">40 times</string>
+    <string name="wake_shakes_hard">70 times</string>
+    <string name="wake_code_easy">4 digits</string>
+    <string name="wake_code_medium">6 digits</string>
+    <string name="wake_code_hard">8 digits</string>
+    <string name="wake_level_easy">Low</string>
+    <string name="wake_level_medium">Medium</string>
+    <string name="wake_level_hard">High</string>
 </resources>

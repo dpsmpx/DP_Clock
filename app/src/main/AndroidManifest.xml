@@ -15,6 +15,12 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Подтверждение пробуждения QR-кодом или снимком (D-015); спрашивается, только когда выбран такой способ. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Без камеры приложение ставится: остаются другие способы проверки. -->
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
 
     <!-- Будильники, пресеты и настройки — в системной копии и при переносе на новое устройство (D-006, п. 9). -->
     <application

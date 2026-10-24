@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -37,23 +39,29 @@ import com.dpsmpx.dpclock.platform.RingItem
 import com.dpsmpx.dpclock.platform.RingService
 import com.dpsmpx.dpclock.platform.Ringing
 import com.dpsmpx.dpclock.platform.TimeText
+import com.dpsmpx.dpclock.ui.WakeChallenge
 import com.dpsmpx.dpclock.ui.rememberNowMillis
 import kotlinx.coroutines.flow.first
 
 /**
  * Экран сигнала поверх блокировки (SCREEN_MAP.md, п. 3, 6). Работает и до
  * первой разблокировки после перезагрузки. Кнопки крупные: нажимаются с
- * первого раза спросонья.
+ * первого раза спросонья. С подтверждением пробуждения «Выключить» открывает
+ * проверку (D-015); «Не спите?» — свой экран.
  */
 class RingActivity : ComponentActivity() {
     /** Действие кнопок громкости из настроек (D-011, п. 1). */
     private var volumeButtons = VolumeButtons.SNOOZE
+
+    /** Ключ сигнала, для которого открыта проверка пробуждения; null — экран сигнала. */
+    private val checking = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setShowWhenLocked(true)
         setTurnScreenOn(true)
+        checking.value = savedInstanceState?.getString(STATE_CHECKING)
         val repository = DpClockApp.graph(this).repository
         setContent {
             DpClockTheme {
@@ -65,9 +73,46 @@ class RingActivity : ComponentActivity() {
                     Ringing.items.first { it.isEmpty() }
                     finish()
                 }
-                items.lastOrNull()?.let { RingContent(it, onAction = ::send) }
+                val item = items.lastOrNull() ?: return@DpClockTheme
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.primaryContainer) {
+                    Box(Modifier.fillMaxSize().safeDrawingPadding()) {
+                        if (item is RingItem.AlarmRing && checking.value == item.key) {
+                            WakeChallenge(
+                                check = item.wakeCheck,
+                                onInteract = { send(RingService.ACTION_QUIET, item.alarmId) },
+                                onPassed = {
+                                    checking.value = null
+                                    send(RingService.ACTION_DISMISS, item.alarmId)
+                                },
+                                onBack = { checking.value = null },
+                            )
+                        } else {
+                            RingContent(item, onAction = ::onAction)
+                        }
+                    }
+                }
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(STATE_CHECKING, checking.value)
+    }
+
+    /** Кнопка экрана сигнала; «Выключить» с проверкой пробуждения открывает проверку. */
+    private fun onAction(action: String, item: RingItem) {
+        if (action == RingService.ACTION_DISMISS && item is RingItem.AlarmRing && item.wakeCheck.required) {
+            checking.value = item.key
+            send(RingService.ACTION_QUIET, item.alarmId)
+            return
+        }
+        val id = when (item) {
+            is RingItem.AlarmRing -> item.alarmId
+            is RingItem.TimerRing -> item.runId
+            is RingItem.RecheckRing -> item.alarmId
+        }
+        send(action, id)
     }
 
     private fun send(action: String, id: String) {
@@ -77,15 +122,18 @@ class RingActivity : ComponentActivity() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (!isVolumeKey(keyCode)) return super.onKeyDown(keyCode, event)
         val item = Ringing.items.value.lastOrNull() ?: return super.onKeyDown(keyCode, event)
-        if (event.repeatCount == 0) {
+        // Во время проверки и на «Не спите?» кнопки громкости ничего не делают.
+        if (event.repeatCount == 0 && checking.value == null) {
             when (volumeButtons) {
                 VolumeButtons.SNOOZE -> when (item) {
-                    is RingItem.AlarmRing -> send(RingService.ACTION_SNOOZE, item.alarmId)
-                    is RingItem.TimerRing -> send(RingService.ACTION_TIMER_ADD_MINUTE, item.runId)
+                    is RingItem.AlarmRing -> if (item.wakeCheck.snoozeAllowed) onAction(RingService.ACTION_SNOOZE, item)
+                    is RingItem.TimerRing -> onAction(RingService.ACTION_TIMER_ADD_MINUTE, item)
+                    is RingItem.RecheckRing -> Unit
                 }
                 VolumeButtons.DISMISS -> when (item) {
-                    is RingItem.AlarmRing -> send(RingService.ACTION_DISMISS, item.alarmId)
-                    is RingItem.TimerRing -> send(RingService.ACTION_TIMER_STOP, item.runId)
+                    is RingItem.AlarmRing -> onAction(RingService.ACTION_DISMISS, item)
+                    is RingItem.TimerRing -> onAction(RingService.ACTION_TIMER_STOP, item)
+                    is RingItem.RecheckRing -> Unit
                 }
                 VolumeButtons.NOTHING -> Unit
             }
@@ -98,61 +146,76 @@ class RingActivity : ComponentActivity() {
         if (isVolumeKey(keyCode) && Ringing.items.value.isNotEmpty()) true else super.onKeyUp(keyCode, event)
 
     private fun isVolumeKey(keyCode: Int) = keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
+
+    private companion object {
+        const val STATE_CHECKING = "checking"
+    }
 }
 
 @Composable
-private fun RingContent(item: RingItem, onAction: (String, String) -> Unit) {
+private fun RingContent(item: RingItem, onAction: (String, RingItem) -> Unit) {
     val context = LocalContext.current
     val now = rememberNowMillis(1_000L)
-    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.primaryContainer) {
-        Column(
-            Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Spacer(Modifier.height(48.dp))
-                Text(TimeText.time(context, now), style = MaterialTheme.typography.displayLarge)
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    when (item) {
-                        is RingItem.AlarmRing ->
-                            item.label.ifBlank { stringResource(R.string.ring_alarm_title) } + " · " + TimeText.time(context, item.hour, item.minute)
-                        is RingItem.TimerRing -> stringResource(
-                            if (item.finished) R.string.ring_timer_named_finished else R.string.ring_step_named_finished,
-                            item.name.ifBlank { stringResource(R.string.timer_default_name) },
-                        )
-                    },
-                    style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Center,
-                )
-            }
-            val buttonModifier = Modifier.fillMaxWidth().height(88.dp)
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(
+        Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Spacer(Modifier.height(48.dp))
+            Text(TimeText.time(context, now), style = MaterialTheme.typography.displayLarge)
+            Spacer(Modifier.height(16.dp))
+            Text(
                 when (item) {
-                    is RingItem.AlarmRing -> {
-                        FilledTonalButton(onClick = { onAction(RingService.ACTION_SNOOZE, item.alarmId) }, modifier = buttonModifier) {
+                    is RingItem.AlarmRing ->
+                        item.label.ifBlank { stringResource(R.string.ring_alarm_title) } + " · " + TimeText.time(context, item.hour, item.minute)
+                    is RingItem.TimerRing -> stringResource(
+                        if (item.finished) R.string.ring_timer_named_finished else R.string.ring_step_named_finished,
+                        item.name.ifBlank { stringResource(R.string.timer_default_name) },
+                    )
+                    is RingItem.RecheckRing -> stringResource(R.string.recheck_title)
+                },
+                style = MaterialTheme.typography.headlineSmall,
+                textAlign = TextAlign.Center,
+            )
+            if (item is RingItem.RecheckRing) {
+                Spacer(Modifier.height(8.dp))
+                Text(stringResource(R.string.recheck_hint), textAlign = TextAlign.Center)
+            }
+        }
+        val buttonModifier = Modifier.fillMaxWidth().height(88.dp)
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            when (item) {
+                is RingItem.AlarmRing -> {
+                    if (item.wakeCheck.snoozeAllowed) {
+                        FilledTonalButton(onClick = { onAction(RingService.ACTION_SNOOZE, item) }, modifier = buttonModifier) {
                             Text(stringResource(R.string.snooze_for, item.snoozeMinutes), style = MaterialTheme.typography.titleLarge)
                         }
-                        Button(onClick = { onAction(RingService.ACTION_DISMISS, item.alarmId) }, modifier = buttonModifier) {
-                            Text(stringResource(R.string.dismiss), style = MaterialTheme.typography.titleLarge)
-                        }
                     }
-                    is RingItem.TimerRing -> {
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            FilledTonalButton(
-                                onClick = { onAction(RingService.ACTION_TIMER_ADD_MINUTE, item.runId) },
-                                modifier = Modifier.weight(1f).height(88.dp),
-                            ) { Text(stringResource(R.string.add_minute), style = MaterialTheme.typography.titleLarge) }
-                            Button(
-                                onClick = { onAction(RingService.ACTION_TIMER_STOP, item.runId) },
-                                modifier = Modifier.weight(1f).height(88.dp),
-                            ) { Text(stringResource(R.string.stop), style = MaterialTheme.typography.titleLarge) }
-                        }
+                    Button(onClick = { onAction(RingService.ACTION_DISMISS, item) }, modifier = buttonModifier) {
+                        Text(
+                            stringResource(if (item.wakeCheck.required) R.string.wake_dismiss_with_check else R.string.dismiss),
+                            style = MaterialTheme.typography.titleLarge,
+                        )
                     }
                 }
-                Spacer(Modifier.size(24.dp))
+                is RingItem.TimerRing -> {
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        FilledTonalButton(
+                            onClick = { onAction(RingService.ACTION_TIMER_ADD_MINUTE, item) },
+                            modifier = Modifier.weight(1f).height(88.dp),
+                        ) { Text(stringResource(R.string.add_minute), style = MaterialTheme.typography.titleLarge) }
+                        Button(
+                            onClick = { onAction(RingService.ACTION_TIMER_STOP, item) },
+                            modifier = Modifier.weight(1f).height(88.dp),
+                        ) { Text(stringResource(R.string.stop), style = MaterialTheme.typography.titleLarge) }
+                    }
+                }
+                is RingItem.RecheckRing -> Button(onClick = { onAction(RingService.ACTION_RECHECK_OK, item) }, modifier = buttonModifier) {
+                    Text(stringResource(R.string.recheck_awake), style = MaterialTheme.typography.titleLarge)
+                }
             }
+            Spacer(Modifier.size(24.dp))
         }
     }
 }

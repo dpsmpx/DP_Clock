@@ -30,6 +30,12 @@ data class AlarmTemplate(val id: String, val name: String, val alarms: List<Alar
             "ra" to alarm.rampSeconds.toString(),
             "sn" to (alarm.snoozeMinutes?.toString() ?: ""),
             "ex" to if (alarm.honorExceptions) "1" else "0",
+            "w" to alarm.wakeCheck.method.name,
+            "wl" to alarm.wakeCheck.level.name,
+            "wt" to alarm.wakeCheck.tasks.toString(),
+            "wr" to alarm.wakeCheck.reference,
+            "ws" to if (alarm.wakeCheck.snoozeAllowed) "1" else "0",
+            "rc" to alarm.wakeCheck.recheckMinutes.toString(),
         ).joinToString("&") { (k, v) -> k + "=" + URLEncoder.encode(v, Charsets.UTF_8) }
     }
 
@@ -58,6 +64,14 @@ data class AlarmTemplate(val id: String, val name: String, val alarms: List<Alar
                     rampSeconds = f["ra"]?.toIntOrNull() ?: 0,
                     snoozeMinutes = f["sn"]?.toIntOrNull(),
                     honorExceptions = f["ex"] != "0",
+                    wakeCheck = WakeCheck(
+                        method = WakeMethod.entries.firstOrNull { it.name == f["w"] } ?: WakeMethod.NONE,
+                        level = WakeLevel.entries.firstOrNull { it.name == f["wl"] } ?: WakeLevel.MEDIUM,
+                        tasks = f["wt"]?.toIntOrNull()?.coerceIn(1, WakeCheck.MAX_TASKS) ?: 1,
+                        reference = f["wr"].orEmpty(),
+                        snoozeAllowed = f["ws"] != "0",
+                        recheckMinutes = f["rc"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0,
+                    ),
                 )
             }
         }

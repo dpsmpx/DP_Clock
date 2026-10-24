@@ -11,7 +11,9 @@ import android.os.Looper
 import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.data.AlarmFire
 import com.dpsmpx.dpclock.model.SignalOutcome
+import com.dpsmpx.dpclock.model.AlarmSound
 import com.dpsmpx.dpclock.model.SignalStyle
+import com.dpsmpx.dpclock.model.WakeCheck
 import com.dpsmpx.dpclock.model.StepSignal
 import com.dpsmpx.dpclock.model.TimerState
 import kotlinx.coroutines.Dispatchers
@@ -34,8 +36,17 @@ sealed interface RingItem {
         val snoozeMinutes: Int,
         override val sound: RingSound,
         override val since: Long,
+        /** Без проверки «Выключить» не выключает (D-015). */
+        val wakeCheck: WakeCheck = WakeCheck(),
     ) : RingItem {
         override val key: String get() = "alarm:$alarmId"
+    }
+
+    /** «Не спите?» через несколько минут после выключения (D-011, п. 3): без ответа — снова сигнал. */
+    data class RecheckRing(val alarmId: String, val hour: Int, val minute: Int, val label: String, override val since: Long) : RingItem {
+        override val key: String get() = "recheck:$alarmId"
+        // Мягкий звук и вибрация: спящего разбудит повторный сигнал, а не этот вопрос.
+        override val sound: RingSound get() = RingSound(AlarmSound.Builtin("dawn"), vibrate = true)
     }
 
     /** [finished] — таймер закончился; иначе — полный сигнал промежуточного шага. */
@@ -52,6 +63,9 @@ object Ringing {
 
     fun isAlarmRinging(alarmId: String): Boolean =
         mutableItems.value.any { it is RingItem.AlarmRing && it.alarmId == alarmId }
+
+    fun isRecheckShowing(alarmId: String): Boolean =
+        mutableItems.value.any { it is RingItem.RecheckRing && it.alarmId == alarmId }
 
     internal fun add(item: RingItem) = mutableItems.update { list -> list.filterNot { it.key == item.key } + item }
 
@@ -91,23 +105,18 @@ class RingService : Service() {
         val repository = DpClockApp.graph(this).repository
         val id = intent.getStringExtra(EXTRA_ID) ?: return
         when (intent.action) {
-            ACTION_FIRE_ALARM -> {
-                val fire = repository.onAlarmFired(id, intent.getLongExtra(EXTRA_SCHEDULED_AT, 0L))
-                if (fire is AlarmFire.Ring) {
-                    val alarm = fire.alarm
-                    ring(
-                        RingItem.AlarmRing(
-                            alarmId = id,
-                            hour = alarm.hour,
-                            minute = alarm.minute,
-                            label = alarm.label,
-                            snoozeMinutes = fire.snoozeMinutes,
-                            sound = RingSound(alarm.sound, alarm.vibrate, alarm.rampSeconds),
-                            since = System.currentTimeMillis(),
-                        ),
-                    )
-                }
+            ACTION_FIRE_ALARM -> when (val fire = repository.onAlarmFired(id, intent.getLongExtra(EXTRA_SCHEDULED_AT, 0L))) {
+                is AlarmFire.Ring -> ring(alarmRing(fire))
+                is AlarmFire.Recheck -> ring(
+                    RingItem.RecheckRing(id, fire.alarm.hour, fire.alarm.minute, fire.alarm.label, System.currentTimeMillis()),
+                )
+                AlarmFire.Skip -> Unit
             }
+            ACTION_RECHECK_OK -> {
+                repository.recheckPassed(id)
+                silence("recheck:$id")
+            }
+            ACTION_QUIET -> player.quiet(QUIET_MILLIS)
             ACTION_FIRE_TIMER -> {
                 val fire = repository.onTimerStepEnded(id) ?: return
                 when (fire.signal) {
@@ -145,12 +154,40 @@ class RingService : Service() {
         }
     }
 
+    private fun alarmRing(fire: AlarmFire.Ring): RingItem.AlarmRing {
+        val alarm = fire.alarm
+        return RingItem.AlarmRing(
+            alarmId = alarm.id,
+            hour = alarm.hour,
+            minute = alarm.minute,
+            label = alarm.label,
+            snoozeMinutes = fire.snoozeMinutes,
+            sound = RingSound(alarm.sound, alarm.vibrate, alarm.rampSeconds),
+            since = System.currentTimeMillis(),
+            wakeCheck = alarm.wakeCheck,
+        )
+    }
+
     private suspend fun ring(item: RingItem) {
         val settings = DpClockApp.graph(this).repository.currentSettings()
         fullScreen = settings.signalStyle == SignalStyle.FULL_SCREEN
         Ringing.add(item)
         player.play(item.sound)
         goForeground()
+        if (item is RingItem.RecheckRing) {
+            // Минута на ответ; потом — снова будильник с той же проверкой.
+            val timeout = Runnable {
+                DpClockApp.scope.launch(Dispatchers.Main) {
+                    val fire = DpClockApp.graph(this@RingService).repository.recheckFailed(item.alarmId)
+                    silence(item.key)
+                    if (fire != null) ring(alarmRing(fire))
+                    stopIfIdle()
+                }
+            }
+            autoStops.put(item.key, timeout)?.let(main::removeCallbacks)
+            main.postDelayed(timeout, RECHECK_MILLIS)
+            return
+        }
         val minutes = settings.autoStopMinutes ?: return
         val autoStop = Runnable {
             DpClockApp.scope.launch(Dispatchers.Main) {
@@ -158,6 +195,7 @@ class RingService : Service() {
                 when (item) {
                     is RingItem.AlarmRing -> repository.stopAlarm(item.alarmId, SignalOutcome.AUTO_STOPPED)
                     is RingItem.TimerRing -> repository.stopTimerSignal(item.runId, SignalOutcome.AUTO_STOPPED)
+                    is RingItem.RecheckRing -> Unit
                 }
                 silence(item.key)
                 stopIfIdle()
@@ -217,6 +255,12 @@ class RingService : Service() {
         const val ACTION_DISMISS = "com.dpsmpx.dpclock.ring.DISMISS"
         const val ACTION_TIMER_STOP = "com.dpsmpx.dpclock.ring.TIMER_STOP"
         const val ACTION_TIMER_ADD_MINUTE = "com.dpsmpx.dpclock.ring.TIMER_ADD_MINUTE"
+        const val ACTION_RECHECK_OK = "com.dpsmpx.dpclock.ring.RECHECK_OK"
+
+        /** Человек решает проверку пробуждения: сигнал молчит [QUIET_MILLIS] с последнего действия (D-015, п. 2). */
+        const val ACTION_QUIET = "com.dpsmpx.dpclock.ring.QUIET"
+        private const val QUIET_MILLIS = 20_000L
+        private const val RECHECK_MILLIS = 60_000L
         private const val EXTRA_ID = "id"
         private const val EXTRA_SCHEDULED_AT = "scheduledAt"
         private const val EXTRA_NAME = "name"

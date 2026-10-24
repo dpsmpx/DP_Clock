@@ -198,4 +198,14 @@ class TimerRulesTest {
         assertEquals(AlarmSound.Builtin("pulse"), TimerRules.advance(run, t0 + 1_000L).sound)
         assertEquals(AlarmSound.Builtin("chime"), TimerRules.advance(run, t0 + 2_000L).sound)
     }
+
+    @Test
+    fun ceilDivWithoutAndroid15() {
+        // Своё деление вверх вместо Math.ceilDiv: тот есть в Android только с API 35.
+        assertEquals(0L, ceilDiv(0L, 1000L))
+        assertEquals(1L, ceilDiv(1L, 1000L))
+        assertEquals(1L, ceilDiv(1000L, 1000L))
+        assertEquals(2L, ceilDiv(1001L, 1000L))
+        assertEquals(Hms.of(2000L), Hms.ofCountdown(1001L))
+    }
 }

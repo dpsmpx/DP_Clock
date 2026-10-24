@@ -8,6 +8,7 @@ import com.dpsmpx.dpclock.model.WeatherPlace
 import com.dpsmpx.dpclock.model.WeatherRules
 import com.dpsmpx.dpclock.model.Zones
 import com.dpsmpx.dpclock.platform.Places
+import com.dpsmpx.dpclock.platform.Surfaces
 import com.dpsmpx.dpclock.platform.WeatherClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -146,7 +147,12 @@ class WeatherStore(private val context: Context, private val repository: ClockRe
             }
         }
         mutableState.value = WeatherState(settings.mode, target, cache, loading = false, problem = problem)
+        // Виджет мировых часов показывает ту же погоду.
+        Surfaces.changed(context)
     }
+
+    /** Последняя погода из кэша — для виджета (D-020): без сети и без ожидания. */
+    fun cached(): WeatherCache? = loadCache()
 
     /** Режим сменили в настройках: шапка сразу показывает новый, погода — после [refresh]. */
     fun onModeChanged(mode: WeatherMode) = mutableState.update { it.copy(mode = mode) }

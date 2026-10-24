@@ -40,6 +40,7 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +59,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
+import com.dpsmpx.dpclock.QuickAction
+import com.dpsmpx.dpclock.QuickRequest
 import com.dpsmpx.dpclock.model.Alarm
 import com.dpsmpx.dpclock.model.AlarmGroup
 import com.dpsmpx.dpclock.model.AlarmRules
@@ -99,6 +102,8 @@ fun AlarmsScreen(
     openSettings: () -> Unit,
     dialog: AlarmsDialog?,
     onDialog: (AlarmsDialog?) -> Unit,
+    quick: QuickRequest? = null,
+    onQuickHandled: (Long) -> Unit = {},
 ) {
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -120,6 +125,20 @@ fun AlarmsScreen(
     var editingId by rememberSaveable { mutableStateOf<String?>(null) }
     var groupAction by rememberSaveable { mutableStateOf<GroupAction?>(null) }
     var actionGroupId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // Ярлык «Новый будильник» и команда ассистента «открыть, чтобы поправить» (D-020).
+    LaunchedEffect(quick?.token) {
+        val request = quick ?: return@LaunchedEffect
+        when (request.action) {
+            QuickAction.NEW_ALARM -> {
+                creatingIn = null
+                creating = true
+            }
+            QuickAction.EDIT_ALARM -> editingId = request.alarmId
+            else -> Unit
+        }
+        onQuickHandled(request.token)
+    }
 
     fun announce(at: Long) {
         if (at > 0) scope.launch {

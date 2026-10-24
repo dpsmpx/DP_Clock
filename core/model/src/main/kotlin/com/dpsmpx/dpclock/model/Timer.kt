@@ -108,9 +108,10 @@ data class TimerProgram(
             }
         }
 
-        private fun url(text: String) = URLEncoder.encode(text, Charsets.UTF_8)
+        // Перегрузки с Charset — только с Android 13; по имени кодировки — есть везде.
+        private fun url(text: String) = URLEncoder.encode(text, "UTF-8")
 
-        private fun unurl(text: String) = URLDecoder.decode(text, Charsets.UTF_8)
+        private fun unurl(text: String) = URLDecoder.decode(text, "UTF-8")
     }
 }
 

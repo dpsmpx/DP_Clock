@@ -10,6 +10,7 @@ import com.dpsmpx.dpclock.data.WeatherStore
 import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.platform.Notifier
 import com.dpsmpx.dpclock.platform.Scheduler
+import com.dpsmpx.dpclock.platform.Surfaces
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,7 +24,7 @@ enum class Section { ALARMS, TIMERS, STOPWATCH, CLOCK, WORLD }
 class AppGraph(context: Context) {
     val scheduler = Scheduler(context)
     val notifier = Notifier(context)
-    val repository = ClockRepository(context, ClockDatabase.open(context), scheduler, notifier)
+    val repository = ClockRepository(context, ClockDatabase.open(context), scheduler, notifier) { Surfaces.changed(context) }
 
     /** Погода нужна только экрану «Мировые часы» (D-019). */
     val weather by lazy { WeatherStore(context, repository) }

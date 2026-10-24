@@ -51,6 +51,34 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Ярлыки на иконке (D-020). -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity>
+
+        <!--
+          Стандартные команды Android (D-020): ассистент и другие приложения ставят
+          будильник и таймер. Вызвать могут только приложения с разрешением SET_ALARM.
+        -->
+        <activity
+            android:name=".AssistantActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:permission="com.android.alarm.permission.SET_ALARM"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SET_ALARM" />
+                <action android:name="android.intent.action.SET_TIMER" />
+                <action android:name="android.intent.action.SHOW_ALARMS" />
+                <action android:name="android.intent.action.SHOW_TIMERS" />
+                <action android:name="android.intent.action.SNOOZE_ALARM" />
+                <action android:name="android.intent.action.DISMISS_ALARM" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.VOICE" />
+            </intent-filter>
         </activity>
 
         <!-- Экран сигнала: поверх блокировки и до первой разблокировки после перезагрузки (D-008, п. 5). -->
@@ -87,6 +115,100 @@
             android:directBootAware="true"
             android:exported="false"
             android:foregroundServiceType="systemExempted" />
+
+        <!-- Виджеты (D-020). -->
+        <receiver
+            android:name=".platform.ClockWidget"
+            android:exported="false"
+            android:label="@string/widget_clock_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_clock_info" />
+        </receiver>
+
+        <receiver
+            android:name=".platform.AlarmsWidget"
+            android:exported="false"
+            android:label="@string/widget_alarms_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_alarms_info" />
+        </receiver>
+
+        <receiver
+            android:name=".platform.TimersWidget"
+            android:exported="false"
+            android:label="@string/widget_timers_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_timers_info" />
+        </receiver>
+
+        <receiver
+            android:name=".platform.WorldWidget"
+            android:exported="false"
+            android:label="@string/widget_world_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_world_info" />
+        </receiver>
+
+        <!-- Плитки быстрых настроек (D-020). -->
+        <service
+            android:name=".platform.SleepTimerTile"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_moon"
+            android:label="@string/sleep_timer"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".platform.NextAlarmTile"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_alarm"
+            android:label="@string/tile_next_alarm"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".platform.LastTimerTile"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_timer"
+            android:label="@string/tile_last_timer"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".platform.StopwatchTile"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_stopwatch"
+            android:label="@string/section_stopwatch"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <receiver
             android:name=".platform.AlarmReceiver"

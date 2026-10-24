@@ -41,7 +41,7 @@ data class AlarmTemplate(val id: String, val name: String, val alarms: List<Alar
             "ar" to alarm.after.reminder,
             "am" to alarm.after.reminderMinutes.toString(),
             "aa" to alarm.after.app,
-        ).joinToString("&") { (k, v) -> k + "=" + URLEncoder.encode(v, Charsets.UTF_8) }
+        ).joinToString("&") { (k, v) -> k + "=" + URLEncoder.encode(v, "UTF-8") }
     }
 
     companion object {
@@ -54,7 +54,7 @@ data class AlarmTemplate(val id: String, val name: String, val alarms: List<Alar
             return lines.drop(1).filter { it.isNotEmpty() }.map { line ->
                 val f = line.split('&').associate {
                     val (k, v) = it.split('=', limit = 2)
-                    k to URLDecoder.decode(v, Charsets.UTF_8)
+                    k to URLDecoder.decode(v, "UTF-8")
                 }
                 Alarm(
                     id = "",

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Виджет «Часы и ближайший будильник» (D-020): время и дата идут сами (TextClock). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextClock
+        android:id="@+id/widget_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFeatureSettings="tnum"
+        android:format12Hour="h:mm"
+        android:format24Hour="H:mm"
+        android:includeFontPadding="false"
+        android:textColor="@color/widget_text"
+        android:textSize="56sp" />
+
+    <TextClock
+        android:id="@+id/widget_date"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:format12Hour="@string/widget_date_format"
+        android:format24Hour="@string/widget_date_format"
+        android:textColor="@color/widget_text_secondary"
+        android:textSize="14sp" />
+
+    <TextView
+        android:id="@+id/widget_alarm"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:drawablePadding="6dp"
+        android:drawableStart="@drawable/ic_widget_alarm"
+        android:drawableTint="@color/widget_accent"
+        android:gravity="center_vertical"
+        android:text="@string/widget_no_alarms"
+        android:textColor="@color/widget_accent"
+        android:textSize="14sp" />
+</LinearLayout>

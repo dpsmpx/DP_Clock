@@ -36,6 +36,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +54,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.DpClockApp
+import com.dpsmpx.dpclock.QuickRequest
 import com.dpsmpx.dpclock.R
 import com.dpsmpx.dpclock.model.AlarmSound
 import com.dpsmpx.dpclock.model.DurationInput
@@ -69,7 +71,7 @@ import java.util.UUID
 
 /** Раздел «Таймеры» (SCREEN_MAP.md, п. 4). */
 @Composable
-fun TimersScreen(requestNotifications: () -> Unit) {
+fun TimersScreen(requestNotifications: () -> Unit, quick: QuickRequest? = null, onQuickHandled: (Long) -> Unit = {}) {
     val repository = DpClockApp.graph(LocalContext.current).repository
     val runs by repository.timerRuns.collectAsStateWithLifecycle(null)
     val presets by repository.presets.collectAsStateWithLifecycle(emptyList())
@@ -80,6 +82,13 @@ fun TimersScreen(requestNotifications: () -> Unit) {
     var sleepOpen by rememberSaveable { mutableStateOf(false) }
     val resources = LocalResources.current
     val now = rememberMoment(200L, active = runs.orEmpty().any { it.state == TimerState.RUNNING })
+
+    // Ярлык «Таймер засыпания» (D-020).
+    LaunchedEffect(quick?.token) {
+        val request = quick ?: return@LaunchedEffect
+        sleepOpen = true
+        onQuickHandled(request.token)
+    }
 
     val list = runs ?: return
     val inputVisible = list.isEmpty() || showInput

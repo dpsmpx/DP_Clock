@@ -1,7 +1,6 @@
 package com.dpsmpx.dpclock.model
 
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.acos
 import kotlin.math.asin
@@ -63,7 +62,7 @@ object WorldClockRules {
 
     /** Какой там день относительно [home]: −1 — вчера, 0 — сегодня, 1 — завтра. */
     fun dayShift(zone: ZoneId, home: ZoneId, at: Instant): Int =
-        (LocalDate.ofInstant(at, zone).toEpochDay() - LocalDate.ofInstant(at, home).toEpochDay()).toInt()
+        (at.atZone(zone).toLocalDate().toEpochDay() - at.atZone(home).toLocalDate().toEpochDay()).toInt()
 
     /** День — солнце выше горизонта с поправкой на преломление; полярный день и ночь — как есть. */
     fun isDaylight(latitude: Double, longitude: Double, at: Instant): Boolean = Sun.elevation(latitude, longitude, at) > SUNRISE_ELEVATION

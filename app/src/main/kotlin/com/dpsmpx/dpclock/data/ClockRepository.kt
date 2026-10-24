@@ -28,6 +28,7 @@ import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.platform.Notifier
 import com.dpsmpx.dpclock.platform.Ringing
 import com.dpsmpx.dpclock.platform.Scheduler
+import com.dpsmpx.dpclock.platform.Surfaces
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -57,6 +58,17 @@ sealed interface AlarmFire {
     data object Skip : AlarmFire
 }
 
+/** Снимок данных для виджетов и плиток (D-020). */
+data class SurfaceData(
+    val alarms: List<Alarm>,
+    val exceptions: Exceptions,
+    val presets: List<TimerPreset>,
+    val runs: List<TimerRun>,
+    val stopwatch: Stopwatch,
+    val worldCities: List<String>,
+    val settings: Settings,
+)
+
 /** Что делать с концом шага таймера; [endedAt] — расчётный конец шага, мс UTC, для журнала. */
 data class TimerFire(val run: TimerRun, val signal: StepSignal, val sound: AlarmSound = AlarmSound.Default, val endedAt: Long? = null)
 
@@ -65,10 +77,12 @@ data class TimerFire(val run: TimerRun, val signal: StepSignal, val sound: Alarm
  * изменения будильники Android и уведомления приводятся в соответствие с базой.
  */
 class ClockRepository(
-    context: Context,
+    private val context: Context,
     db: ClockDatabase,
     private val scheduler: Scheduler,
     private val notifier: Notifier,
+    /** Данные изменились — виджеты и плитки обновляются (D-020). */
+    private val onChanged: () -> Unit = {},
 ) {
     private val dao = db.dao()
     private val mutex = Mutex()
@@ -102,7 +116,8 @@ class ClockRepository(
         list.filter { it.state == Occ.SNOOZED && it.snoozedUntil != null }.associate { it.alarmId to it.snoozedUntil!! }
     }
 
-    private suspend fun <T> locked(block: suspend () -> T): T = mutex.withLock {
+    /** [quiet] — только чтение: виджеты и плитки не трогаются. */
+    private suspend fun <T> locked(quiet: Boolean = false, block: suspend () -> T): T = mutex.withLock {
         if (!ready) {
             // Копия из резервной копии или с другого устройства: идущие таймеры,
             // секундомер и срабатывания относятся к тому устройству (DATA_MODEL.md, п. 8).
@@ -120,10 +135,25 @@ class ClockRepository(
             alarmsChanged = false
             syncBedtimeLocked()
         }
+        if (!quiet) onChanged()
         result
     }
 
-    suspend fun currentSettings(): Settings = locked { dao.currentSettings().toModel() }
+    suspend fun currentSettings(): Settings = locked(quiet = true) { dao.currentSettings().toModel() }
+
+    /** Всё, что показывают виджеты и плитки (D-020), одним чтением. */
+    suspend fun surfaceData(): SurfaceData = locked(quiet = true) {
+        val settings = dao.currentSettings().toModel()
+        SurfaceData(
+            alarms = dao.allAlarms().map { it.toModel() },
+            exceptions = Exceptions(dao.allExceptions().map { it.toModel() }, settings.holidaysRu),
+            presets = dao.allPresets().map { it.toModel() },
+            runs = dao.allTimerRuns().map { it.toModel() },
+            stopwatch = dao.currentStopwatch().toModel(),
+            worldCities = dao.allWorldCities().map { it.zoneId },
+            settings = settings,
+        )
+    }
 
     suspend fun updateSettings(change: (Settings) -> Settings) = locked {
         val old = dao.currentSettings().toModel()
@@ -347,7 +377,7 @@ class ClockRepository(
     }
 
     /** Пришло время мягкого пробуждения (D-017, п. 3): будильник ещё ждёт этого срабатывания — его данные, иначе null. */
-    suspend fun onGentleFired(id: String, alarmAt: Long): Alarm? = locked {
+    suspend fun onGentleFired(id: String, alarmAt: Long): Alarm? = locked(quiet = true) {
         val occ = dao.occurrence(id)?.takeIf { it.state == Occ.SCHEDULED && it.scheduledAt == alarmAt } ?: return@locked null
         dao.alarm(id)?.toModel()?.takeIf { it.enabled && occ.scheduledAt > now() }
     }
@@ -566,7 +596,7 @@ class ClockRepository(
     // Перенос файлом (D-018)
 
     /** Всё, что переносится файлом. */
-    suspend fun exportBackup(): Backup = locked {
+    suspend fun exportBackup(): Backup = locked(quiet = true) {
         Backup(
             alarms = dao.allAlarms().map { it.toModel() }.sortedBy { it.createdAt },
             groups = dao.allGroups().map { it.toModel() },
@@ -648,6 +678,27 @@ class ClockRepository(
         val run = TimerRules.start(UUID.randomUUID().toString(), presetId, name, program, Clocks.moment())
         dao.upsertTimerRun(run.toEntity())
         syncTimers()
+        // Для плиток (D-020): длина таймера засыпания и последний обычный таймер.
+        Surfaces.rememberTimer(context, program, name, presetId)
+    }
+
+    /** Пресет одним нажатием — из виджета (D-020). Пресета нет — false. */
+    suspend fun startPreset(id: String): Boolean = locked {
+        val preset = dao.preset(id)?.toModel() ?: return@locked false
+        val run = TimerRules.start(UUID.randomUUID().toString(), preset.id, preset.name, preset.program, Clocks.moment())
+        dao.upsertTimerRun(run.toEntity())
+        syncTimers()
+        Surfaces.rememberTimer(context, preset.program, preset.name, preset.id)
+        true
+    }
+
+    /** Остановить и убрать таймер засыпания — плитка (D-020). */
+    suspend fun stopSleepTimers() = locked {
+        for (run in dao.allTimerRuns().map { it.toModel() }.filter { it.program.sleep }) {
+            dao.deleteTimerRun(run.id)
+            scheduler.cancelTimer(run.id)
+            notifier.cancelTimer(run.id)
+        }
     }
 
     suspend fun pauseTimer(id: String) = updateTimer(id) { TimerRules.pause(it, Clocks.moment()) }

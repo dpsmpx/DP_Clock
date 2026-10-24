@@ -212,6 +212,9 @@ interface ClockDao {
     @Query("SELECT * FROM alarm_group WHERE id = :id")
     suspend fun group(id: String): GroupEntity?
 
+    @Query("SELECT * FROM alarm_group ORDER BY createdAt")
+    suspend fun allGroups(): List<GroupEntity>
+
     @Upsert
     suspend fun upsertGroup(group: GroupEntity)
 
@@ -223,6 +226,9 @@ interface ClockDao {
 
     @Query("SELECT * FROM alarm_template WHERE id = :id")
     suspend fun template(id: String): TemplateEntity?
+
+    @Query("SELECT * FROM alarm_template ORDER BY createdAt")
+    suspend fun allTemplates(): List<TemplateEntity>
 
     @Upsert
     suspend fun upsertTemplate(template: TemplateEntity)
@@ -262,6 +268,9 @@ interface ClockDao {
 
     @Query("SELECT * FROM timer_preset WHERE id = :id")
     suspend fun preset(id: String): PresetEntity?
+
+    @Query("SELECT * FROM timer_preset ORDER BY createdAt")
+    suspend fun allPresets(): List<PresetEntity>
 
     @Upsert
     suspend fun upsertPreset(preset: PresetEntity)
@@ -320,6 +329,19 @@ interface ClockDao {
 
     @Query("DELETE FROM alarm_occurrence")
     suspend fun clearOccurrences()
+
+    /** «Заменить всё» при загрузке из файла (D-018, п. 4). */
+    @Query("DELETE FROM alarm_group")
+    suspend fun clearGroups()
+
+    @Query("DELETE FROM alarm_template")
+    suspend fun clearTemplates()
+
+    @Query("DELETE FROM exception_period")
+    suspend fun clearExceptions()
+
+    @Query("DELETE FROM timer_preset")
+    suspend fun clearPresets()
 
     companion object {
         const val LOG_LIMIT = 1000

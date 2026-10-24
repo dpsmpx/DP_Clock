@@ -21,12 +21,15 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -60,6 +63,8 @@ fun SettingsScreen(onBack: () -> Unit) {
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
     var noDream by rememberSaveable { mutableStateOf(false) }
     val locale = LocalConfiguration.current.locales[0]
+    val snackbar = remember { SnackbarHostState() }
+    val backup = rememberBackupActions(snackbar)
 
     fun update(change: (Settings) -> Settings) = persistLater { repository.updateSettings(change) }
 
@@ -72,6 +77,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 },
             )
         },
+        snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
             item { Header(R.string.settings_alarms) }
@@ -202,6 +208,21 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                     }
                 }
+            }
+            item { Header(R.string.settings_transfer) }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.backup_save)) },
+                    supportingContent = { Text(stringResource(R.string.backup_save_text)) },
+                    modifier = Modifier.clickable { backup.save() },
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.backup_load)) },
+                    supportingContent = { Text(stringResource(R.string.backup_load_text)) },
+                    modifier = Modifier.clickable { backup.load() },
+                )
             }
             item { Header(R.string.about) }
             item {

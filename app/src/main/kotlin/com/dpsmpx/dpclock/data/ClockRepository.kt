@@ -6,6 +6,8 @@ import com.dpsmpx.dpclock.model.AlarmGroup
 import com.dpsmpx.dpclock.model.AlarmRules
 import com.dpsmpx.dpclock.model.AlarmSound
 import com.dpsmpx.dpclock.model.AlarmTemplate
+import com.dpsmpx.dpclock.model.Backup
+import com.dpsmpx.dpclock.model.BackupRules
 import com.dpsmpx.dpclock.model.ExceptionPeriod
 import com.dpsmpx.dpclock.model.Exceptions
 import com.dpsmpx.dpclock.model.Repeat
@@ -546,6 +548,57 @@ class ClockRepository(
         dao.upsertAlarm(next.toEntity())
         dao.deleteOccurrence(alarm.id)
         scheduleAlarm(next)
+    }
+
+    // Перенос файлом (D-018)
+
+    /** Всё, что переносится файлом. */
+    suspend fun exportBackup(): Backup = locked {
+        Backup(
+            alarms = dao.allAlarms().map { it.toModel() }.sortedBy { it.createdAt },
+            groups = dao.allGroups().map { it.toModel() },
+            templates = dao.allTemplates().map { it.toModel() },
+            exceptions = dao.allExceptions().map { it.toModel() },
+            presets = dao.allPresets().map { it.toModel() },
+            settings = dao.currentSettings().toModel(),
+        )
+    }
+
+    /**
+     * Загрузить файл (D-018, п. 4): добавить к имеющемуся или, при [replace],
+     * сначала удалить будильники, группы, шаблоны, исключения и пресеты.
+     * Звонящий сейчас будильник остаётся. Настройки — из файла, если [withSettings].
+     */
+    suspend fun importBackup(backup: Backup, replace: Boolean, withSettings: Boolean) = locked {
+        if (replace) {
+            for (alarm in dao.allAlarms()) {
+                if (dao.occurrence(alarm.id)?.state == Occ.RINGING) {
+                    dao.upsertAlarm(alarm.copy(groupId = null))
+                    continue
+                }
+                dao.deleteAlarm(alarm.id)
+                dao.deleteOccurrence(alarm.id)
+                scheduler.cancelAlarm(alarm.id)
+                notifier.cancelSnoozed(alarm.id)
+            }
+            dao.clearGroups()
+            dao.clearTemplates()
+            dao.clearExceptions()
+            dao.clearPresets()
+        }
+        val prepared = BackupRules.forImport(backup) { UUID.randomUUID().toString() }
+        prepared.groups.forEach { dao.upsertGroup(it.toEntity()) }
+        prepared.templates.forEach { dao.upsertTemplate(it.toEntity()) }
+        prepared.exceptions.forEach { dao.upsertException(it.toEntity()) }
+        prepared.presets.forEach { dao.upsertPreset(it.toEntity()) }
+        prepared.alarms.forEach { dao.upsertAlarm(normalized(it).toEntity()) }
+        val settings = prepared.settings
+        if (withSettings && settings != null) {
+            // Отметка про Xiaomi — о настройке этого телефона, её файл не меняет.
+            dao.upsertSettings(settings.copy(xiaomiHintsDone = dao.currentSettings().toModel().xiaomiHintsDone).toEntity())
+        }
+        alarmsChanged = true
+        rescheduleAllLocked()
     }
 
     // Таймеры

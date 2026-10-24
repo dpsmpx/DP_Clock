@@ -51,7 +51,9 @@ class BackupTest {
             snoozeMinutes = 5, autoStopMinutes = null, alarmOrder = AlarmOrder.NEXT, signalStyle = SignalStyle.NOTIFICATION,
             volumeButtons = VolumeButtons.NOTHING, holidaysRu = true,
             bedtime = Bedtime(BedtimeMode.SCHEDULE, 450, 22, 30, setOf(DayOfWeek.SUNDAY, DayOfWeek.MONDAY), 30),
+            weather = WeatherSettings(WeatherMode.CITY, WeatherPlace("Тула", 54.1931, 37.6177)),
         ),
+        worldCities = listOf("Asia/Tokyo", "Europe/London"),
     )
 
     @Test
@@ -77,6 +79,8 @@ class BackupTest {
         val backup = BackupFormat.decode(text)
         assertEquals(listOf(Alarm("x", 7, 5, Repeat.Once, enabled = true, createdAt = 0L)), backup.alarms)
         assertEquals(Settings(), backup.settings)
+        assertEquals(WeatherMode.NOT_SET, backup.settings!!.weather.mode)
+        assertTrue(backup.worldCities.isEmpty())
         assertNull(backup.exportedAt)
         assertTrue(backup.groups.isEmpty() && backup.presets.isEmpty())
         // Без настроек в файле — настройки не трогаются.

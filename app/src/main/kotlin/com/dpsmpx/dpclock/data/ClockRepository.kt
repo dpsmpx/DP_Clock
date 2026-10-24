@@ -86,6 +86,9 @@ class ClockRepository(
     val groups: Flow<List<AlarmGroup>> = dao.groups().map { list -> list.map { it.toModel() } }
     val templates: Flow<List<AlarmTemplate>> = dao.templates().map { list -> list.map { it.toModel() } }
 
+    /** Города мировых часов — пояса tz по порядку (D-019). */
+    val worldCities: Flow<List<String>> = dao.worldCities()
+
     /** Журнал срабатываний, новые сверху. */
     val events: Flow<List<SignalEvent>> = dao.events().map { list -> list.map { it.toModel() } }
 
@@ -570,6 +573,7 @@ class ClockRepository(
             templates = dao.allTemplates().map { it.toModel() },
             exceptions = dao.allExceptions().map { it.toModel() },
             presets = dao.allPresets().map { it.toModel() },
+            worldCities = dao.allWorldCities().map { it.zoneId },
             settings = dao.currentSettings().toModel(),
         )
     }
@@ -595,6 +599,7 @@ class ClockRepository(
             dao.clearTemplates()
             dao.clearExceptions()
             dao.clearPresets()
+            dao.clearWorldCities()
         }
         val prepared = BackupRules.forImport(backup) { UUID.randomUUID().toString() }
         prepared.groups.forEach { dao.upsertGroup(it.toEntity()) }
@@ -602,6 +607,12 @@ class ClockRepository(
         prepared.exceptions.forEach { dao.upsertException(it.toEntity()) }
         prepared.presets.forEach { dao.upsertPreset(it.toEntity()) }
         prepared.alarms.forEach { dao.upsertAlarm(normalized(it).toEntity()) }
+        // Города — пояса: тот же город второй раз не добавляется.
+        val cities = dao.allWorldCities().map { it.zoneId }.toMutableList()
+        for (zoneId in prepared.worldCities.filter { it !in cities }) {
+            dao.upsertWorldCity(WorldCityEntity(zoneId, cities.size, now()))
+            cities += zoneId
+        }
         val settings = prepared.settings
         if (withSettings && settings != null) {
             // Отметка про Xiaomi — о настройке этого телефона, её файл не меняет.
@@ -609,6 +620,26 @@ class ClockRepository(
         }
         alarmsChanged = true
         rescheduleAllLocked()
+    }
+
+    // Мировые часы (D-019)
+
+    /** Город в конец списка; уже есть — ничего. */
+    suspend fun addWorldCity(zoneId: String) = locked {
+        val cities = dao.allWorldCities()
+        if (cities.any { it.zoneId == zoneId }) return@locked
+        dao.upsertWorldCity(WorldCityEntity(zoneId, (cities.maxOfOrNull { it.position } ?: -1) + 1, now()))
+    }
+
+    suspend fun removeWorldCity(zoneId: String) = locked { dao.deleteWorldCity(zoneId) }
+
+    /** Сдвинуть город на одно место вверх (−1) или вниз (+1). */
+    suspend fun moveWorldCity(zoneId: String, step: Int) = locked {
+        val cities = dao.allWorldCities().toMutableList()
+        val from = cities.indexOfFirst { it.zoneId == zoneId }.takeIf { it >= 0 } ?: return@locked
+        val to = (from + step).coerceIn(0, cities.lastIndex)
+        cities.add(to, cities.removeAt(from))
+        cities.forEachIndexed { index, city -> dao.upsertWorldCity(city.copy(position = index)) }
     }
 
     // Таймеры

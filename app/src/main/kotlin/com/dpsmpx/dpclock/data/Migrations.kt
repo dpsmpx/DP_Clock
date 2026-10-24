@@ -99,3 +99,17 @@ val MIGRATION_5_6 = SqlMigration(
         "ALTER TABLE `signal_event` ADD COLUMN `title` TEXT NOT NULL DEFAULT ''",
     ),
 )
+
+/** 0.8.0 (D-019): города мировых часов и погода вашего города. */
+val MIGRATION_6_7 = SqlMigration(
+    6,
+    7,
+    listOf(
+        "CREATE TABLE IF NOT EXISTS `world_city` (`zoneId` TEXT NOT NULL, `position` INTEGER NOT NULL, " +
+            "`createdAt` INTEGER NOT NULL, PRIMARY KEY(`zoneId`))",
+        "ALTER TABLE `settings` ADD COLUMN `weatherMode` TEXT NOT NULL DEFAULT 'NOT_SET'",
+        "ALTER TABLE `settings` ADD COLUMN `weatherPlace` TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE `settings` ADD COLUMN `weatherLat` REAL",
+        "ALTER TABLE `settings` ADD COLUMN `weatherLon` REAL",
+    ),
+)

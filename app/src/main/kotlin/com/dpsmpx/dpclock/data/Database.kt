@@ -173,6 +173,19 @@ data class SettingsEntity(
     /** Дни расписания битами, как у будильника. */
     val bedtimeDays: Int,
     val bedtimeLeadMinutes: Int,
+    /** Погода (D-019): WeatherMode, название места и точка; точки нет — место не выбрано. */
+    val weatherMode: String = "NOT_SET",
+    val weatherPlace: String = "",
+    val weatherLat: Double? = null,
+    val weatherLon: Double? = null,
+)
+
+/** Город мировых часов (D-019): пояс tz и место в списке. */
+@Entity(tableName = "world_city")
+data class WorldCityEntity(
+    @PrimaryKey val zoneId: String,
+    val position: Int,
+    val createdAt: Long,
 )
 
 /** Журнал срабатываний (DATA_MODEL.md, п. 7), последние [ClockDao.LOG_LIMIT] событий. */
@@ -340,6 +353,21 @@ interface ClockDao {
     @Query("DELETE FROM alarm_occurrence")
     suspend fun clearOccurrences()
 
+    @Query("SELECT zoneId FROM world_city ORDER BY position, createdAt")
+    fun worldCities(): Flow<List<String>>
+
+    @Query("SELECT * FROM world_city ORDER BY position, createdAt")
+    suspend fun allWorldCities(): List<WorldCityEntity>
+
+    @Upsert
+    suspend fun upsertWorldCity(city: WorldCityEntity)
+
+    @Query("DELETE FROM world_city WHERE zoneId = :zoneId")
+    suspend fun deleteWorldCity(zoneId: String)
+
+    @Query("DELETE FROM world_city")
+    suspend fun clearWorldCities()
+
     /** «Заменить всё» при загрузке из файла (D-018, п. 4). */
     @Query("DELETE FROM alarm_group")
     suspend fun clearGroups()
@@ -370,6 +398,7 @@ interface ClockDao {
         GroupEntity::class,
         TemplateEntity::class,
         ExceptionEntity::class,
+        WorldCityEntity::class,
     ],
     version = ClockDatabase.VERSION,
     exportSchema = true,
@@ -381,10 +410,10 @@ abstract class ClockDatabase : RoomDatabase() {
         const val NAME = "dpclock.db"
 
         /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
-        const val VERSION = 6
+        const val VERSION = 7
 
         /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
-        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки

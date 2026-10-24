@@ -65,6 +65,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     val locale = LocalConfiguration.current.locales[0]
     val snackbar = remember { SnackbarHostState() }
     val backup = rememberBackupActions(snackbar)
+    val weatherChoice = rememberWeatherChoice()
 
     fun update(change: (Settings) -> Settings) = persistLater { repository.updateSettings(change) }
 
@@ -169,6 +170,14 @@ fun SettingsScreen(onBack: () -> Unit) {
                     modifier = Modifier.clickable {
                         noDream = runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_DREAM_SETTINGS)) }.isFailure
                     },
+                )
+            }
+            item { Header(R.string.settings_world) }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.weather_title)) },
+                    supportingContent = { Text(weatherModeText(settings.weather.mode, settings.weather.place)) },
+                    modifier = Modifier.clickable { weatherChoice.openOptions() },
                 )
             }
             item { Header(R.string.settings_reliability) }

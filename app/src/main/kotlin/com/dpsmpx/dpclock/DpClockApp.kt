@@ -6,6 +6,7 @@ import androidx.camera.camera2.Camera2Config
 import androidx.camera.core.CameraXConfig
 import com.dpsmpx.dpclock.data.ClockDatabase
 import com.dpsmpx.dpclock.data.ClockRepository
+import com.dpsmpx.dpclock.data.WeatherStore
 import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.platform.Notifier
 import com.dpsmpx.dpclock.platform.Scheduler
@@ -16,13 +17,16 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 /** Разделы нижней панели слева направо (D-010, п. 2). */
-enum class Section { ALARMS, TIMERS, STOPWATCH, CLOCK }
+enum class Section { ALARMS, TIMERS, STOPWATCH, CLOCK, WORLD }
 
 /** Общие объекты процесса. Работают и до первой разблокировки: база — в хранилище устройства. */
 class AppGraph(context: Context) {
     val scheduler = Scheduler(context)
     val notifier = Notifier(context)
     val repository = ClockRepository(context, ClockDatabase.open(context), scheduler, notifier)
+
+    /** Погода нужна только экрану «Мировые часы» (D-019). */
+    val weather by lazy { WeatherStore(context, repository) }
 }
 
 class DpClockApp : Application(), CameraXConfig.Provider {

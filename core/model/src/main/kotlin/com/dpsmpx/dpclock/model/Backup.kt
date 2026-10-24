@@ -15,6 +15,8 @@ data class Backup(
     val templates: List<AlarmTemplate> = emptyList(),
     val exceptions: List<ExceptionPeriod> = emptyList(),
     val presets: List<TimerPreset> = emptyList(),
+    /** Города мировых часов — пояса tz по порядку (D-019). */
+    val worldCities: List<String> = emptyList(),
     /** null — в файле настроек нет. Отметка про Xiaomi относится к телефону и не переносится. */
     val settings: Settings? = null,
     /** Когда и какой версией приложения сохранён файл; не указано — null и пусто. */
@@ -22,7 +24,8 @@ data class Backup(
     val appVersion: String = "",
 ) {
     val isEmpty: Boolean
-        get() = alarms.isEmpty() && groups.isEmpty() && templates.isEmpty() && exceptions.isEmpty() && presets.isEmpty() && settings == null
+        get() = alarms.isEmpty() && groups.isEmpty() && templates.isEmpty() && exceptions.isEmpty() && presets.isEmpty() &&
+            worldCities.isEmpty() && settings == null
 }
 
 /** Файл не загружается (D-018, п. 5); в базе ничего не меняется. */
@@ -77,6 +80,7 @@ object BackupFormat {
             "presets" to backup.presets.map {
                 mapOf("id" to it.id, "name" to it.name, "createdAt" to it.createdAt, "program" to program(it.program))
             },
+            "worldCities" to backup.worldCities,
         )
         backup.settings?.let { root["settings"] = settings(it) }
         return Json.write(root)
@@ -119,6 +123,7 @@ object BackupFormat {
                 presets = o.objs("presets").map {
                     TimerPreset(it.string("id"), it.string("name", ""), program(it.obj("program") ?: it.missing("program")), it.long("createdAt", 0L))
                 },
+                worldCities = o.list("worldCities").map { it as String }.distinct(),
                 settings = o.obj("settings")?.let(::settings),
                 exportedAt = o.stringOrNull("exportedAt")?.let { runCatching { Instant.parse(it) }.getOrNull() },
                 appVersion = o.string("appVersion", ""),
@@ -210,6 +215,12 @@ object BackupFormat {
         "signalStyle" to settings.signalStyle.name,
         "volumeButtons" to settings.volumeButtons.name,
         "holidaysRu" to settings.holidaysRu,
+        "weather" to settings.weather.let { weather ->
+            mapOf(
+                "mode" to weather.mode.name,
+                "place" to weather.place?.let { mapOf("name" to it.name, "latitude" to it.latitude, "longitude" to it.longitude) },
+            )
+        },
         "bedtime" to settings.bedtime.let {
             mapOf(
                 "mode" to it.mode.name,
@@ -322,6 +333,12 @@ object BackupFormat {
             volumeButtons = o.enum("volumeButtons", defaults.volumeButtons),
             holidaysRu = o.bool("holidaysRu", defaults.holidaysRu),
             bedtime = bedtime,
+            weather = o.obj("weather")?.let { weather ->
+                WeatherSettings(
+                    mode = weather.enum("mode", WeatherMode.NOT_SET),
+                    place = weather.obj("place")?.let { WeatherPlace(it.string("name", ""), it.double("latitude"), it.double("longitude")) },
+                )
+            } ?: defaults.weather,
         )
     }
 
@@ -383,6 +400,12 @@ private class Obj(private val map: Map<*, *>, private val path: String) {
     fun intOrNull(key: String): Int? = when (val v = map[key]) {
         null -> null
         is Long -> if (v in Int.MIN_VALUE..Int.MAX_VALUE) v.toInt() else wrong(key)
+        else -> wrong(key)
+    }
+
+    fun double(key: String): Double = when (val v = map[key]) {
+        null -> missing(key)
+        is Number -> v.toDouble()
         else -> wrong(key)
     }
 

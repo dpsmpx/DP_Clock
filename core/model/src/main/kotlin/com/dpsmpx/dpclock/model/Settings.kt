@@ -14,6 +14,8 @@ data class Settings(
     val holidaysRu: Boolean = false,
     /** Время сна и напоминание ложиться (D-017, п. 2). */
     val bedtime: Bedtime = Bedtime(),
+    /** Погода вашего города в «Мировых часах» (D-019). */
+    val weather: WeatherSettings = WeatherSettings(),
 ) {
     companion object {
         const val DEFAULT_SNOOZE = 10

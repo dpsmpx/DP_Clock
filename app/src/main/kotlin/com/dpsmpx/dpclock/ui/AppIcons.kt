@@ -36,6 +36,17 @@ object AppIcons {
     val Down = icon("Down", "M12 5v14 M6 13l6 6l6 -6")
     val More = icon("More", "M12 6v0.01 M12 12v0.01 M12 18v0.01", width = 3f)
     val Moon = icon("Moon", "M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z")
+    val Sun = icon(
+        "Sun",
+        "M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M12 2.5v2 M12 19.5v2 M2.5 12h2 M19.5 12h2 " +
+            "M5.3 5.3l1.4 1.4 M17.3 17.3l1.4 1.4 M5.3 18.7l1.4 -1.4 M17.3 6.7l1.4 -1.4",
+    )
+    val Globe = icon(
+        "Globe",
+        "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M3.5 9h17 M3.5 15h17 M12 3c-3 3.5 -3 14.5 0 18 M12 3c3 3.5 3 14.5 0 18",
+    )
+    val Place = icon("Place", "M12 21s-6.5 -6 -6.5 -11a6.5 6.5 0 0 1 13 0c0 5 -6.5 11 -6.5 11z M10 10a2 2 0 1 0 4 0a2 2 0 1 0 -4 0")
+    val Search = icon("Search", "M4 10.5a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0 -13 0 M15.5 15.5L20 20")
     val Share = icon(
         "Share",
         "M15 5a3 3 0 1 0 6 0a3 3 0 1 0 -6 0 M3 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0 M15 19a3 3 0 1 0 6 0a3 3 0 1 0 -6 0 " +

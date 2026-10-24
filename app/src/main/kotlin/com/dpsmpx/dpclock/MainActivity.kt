@@ -46,11 +46,12 @@ import com.dpsmpx.dpclock.ui.ExceptionsScreen
 import com.dpsmpx.dpclock.ui.SettingsScreen
 import com.dpsmpx.dpclock.ui.StopwatchScreen
 import com.dpsmpx.dpclock.ui.TimersScreen
+import com.dpsmpx.dpclock.ui.WorldClockScreen
 import com.dpsmpx.dpclock.ui.orderTitle
 import com.dpsmpx.dpclock.ui.rememberNotificationPermissionRequest
 import kotlinx.coroutines.launch
 
-/** Главный экран: четыре раздела в нижней панели со свайпом между ними (D-006, D-010). */
+/** Главный экран: разделы в нижней панели со свайпом между ними (D-006, D-010); «Мировые часы» — с 0.8.0 (D-019). */
 class MainActivity : ComponentActivity() {
     /** Раздел, который просит открыть уведомление; растёт номер — новая просьба, -1 — просьбы нет. */
     private var request by mutableStateOf(SectionRequest(Section.ALARMS, 0))
@@ -97,7 +98,11 @@ private val SECTION_TITLES = mapOf(
     Section.TIMERS to R.string.section_timers,
     Section.STOPWATCH to R.string.section_stopwatch,
     Section.CLOCK to R.string.section_clock,
+    Section.WORLD to R.string.section_world,
 )
+
+/** В нижней панели пять подписей — у мировых часов короткая. */
+private val NAV_LABELS = SECTION_TITLES + (Section.WORLD to R.string.nav_world)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -157,11 +162,12 @@ private fun AppRoot(request: SectionRequest) {
                                     Section.TIMERS -> AppIcons.Timer
                                     Section.STOPWATCH -> AppIcons.Stopwatch
                                     Section.CLOCK -> AppIcons.Clock
+                                    Section.WORLD -> AppIcons.Globe
                                 },
                                 contentDescription = null,
                             )
                         },
-                        label = { Text(stringResource(SECTION_TITLES.getValue(item))) },
+                        label = { Text(stringResource(NAV_LABELS.getValue(item)), maxLines = 1) },
                     )
                 }
             }
@@ -184,6 +190,7 @@ private fun AppRoot(request: SectionRequest) {
                 Section.TIMERS -> TimersScreen(requestNotifications)
                 Section.STOPWATCH -> StopwatchScreen()
                 Section.CLOCK -> ClockScreen()
+                Section.WORLD -> WorldClockScreen(visible = pager.currentPage == Section.WORLD.ordinal && !pager.isScrollInProgress)
             }
         }
     }

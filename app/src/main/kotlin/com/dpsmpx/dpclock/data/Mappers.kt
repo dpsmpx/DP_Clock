@@ -26,6 +26,9 @@ import com.dpsmpx.dpclock.model.VolumeButtons
 import com.dpsmpx.dpclock.model.WakeCheck
 import com.dpsmpx.dpclock.model.WakeLevel
 import com.dpsmpx.dpclock.model.WakeMethod
+import com.dpsmpx.dpclock.model.WeatherMode
+import com.dpsmpx.dpclock.model.WeatherPlace
+import com.dpsmpx.dpclock.model.WeatherSettings
 import com.dpsmpx.dpclock.model.bits
 import com.dpsmpx.dpclock.model.days
 import java.time.LocalDate
@@ -175,6 +178,10 @@ fun SettingsEntity?.toModel(): Settings = if (this == null) Settings() else Sett
             leadMinutes = bedtimeLeadMinutes,
         )
     }.getOrDefault(Bedtime()),
+    weather = WeatherSettings(
+        mode = enumOr(weatherMode, WeatherMode.NOT_SET),
+        place = weatherLat?.let { lat -> weatherLon?.let { lon -> runCatching { WeatherPlace(weatherPlace, lat, lon) }.getOrNull() } },
+    ),
 )
 
 fun Settings.toEntity() = SettingsEntity(
@@ -191,6 +198,10 @@ fun Settings.toEntity() = SettingsEntity(
     bedtimeMinute = bedtime.minute,
     bedtimeDays = Repeat.of(bedtime.days).bits,
     bedtimeLeadMinutes = bedtime.leadMinutes,
+    weatherMode = weather.mode.name,
+    weatherPlace = weather.place?.name.orEmpty(),
+    weatherLat = weather.place?.latitude,
+    weatherLon = weather.place?.longitude,
 )
 
 /** Неизвестное значение (например, из копии новой версии) — значение по умолчанию. */

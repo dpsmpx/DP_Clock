@@ -19,10 +19,23 @@ data class AlarmEntity(
     @PrimaryKey val id: String,
     val hour: Int,
     val minute: Int,
-    /** Дни повтора битами (Repeat.bits); 0 — однократно. */
+    /** Дни повтора битами (Repeat.bits); 0 — однократно или на дату. */
     val repeatDays: Int,
     val enabled: Boolean,
     val createdAt: Long,
+    val label: String,
+    /** AlarmSound.encode(). */
+    val sound: String,
+    /** Название мелодии телефона или файла. */
+    val soundTitle: String,
+    val vibrate: Boolean,
+    val rampSeconds: Int,
+    /** null — общий интервал из настроек. */
+    val snoozeMinutes: Int?,
+    /** Пропускаемая дата, день от эпохи (LocalDate.toEpochDay). */
+    val skipDate: Long?,
+    /** Будильник на дату: день от эпохи; null — однократно или по дням недели. */
+    val repeatDate: Long?,
 )
 
 /** Текущее срабатывание будильника (DATA_MODEL.md, п. 3). */
@@ -85,6 +98,10 @@ data class SettingsEntity(
     val autoStopMinutes: Int?,
     val alarmOrder: String,
     val xiaomiHintsDone: Boolean,
+    /** SignalStyle. */
+    val signalStyle: String,
+    /** VolumeButtons. */
+    val volumeButtons: String,
 )
 
 /** Журнал срабатываний (DATA_MODEL.md, п. 7), последние [ClockDao.LOG_LIMIT] событий. */
@@ -208,7 +225,7 @@ interface ClockDao {
         SettingsEntity::class,
         SignalEventEntity::class,
     ],
-    version = 1,
+    version = ClockDatabase.VERSION,
     exportSchema = true,
 )
 abstract class ClockDatabase : RoomDatabase() {
@@ -216,6 +233,12 @@ abstract class ClockDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "dpclock.db"
+
+        /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
+        const val VERSION = 2
+
+        /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки
@@ -225,6 +248,7 @@ abstract class ClockDatabase : RoomDatabase() {
             Room.databaseBuilder(context.deviceStorage(), ClockDatabase::class.java, NAME)
                 // Без журнала WAL всё лежит в одном файле — его и берёт системная копия.
                 .setJournalMode(JournalMode.TRUNCATE)
+                .addMigrations(*MIGRATIONS.toTypedArray())
                 .build()
     }
 }

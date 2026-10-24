@@ -11,6 +11,7 @@ import android.os.Looper
 import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.data.AlarmFire
 import com.dpsmpx.dpclock.model.SignalOutcome
+import com.dpsmpx.dpclock.model.SignalStyle
 import com.dpsmpx.dpclock.model.StepSignal
 import com.dpsmpx.dpclock.model.TimerState
 import kotlinx.coroutines.Dispatchers
@@ -23,14 +24,24 @@ import kotlinx.coroutines.launch
 sealed interface RingItem {
     val key: String
     val since: Long
+    val sound: RingSound
 
-    data class AlarmRing(val alarmId: String, val hour: Int, val minute: Int, override val since: Long) : RingItem {
+    data class AlarmRing(
+        val alarmId: String,
+        val hour: Int,
+        val minute: Int,
+        val label: String,
+        val snoozeMinutes: Int,
+        override val sound: RingSound,
+        override val since: Long,
+    ) : RingItem {
         override val key: String get() = "alarm:$alarmId"
     }
 
     /** [finished] — таймер закончился; иначе — полный сигнал промежуточного шага. */
     data class TimerRing(val runId: String, val name: String, val finished: Boolean, override val since: Long) : RingItem {
         override val key: String get() = "timer:$runId"
+        override val sound: RingSound get() = RingSound()
     }
 }
 
@@ -56,6 +67,8 @@ class RingService : Service() {
     private val player by lazy { AlarmPlayer(this) }
     private val autoStops = mutableMapOf<String, Runnable>()
     private var pending = 0
+    /** Вид сигнала из настроек на момент последнего сигнала (D-007, п. 2). */
+    private var fullScreen = true
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -81,7 +94,18 @@ class RingService : Service() {
             ACTION_FIRE_ALARM -> {
                 val fire = repository.onAlarmFired(id, intent.getLongExtra(EXTRA_SCHEDULED_AT, 0L))
                 if (fire is AlarmFire.Ring) {
-                    ring(RingItem.AlarmRing(id, fire.alarm.hour, fire.alarm.minute, System.currentTimeMillis()))
+                    val alarm = fire.alarm
+                    ring(
+                        RingItem.AlarmRing(
+                            alarmId = id,
+                            hour = alarm.hour,
+                            minute = alarm.minute,
+                            label = alarm.label,
+                            snoozeMinutes = fire.snoozeMinutes,
+                            sound = RingSound(alarm.sound, alarm.vibrate, alarm.rampSeconds),
+                            since = System.currentTimeMillis(),
+                        ),
+                    )
                 }
             }
             ACTION_FIRE_TIMER -> {
@@ -122,10 +146,12 @@ class RingService : Service() {
     }
 
     private suspend fun ring(item: RingItem) {
+        val settings = DpClockApp.graph(this).repository.currentSettings()
+        fullScreen = settings.signalStyle == SignalStyle.FULL_SCREEN
         Ringing.add(item)
-        player.start()
+        player.play(item.sound)
         goForeground()
-        val minutes = DpClockApp.graph(this).repository.currentSettings().autoStopMinutes ?: return
+        val minutes = settings.autoStopMinutes ?: return
         val autoStop = Runnable {
             DpClockApp.scope.launch(Dispatchers.Main) {
                 val repository = DpClockApp.graph(this@RingService).repository
@@ -144,7 +170,14 @@ class RingService : Service() {
     private fun silence(key: String) {
         autoStops.remove(key)?.let(main::removeCallbacks)
         Ringing.remove(key)
-        if (Ringing.items.value.isEmpty()) player.stop() else goForeground()
+        // Остался другой сигнал — звучит его звук.
+        val next = Ringing.items.value.lastOrNull()
+        if (next == null) {
+            player.stop()
+        } else {
+            player.play(next.sound)
+            goForeground()
+        }
     }
 
     private fun stopIfIdle() {
@@ -156,7 +189,7 @@ class RingService : Service() {
 
     private fun goForeground() {
         val notifier = DpClockApp.graph(this).notifier
-        val notification = Ringing.items.value.lastOrNull()?.let(notifier::ringing) ?: notifier.ringPlaceholder()
+        val notification = Ringing.items.value.lastOrNull()?.let { notifier.ringing(it, fullScreen) } ?: notifier.ringPlaceholder()
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 startForeground(Notifier.ID_RING, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED)

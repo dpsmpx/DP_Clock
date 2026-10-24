@@ -3,6 +3,7 @@ package com.dpsmpx.dpclock.ui
 import android.Manifest
 import android.app.AlarmManager
 import android.app.NotificationManager
+import android.media.AudioManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -83,6 +84,9 @@ enum class Issue(val title: Int, val text: Int) {
     NOTIFICATIONS(R.string.issue_notifications, R.string.issue_notifications_text),
     FULL_SCREEN(R.string.issue_full_screen, R.string.issue_full_screen_text),
     EXACT_ALARMS(R.string.issue_exact, R.string.issue_exact_text),
+    VOLUME_OFF(R.string.issue_volume_off, R.string.issue_volume_off_text),
+    VOLUME_LOW(R.string.issue_volume_low, R.string.issue_volume_low_text),
+    DND(R.string.issue_dnd, R.string.issue_dnd_text),
     XIAOMI(R.string.issue_xiaomi, R.string.issue_xiaomi_text),
 }
 
@@ -92,35 +96,69 @@ data class Reliability(
     val fullScreen: Boolean,
     val exactAlarms: Boolean,
     val isXiaomi: Boolean,
+    /** Громкость потока будильника и её предел. */
+    val alarmVolume: Int,
+    val alarmVolumeMax: Int,
+    /** «Не беспокоить» сейчас не пропускает будильники. */
+    val dndBlocksAlarms: Boolean,
 ) {
+    val volumeOff: Boolean get() = alarmVolume == 0
+    val volumeLow: Boolean get() = !volumeOff && alarmVolume * 5 <= alarmVolumeMax
+
     fun issues(xiaomiHintsDone: Boolean): List<Issue> = buildList {
         if (!notifications) add(Issue.NOTIFICATIONS)
         if (!fullScreen) add(Issue.FULL_SCREEN)
         if (!exactAlarms) add(Issue.EXACT_ALARMS)
+        if (volumeOff) add(Issue.VOLUME_OFF)
+        if (volumeLow) add(Issue.VOLUME_LOW)
+        if (dndBlocksAlarms) add(Issue.DND)
         if (isXiaomi && !xiaomiHintsDone) add(Issue.XIAOMI)
     }
 
     companion object {
         fun read(context: Context): Reliability {
             val notifications = context.getSystemService(NotificationManager::class.java)
+            val audio = context.getSystemService(AudioManager::class.java)
             return Reliability(
                 notifications = notifications.areNotificationsEnabled(),
                 fullScreen = Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE || notifications.canUseFullScreenIntent(),
                 exactAlarms = context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms(),
                 isXiaomi = Build.MANUFACTURER.equals("xiaomi", ignoreCase = true) ||
                     Build.BRAND.lowercase() in setOf("xiaomi", "redmi", "poco"),
+                alarmVolume = audio.getStreamVolume(AudioManager.STREAM_ALARM),
+                alarmVolumeMax = audio.getStreamMaxVolume(AudioManager.STREAM_ALARM),
+                dndBlocksAlarms = dndBlocksAlarms(notifications),
             )
         }
+
+        private fun dndBlocksAlarms(manager: NotificationManager): Boolean = runCatching {
+            when (manager.currentInterruptionFilter) {
+                NotificationManager.INTERRUPTION_FILTER_NONE -> true
+                NotificationManager.INTERRUPTION_FILTER_PRIORITY ->
+                    manager.notificationPolicy.priorityCategories and NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS == 0
+                else -> false
+            }
+        }.getOrDefault(false)
     }
 }
 
+/** Состояние надёжности; перечитывается при возврате на экран и раз в 2 с, пока экран открыт: громкость меняют и кнопками. */
 @Composable
 fun rememberReliability(): Reliability {
     val context = LocalContext.current
     var state by remember { mutableStateOf(Reliability.read(context)) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     LifecycleResumeEffect(context) {
         state = Reliability.read(context)
         onPauseOrDispose {}
+    }
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                delay(2_000L)
+                state = Reliability.read(context)
+            }
+        }
     }
     return state
 }
@@ -137,11 +175,27 @@ fun Context.openFix(issue: Issue) {
                 Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)
             }
         Issue.EXACT_ALARMS -> Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, pkg)
+        Issue.VOLUME_OFF, Issue.VOLUME_LOW -> {
+            if (raiseAlarmVolume()) return
+            Intent(Settings.ACTION_SOUND_SETTINGS)
+        }
+        Issue.DND -> Intent(Settings.ACTION_SOUND_SETTINGS)
         Issue.XIAOMI -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)
     }
     runCatching { startActivity(intent) }
         .onFailure { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)) }
 }
+
+/**
+ * Громкость будильника — до 70 % предела, с системным ползунком на экране: его
+ * можно сразу поправить. false — система не дала (тогда открываются настройки звука).
+ */
+private fun Context.raiseAlarmVolume(): Boolean = runCatching {
+    val audio = getSystemService(AudioManager::class.java)
+    val target = maxOf(audio.getStreamVolume(AudioManager.STREAM_ALARM), (audio.getStreamMaxVolume(AudioManager.STREAM_ALARM) * 7 + 9) / 10)
+    audio.setStreamVolume(AudioManager.STREAM_ALARM, target, AudioManager.FLAG_SHOW_UI)
+    true
+}.getOrDefault(false)
 
 /**
  * Разрешение на уведомления — при создании первого будильника или таймера,

@@ -2,22 +2,54 @@ package com.dpsmpx.dpclock.data
 
 import com.dpsmpx.dpclock.model.Alarm
 import com.dpsmpx.dpclock.model.AlarmOrder
+import com.dpsmpx.dpclock.model.AlarmSound
 import com.dpsmpx.dpclock.model.Moment
 import com.dpsmpx.dpclock.model.Repeat
 import com.dpsmpx.dpclock.model.Settings
+import com.dpsmpx.dpclock.model.SignalStyle
 import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
 import com.dpsmpx.dpclock.model.TimerPreset
 import com.dpsmpx.dpclock.model.TimerProgram
 import com.dpsmpx.dpclock.model.TimerRun
 import com.dpsmpx.dpclock.model.TimerState
+import com.dpsmpx.dpclock.model.VolumeButtons
 import com.dpsmpx.dpclock.model.bits
+import java.time.LocalDate
 
 // Строки базы ↔ модель :core:model.
 
-fun AlarmEntity.toModel() = Alarm(id, hour, minute, Repeat.fromBits(repeatDays), enabled, createdAt)
+fun AlarmEntity.toModel() = Alarm(
+    id = id,
+    hour = hour,
+    minute = minute,
+    repeat = if (repeatDate != null) Repeat.OnDate(LocalDate.ofEpochDay(repeatDate)) else Repeat.fromBits(repeatDays),
+    enabled = enabled,
+    createdAt = createdAt,
+    label = label,
+    sound = AlarmSound.decode(sound, soundTitle),
+    vibrate = vibrate,
+    rampSeconds = rampSeconds,
+    snoozeMinutes = snoozeMinutes,
+    skipDate = skipDate?.let(LocalDate::ofEpochDay),
+)
 
-fun Alarm.toEntity() = AlarmEntity(id, hour, minute, repeat.bits, enabled, createdAt)
+fun Alarm.toEntity() = AlarmEntity(
+    id = id,
+    hour = hour,
+    minute = minute,
+    repeatDays = repeat.bits,
+    enabled = enabled,
+    createdAt = createdAt,
+    label = label,
+    sound = sound.encode(),
+    soundTitle = sound.title,
+    vibrate = vibrate,
+    rampSeconds = rampSeconds,
+    snoozeMinutes = snoozeMinutes,
+    skipDate = skipDate?.toEpochDay(),
+    repeatDate = (repeat as? Repeat.OnDate)?.date?.toEpochDay(),
+)
 
 fun PresetEntity.toModel() = TimerPreset(id, name, TimerProgram.decode(program), createdAt)
 
@@ -70,8 +102,10 @@ fun Stopwatch.toEntity() = StopwatchEntity(
 fun SettingsEntity?.toModel(): Settings = if (this == null) Settings() else Settings(
     snoozeMinutes = snoozeMinutes,
     autoStopMinutes = autoStopMinutes,
-    alarmOrder = AlarmOrder.entries.firstOrNull { it.name == alarmOrder } ?: AlarmOrder.TIME_OF_DAY,
+    alarmOrder = enumOr(alarmOrder, AlarmOrder.TIME_OF_DAY),
     xiaomiHintsDone = xiaomiHintsDone,
+    signalStyle = enumOr(signalStyle, SignalStyle.FULL_SCREEN),
+    volumeButtons = enumOr(volumeButtons, VolumeButtons.SNOOZE),
 )
 
 fun Settings.toEntity() = SettingsEntity(
@@ -79,7 +113,13 @@ fun Settings.toEntity() = SettingsEntity(
     autoStopMinutes = autoStopMinutes,
     alarmOrder = alarmOrder.name,
     xiaomiHintsDone = xiaomiHintsDone,
+    signalStyle = signalStyle.name,
+    volumeButtons = volumeButtons.name,
 )
+
+/** Неизвестное значение (например, из копии новой версии) — значение по умолчанию. */
+private inline fun <reified E : Enum<E>> enumOr(name: String, default: E): E =
+    enumValues<E>().firstOrNull { it.name == name } ?: default
 
 private fun moment(elapsed: Long?, bootCount: Int?, utc: Long?): Moment? =
     if (elapsed == null || bootCount == null || utc == null) null else Moment(elapsed, bootCount, utc)

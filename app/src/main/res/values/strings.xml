@@ -53,9 +53,38 @@
     <string name="input_dial">Use the dial</string>
     <string name="snoozed_until">Snoozed until %1$s</string>
 
+    <!-- Будильник целиком (D-013) -->
+    <string name="snooze_for">Snooze %1$d min</string>
+    <string name="alarm_label">Label</string>
+    <string name="repeat_by_days">Days of week</string>
+    <string name="repeat_on_date">On a date</string>
+    <string name="pick_date">Pick a date</string>
+    <string name="date_passed">This date and time have passed</string>
+    <string name="advanced">More options</string>
+    <string name="alarm_sound">Sound</string>
+    <string name="vibration">Vibration</string>
+    <string name="volume_ramp">Gradually increase volume</string>
+    <string name="ramp_off">Off</string>
+    <string name="seconds_value">%1$d s</string>
+    <string name="snooze_common">Common — %1$d min</string>
+    <string name="skip_next">Skip the next alarm</string>
+    <string name="skipped_on">Skipped on %1$s</string>
+    <string name="unnoticeable">No sound and no vibration: you will not notice this alarm.</string>
+    <string name="sounds_dp_clock">DP Clock sounds</string>
+    <string name="sounds_phone">Phone alarm sounds</string>
+    <string name="sounds_ringtones">Ringtones</string>
+    <string name="sounds_other">Other</string>
+    <string name="sound_default">Phone\'s default alarm sound</string>
+    <string name="sound_file">Audio file…</string>
+    <string name="sound_silent">Silent (vibration only)</string>
+    <string name="sound_chime">Chimes</string>
+    <string name="sound_dawn">Dawn</string>
+    <string name="sound_marimba">Marimba</string>
+    <string name="sound_classic">Classic beeps</string>
+    <string name="sound_pulse">Pulse</string>
+
     <!-- Сигнал -->
     <string name="ring_alarm_title">Alarm</string>
-    <string name="snooze">Snooze</string>
     <string name="dismiss">Dismiss</string>
     <string name="ring_timer_finished">Time\'s up</string>
     <string name="ring_step_finished">Step finished</string>
@@ -126,6 +155,22 @@
     <string name="xiaomi_done">I did it</string>
     <string name="xiaomi_not_done">Show the reminder again</string>
     <string name="open_app_settings">Open app settings</string>
+    <string name="settings_signal">Signal</string>
+    <string name="signal_style">How alarms ring</string>
+    <string name="signal_style_full_screen">Full screen over the lock screen</string>
+    <string name="signal_style_notification">Notification only</string>
+    <string name="volume_buttons">Volume buttons while ringing</string>
+    <string name="volume_buttons_snooze">Snooze (timer: +1 min)</string>
+    <string name="volume_buttons_dismiss">Dismiss (timer: stop)</string>
+    <string name="volume_buttons_nothing">Do nothing</string>
+    <string name="alarm_volume">Alarm volume</string>
+    <string name="volume_value">%1$d of %2$d</string>
+    <string name="issue_volume_off">Alarm volume is off</string>
+    <string name="issue_volume_off_text">Alarms will ring silently.</string>
+    <string name="issue_volume_low">Alarm volume is low</string>
+    <string name="issue_volume_low_text">You may not hear the alarm.</string>
+    <string name="issue_dnd">Do Not Disturb blocks alarms</string>
+    <string name="issue_dnd_text">Allow alarms in the Do Not Disturb settings.</string>
     <string name="about">About</string>
     <string name="version_value">Version %1$s</string>
     <string name="licenses">Open source libraries</string>

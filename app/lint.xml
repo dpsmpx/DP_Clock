@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- androidx.sqlite для тестов миграций — версии, от которой зависит Room, а не новейшей:
+         тесты должны идти на том же SQLite-слое, что в APK (gradle/libs.versions.toml). -->
+    <issue id="GradleDependency">
+        <ignore regexp="androidx\.sqlite:sqlite-bundled-jvm" />
+    </issue>
+</lint>

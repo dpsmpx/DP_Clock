@@ -16,5 +16,8 @@
 | KSP | Maven Central, `com.google.devtools.ksp` | Apache 2.0 | только сборка |
 | Gradle wrapper (`gradle/wrapper/gradle-wrapper.jar`) | Gradle, версия 9.8.2 | Apache 2.0 | только сборка |
 | JUnit 4 | Maven Central, `junit:junit` | EPL 1.0 | только тесты |
+| Встроенный SQLite для JVM (`sqlite-bundled-jvm`) | Google Maven, `androidx.sqlite` | Apache 2.0 | только тесты миграций (D-013, п. 10) |
+
+Звуки DP_Clock не файлы: ноты и тембры записаны в коде (`app/src/main/kotlin/com/dpsmpx/dpclock/platform/Synth.kt`), звук синтезируется при сигнале (D-013, п. 2). Мелодии телефона и выбранные человеком файлы в APK не входят.
 
 Список библиотек в APK и их лицензия показаны в настройках, «О приложении» (0.1.0). Полные тексты уведомлений о лицензиях — до первой сборки для распространения (ROADMAP, P5 — проверка лицензий).

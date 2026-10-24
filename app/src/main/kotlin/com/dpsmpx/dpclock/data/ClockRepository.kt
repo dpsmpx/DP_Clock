@@ -14,6 +14,7 @@ import com.dpsmpx.dpclock.model.TimerProgram
 import com.dpsmpx.dpclock.model.TimerRules
 import com.dpsmpx.dpclock.model.TimerRun
 import com.dpsmpx.dpclock.model.TimerState
+import com.dpsmpx.dpclock.model.isRepeating
 import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.platform.Notifier
 import com.dpsmpx.dpclock.platform.Ringing
@@ -36,7 +37,7 @@ private object Occ {
 
 /** Что делать с пришедшим будильником. */
 sealed interface AlarmFire {
-    data class Ring(val alarm: Alarm, val scheduledAt: Long) : AlarmFire
+    data class Ring(val alarm: Alarm, val scheduledAt: Long, val snoozeMinutes: Int) : AlarmFire
     data object Skip : AlarmFire
 }
 
@@ -151,21 +152,22 @@ class ClockRepository(
             return@locked AlarmFire.Skip
         }
         dao.upsertOccurrence(occ.copy(state = Occ.RINGING, ringingSince = now, snoozedUntil = null))
-        // Однократный будильник выполнен — выключается сразу, «Отложить» его не возвращает в список.
-        if (alarm.repeat == Repeat.Once) dao.upsertAlarm(alarm.copy(enabled = false).toEntity())
+        // Однократный и на дату выполнены — выключаются сразу, «Отложить» их не возвращает в список.
+        if (!alarm.repeat.isRepeating) dao.upsertAlarm(alarm.copy(enabled = false).toEntity())
         notifier.cancelSnoozed(id)
-        AlarmFire.Ring(alarm, occ.scheduledAt)
+        AlarmFire.Ring(alarm, occ.scheduledAt, snoozeMinutes(alarm))
     }
 
     /** «Отложить»: возвращает конец интервала или null, если будильник не звонит. */
     suspend fun snoozeAlarm(id: String): Long? = locked {
         val occ = dao.occurrence(id)?.takeIf { it.state == Occ.RINGING } ?: return@locked null
         val now = now()
-        val until = now + dao.currentSettings().toModel().snoozeMinutes * 60_000L
+        val alarm = dao.alarm(id)?.toModel()
+        val until = now + (alarm?.let { snoozeMinutes(it) } ?: dao.currentSettings().toModel().snoozeMinutes) * 60_000L
         dao.upsertOccurrence(occ.copy(state = Occ.SNOOZED, snoozedUntil = until, ringingSince = null))
         log(SignalSource.ALARM, id, occ.scheduledAt, occ.ringingSince ?: now, SignalOutcome.SNOOZED)
         scheduler.setAlarm(id, until)
-        dao.alarm(id)?.toModel()?.let { notifier.snoozed(it, until) }
+        alarm?.let { notifier.snoozed(it, until) }
         until
     }
 
@@ -225,6 +227,10 @@ class ClockRepository(
         notifier.stopwatch(dao.currentStopwatch().toModel())
     }
 
+    /** Интервал «Отложить» будильника: свой или общий из настроек (D-013, п. 3). */
+    private suspend fun snoozeMinutes(alarm: Alarm): Int =
+        alarm.snoozeMinutes ?: dao.currentSettings().toModel().snoozeMinutes
+
     private suspend fun resetOccurrence(id: String) {
         val occ = dao.occurrence(id) ?: return
         if (occ.state == Occ.RINGING) return
@@ -232,8 +238,15 @@ class ClockRepository(
         notifier.cancelSnoozed(id)
     }
 
-    /** Поставить ближайшее срабатывание; возвращает его момент (0 — будильник выключен). */
-    private suspend fun scheduleAlarm(alarm: Alarm): Long {
+    /** Поставить ближайшее срабатывание; возвращает его момент (0 — будильник выключен или больше не сработает). */
+    private suspend fun scheduleAlarm(stored: Alarm): Long {
+        val zone = ZoneId.systemDefault()
+        val nowInstant = Instant.ofEpochMilli(now())
+        var alarm = stored
+        if (AlarmRules.isSkipStale(alarm, nowInstant, zone)) {
+            alarm = alarm.copy(skipDate = null)
+            dao.upsertAlarm(alarm.toEntity())
+        }
         val occ = dao.occurrence(alarm.id)
         when (occ?.state) {
             Occ.RINGING -> return 0L
@@ -247,7 +260,14 @@ class ClockRepository(
             scheduler.cancelAlarm(alarm.id)
             return 0L
         }
-        val at = AlarmRules.nextTrigger(alarm, Instant.ofEpochMilli(now()), ZoneId.systemDefault()).toEpochMilli()
+        val at = AlarmRules.nextTrigger(alarm, nowInstant, zone)?.toEpochMilli()
+        if (at == null) {
+            // Дата прошла: будильник больше не сработает и выключается.
+            dao.upsertAlarm(alarm.copy(enabled = false).toEntity())
+            dao.deleteOccurrence(alarm.id)
+            scheduler.cancelAlarm(alarm.id)
+            return 0L
+        }
         dao.upsertOccurrence(OccurrenceEntity(alarm.id, at, Occ.SCHEDULED, snoozedUntil = null, ringingSince = null))
         scheduler.setAlarm(alarm.id, at)
         return at
@@ -257,7 +277,7 @@ class ClockRepository(
     private suspend fun missAlarm(alarm: Alarm, scheduledAt: Long, now: Long) {
         log(SignalSource.ALARM, alarm.id, scheduledAt, now, SignalOutcome.MISSED)
         notifier.missedAlarm(alarm, scheduledAt, autoStopped = false)
-        val next = if (alarm.repeat == Repeat.Once) alarm.copy(enabled = false) else alarm
+        val next = if (alarm.repeat.isRepeating) alarm else alarm.copy(enabled = false)
         dao.upsertAlarm(next.toEntity())
         dao.deleteOccurrence(alarm.id)
         scheduleAlarm(next)

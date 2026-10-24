@@ -43,8 +43,9 @@ class Notifier(private val context: Context) {
 
     // Сигнал
 
-    fun ringing(item: RingItem): Notification {
-        val fullScreen = PendingIntent.getActivity(
+    /** [fullScreen] — по настройке «Вид сигнала»; иначе только всплывающее уведомление с кнопками. */
+    fun ringing(item: RingItem, fullScreen: Boolean): Notification {
+        val screen = PendingIntent.getActivity(
             context,
             0,
             Intent(context, RingActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION),
@@ -54,14 +55,14 @@ class Notifier(private val context: Context) {
             .setSmallIcon(R.drawable.ic_notification)
             .setCategory(Notification.CATEGORY_ALARM)
             .setOngoing(true)
-            .setContentIntent(fullScreen)
-            .setFullScreenIntent(fullScreen, true)
+            .setContentIntent(screen)
             .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
+        if (fullScreen) builder.setFullScreenIntent(screen, true)
         when (item) {
             is RingItem.AlarmRing -> builder
-                .setContentTitle(text(R.string.ring_alarm_title))
+                .setContentTitle(alarmTitle(item.label))
                 .setContentText(TimeText.time(context, item.hour, item.minute))
-                .addAction(action(text(R.string.snooze), ringAction(RingService.ACTION_SNOOZE, item.alarmId)))
+                .addAction(action(context.getString(R.string.snooze_for, item.snoozeMinutes), ringAction(RingService.ACTION_SNOOZE, item.alarmId)))
                 .addAction(action(text(R.string.dismiss), ringAction(RingService.ACTION_DISMISS, item.alarmId)))
             is RingItem.TimerRing -> builder
                 .setContentTitle(timerTitle(item.name))
@@ -97,7 +98,7 @@ class Notifier(private val context: Context) {
         ID_ALARM,
         Notification.Builder(context, CHANNEL_ONGOING)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(text(R.string.snoozed_title))
+            .setContentTitle(if (alarm.label.isBlank()) text(R.string.snoozed_title) else alarm.label)
             .setContentText(context.getString(R.string.snoozed_until, TimeText.time(context, until)))
             .setOngoing(true)
             .setContentIntent(openApp(Section.ALARMS))
@@ -117,7 +118,7 @@ class Notifier(private val context: Context) {
         ID_ALARM,
         Notification.Builder(context, CHANNEL_MISSED)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(text(R.string.missed_title))
+            .setContentTitle(if (alarm.label.isBlank()) text(R.string.missed_title) else text(R.string.missed_title) + " · " + alarm.label)
             .setContentText(
                 context.getString(
                     if (autoStopped) R.string.missed_auto_stop else R.string.missed_phone_off,
@@ -210,6 +211,8 @@ class Notifier(private val context: Context) {
     }
 
     private fun timerTitle(name: String): String = name.ifBlank { text(R.string.timer_default_name) }
+
+    private fun alarmTitle(label: String): String = label.ifBlank { text(R.string.ring_alarm_title) }
 
     private fun text(id: Int): String = context.getString(id)
 

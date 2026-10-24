@@ -1,9 +1,10 @@
 package com.dpsmpx.dpclock.model
 
 import java.time.DayOfWeek
+import java.time.LocalDate
 
 /**
- * Будильник MVP (DATA_MODEL.md, п. 2). Время — местное: 7:00 остаётся 7:00
+ * Будильник (DATA_MODEL.md, п. 2; D-013). Время — местное: 7:00 остаётся 7:00
  * после смены часового пояса.
  */
 data class Alarm(
@@ -14,17 +15,36 @@ data class Alarm(
     val enabled: Boolean,
     /** Момент создания, мс UTC: порядок в списке при равном времени. */
     val createdAt: Long,
+    /** Название; пустое — без названия. */
+    val label: String = "",
+    val sound: AlarmSound = AlarmSound.Default,
+    val vibrate: Boolean = true,
+    /** Нарастание громкости, с; 0 — сразу полная громкость. */
+    val rampSeconds: Int = 0,
+    /** Свой интервал «Отложить», мин; null — общий из настроек. */
+    val snoozeMinutes: Int? = null,
+    /** Дата одного пропускаемого срабатывания; null — без пропуска. */
+    val skipDate: LocalDate? = null,
 ) {
     init {
         require(hour in 0..23) { "час $hour" }
         require(minute in 0..59) { "минута $minute" }
+        require(rampSeconds >= 0) { "нарастание $rampSeconds" }
+        require(snoozeMinutes == null || snoozeMinutes > 0) { "«Отложить» $snoozeMinutes" }
     }
 
     /** Минута суток: ключ сортировки «по времени суток». */
     val minuteOfDay: Int get() = hour * 60 + minute
+
+    /** Ни звука, ни вибрации — сигнал никто не заметит. */
+    val isUnnoticeable: Boolean get() = sound == AlarmSound.Silent && !vibrate
+
+    companion object {
+        const val MAX_LABEL = 40
+    }
 }
 
-/** Правило повтора. В версии 1.0 добавятся дата и сменный график (DATA_MODEL.md). */
+/** Правило повтора. В версии 1.0 добавится сменный график (DATA_MODEL.md). */
 sealed interface Repeat {
     /** Ближайшее наступление времени; после срабатывания будильник выключается. */
     data object Once : Repeat
@@ -35,6 +55,9 @@ sealed interface Repeat {
             require(days.isNotEmpty()) { "повтор без дней — это Once" }
         }
     }
+
+    /** Один раз в указанную дату; после срабатывания будильник выключается. */
+    data class OnDate(val date: LocalDate) : Repeat
 
     companion object {
         /** Ни одного дня — однократно (SCREEN_MAP.md, п. 2). */
@@ -48,19 +71,24 @@ sealed interface Repeat {
 
 val Repeat.days: Set<DayOfWeek>
     get() = when (this) {
-        Repeat.Once -> emptySet()
         is Repeat.Weekly -> days
+        Repeat.Once, is Repeat.OnDate -> emptySet()
     }
 
 val Repeat.bits: Int
     get() = days.fold(0) { acc, day -> acc or (1 shl day.ordinal) }
 
-/** Вид повтора для подписи в списке: «Однократно», «Ежедневно», «Пн–Пт» или перечень дней. */
-enum class RepeatKind { ONCE, DAILY, WEEKDAYS, DAYS }
+/** Звонит больше одного раза: пропуск одного срабатывания имеет смысл. */
+val Repeat.isRepeating: Boolean
+    get() = this is Repeat.Weekly
+
+/** Вид повтора для подписи в списке: «Однократно», «Ежедневно», «Пн–Пт», перечень дней или дата. */
+enum class RepeatKind { ONCE, DAILY, WEEKDAYS, DAYS, DATE }
 
 val Repeat.kind: RepeatKind
     get() = when {
         this == Repeat.Once -> RepeatKind.ONCE
+        this is Repeat.OnDate -> RepeatKind.DATE
         days.size == 7 -> RepeatKind.DAILY
         days == WORKDAYS -> RepeatKind.WEEKDAYS
         else -> RepeatKind.DAYS

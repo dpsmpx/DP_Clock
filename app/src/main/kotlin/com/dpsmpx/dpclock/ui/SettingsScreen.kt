@@ -36,6 +36,8 @@ import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
 import com.dpsmpx.dpclock.model.AlarmOrder
 import com.dpsmpx.dpclock.model.Settings
+import com.dpsmpx.dpclock.model.SignalStyle
+import com.dpsmpx.dpclock.model.VolumeButtons
 import com.dpsmpx.dpclock.persistLater
 
 /** Настройки MVP (SCREEN_MAP.md, п. 9). */
@@ -83,10 +85,43 @@ fun SettingsScreen(onBack: () -> Unit) {
                     modifier = Modifier.clickable { dialog = "order" },
                 )
             }
+            item { Header(R.string.settings_signal) }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.signal_style)) },
+                    supportingContent = { Text(stringResource(styleTitle(settings.signalStyle))) },
+                    modifier = Modifier.clickable { dialog = "style" },
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.volume_buttons)) },
+                    supportingContent = { Text(stringResource(volumeButtonsTitle(settings.volumeButtons))) },
+                    modifier = Modifier.clickable { dialog = "volume" },
+                )
+            }
             item { Header(R.string.settings_reliability) }
             item { PermissionRow(Issue.NOTIFICATIONS, reliability.notifications) }
             item { PermissionRow(Issue.FULL_SCREEN, reliability.fullScreen) }
             item { PermissionRow(Issue.EXACT_ALARMS, reliability.exactAlarms) }
+            item {
+                val issue = if (reliability.volumeOff) Issue.VOLUME_OFF else Issue.VOLUME_LOW
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.alarm_volume)) },
+                    supportingContent = {
+                        Text(
+                            if (reliability.volumeOff || reliability.volumeLow) stringResource(issue.text)
+                            else stringResource(R.string.volume_value, reliability.alarmVolume, reliability.alarmVolumeMax),
+                        )
+                    },
+                    trailingContent = {
+                        if (reliability.volumeOff || reliability.volumeLow) {
+                            TextButton(onClick = { context.openFix(issue) }) { Text(stringResource(R.string.fix)) }
+                        }
+                    },
+                )
+            }
+            if (reliability.dndBlocksAlarms) item { PermissionRow(Issue.DND, granted = false) }
             if (reliability.isXiaomi) {
                 item {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -144,6 +179,22 @@ fun SettingsScreen(onBack: () -> Unit) {
             onDismiss = { dialog = null },
             onSelect = { value -> update { it.copy(alarmOrder = value) } },
         )
+        "style" -> ChoiceDialog(
+            title = stringResource(R.string.signal_style),
+            choices = SignalStyle.entries,
+            selected = settings.signalStyle,
+            label = { stringResource(styleTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(signalStyle = value) } },
+        )
+        "volume" -> ChoiceDialog(
+            title = stringResource(R.string.volume_buttons),
+            choices = VolumeButtons.entries,
+            selected = settings.volumeButtons,
+            label = { stringResource(volumeButtonsTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(volumeButtons = value) } },
+        )
     }
 }
 
@@ -173,14 +224,26 @@ private fun PermissionRow(issue: Issue, granted: Boolean) {
 private fun autoStopText(minutes: Int?): String =
     if (minutes == null) stringResource(R.string.never) else stringResource(R.string.minutes_value, minutes)
 
+private fun styleTitle(style: SignalStyle): Int = when (style) {
+    SignalStyle.FULL_SCREEN -> R.string.signal_style_full_screen
+    SignalStyle.NOTIFICATION -> R.string.signal_style_notification
+}
+
+private fun volumeButtonsTitle(action: VolumeButtons): Int = when (action) {
+    VolumeButtons.SNOOZE -> R.string.volume_buttons_snooze
+    VolumeButtons.DISMISS -> R.string.volume_buttons_dismiss
+    VolumeButtons.NOTHING -> R.string.volume_buttons_nothing
+}
+
 fun orderTitle(order: AlarmOrder): Int = when (order) {
     AlarmOrder.TIME_OF_DAY -> R.string.order_time_of_day
     AlarmOrder.NEXT -> R.string.order_next
     AlarmOrder.CREATED -> R.string.order_created
 }
 
+/** Выбор одного значения из списка. */
 @Composable
-private fun <T> ChoiceDialog(
+fun <T> ChoiceDialog(
     title: String,
     choices: List<T>,
     selected: T,

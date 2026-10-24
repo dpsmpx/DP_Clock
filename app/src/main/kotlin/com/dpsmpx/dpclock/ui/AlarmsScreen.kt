@@ -1,11 +1,10 @@
 package com.dpsmpx.dpclock.ui
 
-import android.content.res.Resources
+import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,7 +19,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,19 +37,17 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.DpClockApp
@@ -64,6 +60,7 @@ import com.dpsmpx.dpclock.model.Repeat
 import com.dpsmpx.dpclock.model.RepeatKind
 import com.dpsmpx.dpclock.model.Settings
 import com.dpsmpx.dpclock.model.days
+import com.dpsmpx.dpclock.model.isRepeating
 import com.dpsmpx.dpclock.model.kind
 import com.dpsmpx.dpclock.platform.TimeText
 import kotlinx.coroutines.launch
@@ -159,11 +156,14 @@ fun AlarmsScreen(
                         snoozedUntil = snoozed[alarm.id],
                         onClick = { editingId = alarm.id },
                         onToggle = { enabled ->
-                            scope.launch {
-                                persist { repository.setAlarmEnabled(alarm.id, enabled) }
-                                if (enabled) {
-                                    val at = AlarmRules.nextTrigger(alarm, Instant.now(), ZoneId.systemDefault())
-                                    announce(at.toEpochMilli())
+                            val at = AlarmRules.nextTrigger(alarm, Instant.now(), ZoneId.systemDefault())
+                            if (enabled && at == null) {
+                                // Дата прошла — включить нечего, нужна новая дата.
+                                editingId = alarm.id
+                            } else {
+                                scope.launch {
+                                    persist { repository.setAlarmEnabled(alarm.id, enabled) }
+                                    if (enabled && at != null) announce(at.toEpochMilli())
                                 }
                             }
                         },
@@ -193,6 +193,7 @@ fun AlarmsScreen(
     if (editing != null) {
         AlarmEditor(
             alarm = editing,
+            settings = settings,
             onDismiss = { editingId = null },
             onSave = { updated ->
                 editingId = null
@@ -257,12 +258,23 @@ private fun AlarmRow(alarm: Alarm, snoozedUntil: Long?, onClick: () -> Unit, onT
     ) {
         Row(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
+                if (alarm.label.isNotBlank()) {
+                    Text(alarm.label, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 Text(
                     TimeText.time(context, alarm.hour, alarm.minute),
                     style = MaterialTheme.typography.displaySmall,
                     fontWeight = if (alarm.enabled) FontWeight.Medium else FontWeight.Normal,
                 )
-                Text(repeatText(LocalResources.current, alarm.repeat), style = MaterialTheme.typography.bodyMedium)
+                Text(repeatText(context, alarm.repeat), style = MaterialTheme.typography.bodyMedium)
+                val skipDate = alarm.skipDate
+                if (alarm.enabled && skipDate != null && alarm.repeat.isRepeating) {
+                    Text(
+                        stringResource(R.string.skipped_on, TimeText.date(context, skipDate)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
                 if (snoozedUntil != null) {
                     Text(
                         stringResource(R.string.snoozed_until, TimeText.time(context, snoozedUntil)),
@@ -282,7 +294,8 @@ fun orderedDays(locale: Locale): List<DayOfWeek> {
     return (0L until 7L).map { first.plus(it) }
 }
 
-fun repeatText(resources: Resources, repeat: Repeat): String {
+fun repeatText(context: Context, repeat: Repeat): String {
+    val resources = context.resources
     val locale = resources.configuration.locales[0]
     return when (repeat.kind) {
         RepeatKind.ONCE -> resources.getString(R.string.repeat_once)
@@ -290,67 +303,7 @@ fun repeatText(resources: Resources, repeat: Repeat): String {
         RepeatKind.WEEKDAYS -> resources.getString(R.string.repeat_weekdays)
         RepeatKind.DAYS -> orderedDays(locale).filter { it in repeat.days }
             .joinToString(", ") { it.getDisplayName(TextStyle.SHORT, locale) }
-    }
-}
-
-/** Редактор будильника MVP: время, дни повтора, удаление (SCREEN_MAP.md, п. 2). */
-@Composable
-private fun AlarmEditor(alarm: Alarm, onDismiss: () -> Unit, onSave: (Alarm) -> Unit, onDelete: () -> Unit) {
-    val context = LocalContext.current
-    val locale = LocalConfiguration.current.locales[0]
-    var hour by rememberSaveable { mutableIntStateOf(alarm.hour) }
-    var minute by rememberSaveable { mutableIntStateOf(alarm.minute) }
-    var days by remember { mutableStateOf(alarm.repeat.days) }
-    var pickTime by rememberSaveable { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.edit_alarm)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                TextButton(onClick = { pickTime = true }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                    Text(TimeText.time(context, hour, minute), style = MaterialTheme.typography.displayMedium)
-                }
-                Text(stringResource(R.string.repeat), style = MaterialTheme.typography.titleSmall)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    for (day in orderedDays(locale)) {
-                        FilterChip(
-                            selected = day in days,
-                            onClick = { days = if (day in days) days - day else days + day },
-                            label = { Text(day.getDisplayName(TextStyle.NARROW_STANDALONE, locale)) },
-                        )
-                    }
-                }
-                Text(
-                    if (days.isEmpty()) stringResource(R.string.repeat_once) else repeatText(LocalResources.current, Repeat.of(days)),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TextButton(onClick = onDelete) {
-                    Icon(AppIcons.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.size(8.dp))
-                    Text(stringResource(R.string.delete))
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(alarm.copy(hour = hour, minute = minute, repeat = Repeat.of(days))) }) {
-                Text(stringResource(R.string.done))
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
-    )
-    if (pickTime) {
-        TimePickerDialog(
-            initialHour = hour,
-            initialMinute = minute,
-            onDismiss = { pickTime = false },
-            onConfirm = { h, m ->
-                hour = h
-                minute = m
-                pickTime = false
-            },
-        )
+        RepeatKind.DATE -> TimeText.date(context, (repeat as Repeat.OnDate).date)
     }
 }
 

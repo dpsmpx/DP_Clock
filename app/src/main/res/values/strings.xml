@@ -377,4 +377,22 @@
     <string name="backup_replace_text">Your alarms, groups, templates, exceptions and presets are deleted first.</string>
     <string name="backup_with_settings">Take settings from the file</string>
     <string name="backup_load_button">Load</string>
+    <string name="journal">Signal log</string>
+    <string name="journal_text">When alarms and timers rang and how late</string>
+    <string name="journal_hint">The last 1000 signals. Lateness is counted from the planned time to the start of the sound; after Snooze — from the end of the snooze.</string>
+    <string name="journal_empty">Nothing has rung yet.</string>
+    <string name="journal_alarm">Alarm</string>
+    <string name="journal_alarm_named">Alarm “%1$s”</string>
+    <string name="journal_timer">Timer</string>
+    <string name="journal_timer_named">Timer “%1$s”</string>
+    <string name="journal_share">Share the log</string>
+    <string name="journal_share_title">DP Clock signal log</string>
+    <string name="outcome_dismissed">dismissed</string>
+    <string name="outcome_snoozed">snoozed</string>
+    <string name="outcome_auto_stopped">stopped by itself</string>
+    <string name="outcome_missed">missed</string>
+    <string name="late_on_time">on time</string>
+    <string name="late_seconds">+%1$d s</string>
+    <string name="late_minutes">+%1$d min %2$d s</string>
+    <string name="late_hours">+%1$d h %2$d min</string>
 </resources>

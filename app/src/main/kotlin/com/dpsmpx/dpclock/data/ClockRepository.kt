@@ -12,6 +12,7 @@ import com.dpsmpx.dpclock.model.ExceptionPeriod
 import com.dpsmpx.dpclock.model.Exceptions
 import com.dpsmpx.dpclock.model.Repeat
 import com.dpsmpx.dpclock.model.Settings
+import com.dpsmpx.dpclock.model.SignalEvent
 import com.dpsmpx.dpclock.model.SleepRules
 import com.dpsmpx.dpclock.model.SignalOutcome
 import com.dpsmpx.dpclock.model.SignalSource
@@ -56,8 +57,8 @@ sealed interface AlarmFire {
     data object Skip : AlarmFire
 }
 
-/** Что делать с концом шага таймера. */
-data class TimerFire(val run: TimerRun, val signal: StepSignal, val sound: AlarmSound = AlarmSound.Default)
+/** Что делать с концом шага таймера; [endedAt] — расчётный конец шага, мс UTC, для журнала. */
+data class TimerFire(val run: TimerRun, val signal: StepSignal, val sound: AlarmSound = AlarmSound.Default, val endedAt: Long? = null)
 
 /**
  * Все изменения данных и расписаний — здесь, по одному за раз: после каждого
@@ -84,6 +85,9 @@ class ClockRepository(
     val stopwatch: Flow<Stopwatch> = dao.stopwatch().map { it.toModel() }
     val groups: Flow<List<AlarmGroup>> = dao.groups().map { list -> list.map { it.toModel() } }
     val templates: Flow<List<AlarmTemplate>> = dao.templates().map { list -> list.map { it.toModel() } }
+
+    /** Журнал срабатываний, новые сверху. */
+    val events: Flow<List<SignalEvent>> = dao.events().map { list -> list.map { it.toModel() } }
 
     /** Общий список исключений: свои периоды и праздники, если включены (D-014, п. 4). */
     val exceptions: Flow<Exceptions> = combine(dao.exceptionsFlow(), settings) { periods, settings ->
@@ -290,7 +294,7 @@ class ClockRepository(
             missAlarm(alarm, occ.scheduledAt, now)
             return@locked AlarmFire.Skip
         }
-        dao.upsertOccurrence(occ.copy(state = Occ.RINGING, ringingSince = now, snoozedUntil = null))
+        dao.upsertOccurrence(occ.copy(state = Occ.RINGING, ringingSince = now, snoozedUntil = null, expectedAt = scheduledAt))
         // Однократный и на дату выполнены — выключаются сразу, «Отложить» их не возвращает в список.
         if (!alarm.repeat.isRepeating) dao.upsertAlarm(alarm.copy(enabled = false).toEntity())
         notifier.cancelSnoozed(id)
@@ -304,7 +308,7 @@ class ClockRepository(
         val alarm = dao.alarm(id)?.toModel()
         val until = now + (alarm?.let { snoozeMinutes(it) } ?: dao.currentSettings().toModel().snoozeMinutes) * 60_000L
         dao.upsertOccurrence(occ.copy(state = Occ.SNOOZED, snoozedUntil = until, ringingSince = null))
-        log(SignalSource.ALARM, id, occ.scheduledAt, occ.ringingSince ?: now, SignalOutcome.SNOOZED)
+        log(SignalSource.ALARM, id, occ.expectedAt ?: occ.scheduledAt, occ.ringingSince ?: now, SignalOutcome.SNOOZED, alarm?.label.orEmpty())
         scheduler.setAlarm(id, until)
         alarm?.let { notifier.snoozed(it, until) }
         until
@@ -315,6 +319,10 @@ class ClockRepository(
         val occ = dao.occurrence(id)
         val now = now()
         val recheck = dao.alarm(id)?.toModel()?.wakeCheck?.recheckMinutes ?: 0
+        // В журнал — только звучавший сигнал: «Выключить» у отложенного уже записан как «Отложен».
+        if (occ?.state == Occ.RINGING) {
+            log(SignalSource.ALARM, id, occ.expectedAt ?: occ.scheduledAt, occ.ringingSince ?: now, outcome, dao.alarm(id)?.label.orEmpty())
+        }
         if (outcome == SignalOutcome.DISMISSED && occ != null && occ.state != Occ.RECHECK) {
             dao.alarm(id)?.toModel()?.let { runAfterActions(it) }
         }
@@ -322,7 +330,6 @@ class ClockRepository(
             // Выключен, но через несколько минут — «Не спите?» (D-011, п. 3; D-015, п. 4).
             val at = now + recheck * 60_000L
             dao.upsertOccurrence(occ.copy(state = Occ.RECHECK, snoozedUntil = null, ringingSince = null, recheckAt = at))
-            log(SignalSource.ALARM, id, occ.scheduledAt, occ.ringingSince ?: now, outcome)
             notifier.cancelSnoozed(id)
             scheduler.setAlarm(id, at)
             alarmsChanged = true
@@ -332,7 +339,6 @@ class ClockRepository(
         scheduler.cancelAlarm(id)
         notifier.cancelSnoozed(id)
         val alarm = dao.alarm(id)?.toModel() ?: return@locked
-        if (occ != null) log(SignalSource.ALARM, id, occ.scheduledAt, occ.ringingSince ?: now, outcome)
         if (outcome == SignalOutcome.AUTO_STOPPED) notifier.missedAlarm(alarm, occ?.scheduledAt ?: now, autoStopped = true)
         scheduleAlarm(alarm)
     }
@@ -352,7 +358,7 @@ class ClockRepository(
         val alarm = dao.alarm(id)?.toModel() ?: return@locked
         dao.deleteOccurrence(id)
         scheduler.cancelAlarm(id)
-        log(SignalSource.ALARM, id, occ.scheduledAt, now(), SignalOutcome.DISMISSED)
+        log(SignalSource.ALARM, id, occ.scheduledAt, now(), SignalOutcome.DISMISSED, alarm.label)
         runAfterActions(alarm)
         val zone = ZoneId.systemDefault()
         val next = if (alarm.repeat.isRepeating) {
@@ -398,20 +404,24 @@ class ClockRepository(
         }
     }
 
-    /** «Я не сплю» — проверка пройдена: будильник идёт к следующему срабатыванию. */
-    suspend fun recheckPassed(id: String) = locked {
+    /** «Я не сплю» — проверка пройдена: будильник идёт к следующему срабатыванию. [shownAt] — когда вопрос появился. */
+    suspend fun recheckPassed(id: String, shownAt: Long? = null) = locked {
         val occ = dao.occurrence(id)?.takeIf { it.state == Occ.RECHECK } ?: return@locked
         dao.deleteOccurrence(id)
         scheduler.cancelAlarm(id)
-        dao.alarm(id)?.toModel()?.let { scheduleAlarm(it) }
-        log(SignalSource.ALARM, id, occ.scheduledAt, now(), SignalOutcome.DISMISSED)
+        val alarm = dao.alarm(id)?.toModel()
+        alarm?.let { scheduleAlarm(it) }
+        val now = now()
+        log(SignalSource.ALARM, id, occ.recheckAt ?: now, shownAt ?: now, SignalOutcome.DISMISSED, alarm?.label.orEmpty())
     }
 
     /** На «Не спите?» не ответили: будильник звонит снова. null — звонить нечему. */
     suspend fun recheckFailed(id: String): AlarmFire.Ring? = locked {
         val occ = dao.occurrence(id)?.takeIf { it.state == Occ.RECHECK } ?: return@locked null
         val alarm = dao.alarm(id)?.toModel() ?: return@locked null
-        dao.upsertOccurrence(occ.copy(state = Occ.RINGING, ringingSince = now(), recheckAt = null))
+        val now = now()
+        // Повторный сигнал — сразу после вопроса без ответа: ожидался сейчас.
+        dao.upsertOccurrence(occ.copy(state = Occ.RINGING, ringingSince = now, recheckAt = null, expectedAt = now))
         AlarmFire.Ring(alarm, occ.scheduledAt, snoozeMinutes(alarm))
     }
 
@@ -542,7 +552,7 @@ class ClockRepository(
 
     /** Пропуск (DATA_MODEL.md, п. 2): уведомление, однократный выключается, повторяющийся — к следующему. */
     private suspend fun missAlarm(alarm: Alarm, scheduledAt: Long, now: Long) {
-        log(SignalSource.ALARM, alarm.id, scheduledAt, now, SignalOutcome.MISSED)
+        log(SignalSource.ALARM, alarm.id, scheduledAt, now, SignalOutcome.MISSED, alarm.label)
         notifier.missedAlarm(alarm, scheduledAt, autoStopped = false)
         val next = if (alarm.repeat.isRepeating) alarm else alarm.copy(enabled = false)
         dao.upsertAlarm(next.toEntity())
@@ -629,11 +639,14 @@ class ClockRepository(
         notifier.cancelTimer(id)
     }
 
-    /** Звонящий таймер выключен: закончившийся удаляется, промежуточный шаг идёт дальше. */
-    suspend fun stopTimerSignal(id: String, outcome: SignalOutcome) = locked {
+    /**
+     * Звонящий таймер выключен: закончившийся удаляется, промежуточный шаг идёт дальше.
+     * [endedAt] — расчётный конец шага, [ringingSince] — начало сигнала, мс UTC; для журнала.
+     */
+    suspend fun stopTimerSignal(id: String, outcome: SignalOutcome, endedAt: Long? = null, ringingSince: Long? = null) = locked {
         val run = dao.timerRun(id)?.toModel() ?: return@locked
         val now = now()
-        log(SignalSource.TIMER, id, now, now, outcome)
+        log(SignalSource.TIMER, id, endedAt ?: now, ringingSince ?: now, outcome, run.name)
         if (run.state == TimerState.RINGING) {
             dao.deleteTimerRun(id)
             scheduler.cancelTimer(id)
@@ -648,25 +661,27 @@ class ClockRepository(
         val now = Clocks.moment()
         val result = TimerRules.advance(run, now)
         var signal = if (result.late) StepSignal.NONE else result.signal
+        // Конец шага по монотонным часам — перевод времени не искажает опоздание в журнале.
+        val endedAt = result.endedAt?.let { now.utc + it.millisAfter(now) }
         if (result.run.state == TimerState.RINGING && run.program.sleep) {
             // Таймер засыпания закончился: без сигнала, музыку останавливает приёмник (D-016, п. 1).
             dao.deleteTimerRun(id)
             scheduler.cancelTimer(id)
             notifier.cancelTimer(id)
-            log(SignalSource.TIMER, id, now.utc, now.utc, if (result.late) SignalOutcome.MISSED else SignalOutcome.DISMISSED)
+            log(SignalSource.TIMER, id, endedAt ?: now.utc, now.utc, if (result.late) SignalOutcome.MISSED else SignalOutcome.DISMISSED, run.name)
         } else if (result.run.state == TimerState.RINGING && result.late) {
             // Закончился, пока телефон был выключен: только уведомление (DATA_MODEL.md, п. 5).
             dao.deleteTimerRun(id)
             scheduler.cancelTimer(id)
             notifier.cancelTimer(id)
             notifier.timerFinished(run)
-            log(SignalSource.TIMER, id, now.utc, now.utc, SignalOutcome.MISSED)
+            log(SignalSource.TIMER, id, endedAt ?: now.utc, now.utc, SignalOutcome.MISSED, run.name)
             signal = StepSignal.NONE
         } else {
             dao.upsertTimerRun(result.run.toEntity())
         }
         syncTimers()
-        TimerFire(result.run, signal, result.sound)
+        TimerFire(result.run, signal, result.sound, endedAt)
     }
 
     /** Будильники Android и уведомления — по идущим таймерам. */
@@ -701,9 +716,9 @@ class ClockRepository(
         notifier.stopwatch(updated)
     }
 
-    private suspend fun log(source: SignalSource, sourceId: String, scheduledAt: Long, firedAt: Long, outcome: SignalOutcome) {
+    private suspend fun log(source: SignalSource, sourceId: String, scheduledAt: Long, firedAt: Long, outcome: SignalOutcome, title: String) {
         dao.insertEvent(
-            SignalEventEntity(UUID.randomUUID().toString(), source.name, sourceId, scheduledAt, firedAt, outcome.name),
+            SignalEventEntity(UUID.randomUUID().toString(), source.name, sourceId, scheduledAt, firedAt, outcome.name, title),
         )
         dao.trimEvents()
     }

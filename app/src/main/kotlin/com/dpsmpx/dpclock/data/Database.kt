@@ -104,6 +104,11 @@ data class OccurrenceEntity(
     val ringingSince: Long?,
     /** Момент повторной проверки «Не спите?» (D-015, п. 4). */
     val recheckAt: Long?,
+    /**
+     * У звонящего: когда этот звонок ожидался — срок, конец «Отложить» или
+     * момент повторного сигнала после «Не спите?». Для журнала (0.7.1).
+     */
+    val expectedAt: Long? = null,
 )
 
 @Entity(tableName = "timer_preset")
@@ -181,6 +186,8 @@ data class SignalEventEntity(
     val firedAt: Long,
     /** SignalOutcome. */
     val outcome: String,
+    /** Название будильника или таймера на момент записи (0.7.1). */
+    val title: String = "",
 )
 
 @Dao
@@ -314,6 +321,9 @@ interface ClockDao {
     @Upsert
     suspend fun insertEvent(event: SignalEventEntity)
 
+    @Query("SELECT * FROM signal_event ORDER BY firedAt DESC")
+    fun events(): Flow<List<SignalEventEntity>>
+
     @Query(
         "DELETE FROM signal_event WHERE id NOT IN " +
             "(SELECT id FROM signal_event ORDER BY firedAt DESC LIMIT $LOG_LIMIT)",
@@ -371,10 +381,10 @@ abstract class ClockDatabase : RoomDatabase() {
         const val NAME = "dpclock.db"
 
         /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
-        const val VERSION = 5
+        const val VERSION = 6
 
         /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
-        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки

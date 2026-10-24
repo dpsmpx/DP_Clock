@@ -12,6 +12,9 @@ import com.dpsmpx.dpclock.model.ExceptionPeriod
 import com.dpsmpx.dpclock.model.Moment
 import com.dpsmpx.dpclock.model.Repeat
 import com.dpsmpx.dpclock.model.Settings
+import com.dpsmpx.dpclock.model.SignalEvent
+import com.dpsmpx.dpclock.model.SignalOutcome
+import com.dpsmpx.dpclock.model.SignalSource
 import com.dpsmpx.dpclock.model.SignalStyle
 import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
@@ -196,3 +199,13 @@ private inline fun <reified E : Enum<E>> enumOr(name: String, default: E): E =
 
 private fun moment(elapsed: Long?, bootCount: Int?, utc: Long?): Moment? =
     if (elapsed == null || bootCount == null || utc == null) null else Moment(elapsed, bootCount, utc)
+
+fun SignalEventEntity.toModel() = SignalEvent(
+    id = id,
+    source = enumOr(source, SignalSource.ALARM),
+    sourceId = sourceId,
+    title = title,
+    scheduledAt = scheduledAt,
+    firedAt = firedAt,
+    outcome = enumOr(outcome, SignalOutcome.DISMISSED),
+)

@@ -20,10 +20,13 @@ class TimerRulesTest {
         val early = TimerRules.advance(run, t0 + 59_999L)
         assertEquals(StepSignal.NONE, early.signal)
         assertEquals(TimerState.RUNNING, early.run.state)
-        val done = TimerRules.advance(run, t0 + 60_000L)
+        assertEquals(null, early.endedAt)
+        val done = TimerRules.advance(run, t0 + 60_250L)
         assertEquals(StepSignal.FULL, done.signal)
         assertEquals(TimerState.RINGING, done.run.state)
         assertFalse(done.late)
+        // Журнал: шаг должен был кончиться в 60 с, сигнал — на 250 мс позже.
+        assertEquals(t0 + 60_000L, done.endedAt)
     }
 
     @Test
@@ -52,6 +55,7 @@ class TimerRulesTest {
         val run = TimerRules.start("r", null, "", chain(), t0)
         val after = TimerRules.advance(run, t0 + 3_600_000L)
         assertEquals(4, after.endedSteps)
+        assertEquals(t0 + 80_000L, after.endedAt)
         assertEquals(TimerState.RINGING, after.run.state)
         assertTrue(after.late)
     }

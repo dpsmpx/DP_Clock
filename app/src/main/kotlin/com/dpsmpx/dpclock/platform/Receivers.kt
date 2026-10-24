@@ -43,7 +43,7 @@ class AlarmReceiver : BroadcastReceiver() {
                         when (fire?.signal) {
                             StepSignal.SHORT -> Sounds.shortSignal(context, fire.sound)
                             // Шаг стал последним после «+1 мин» на паузе — сигнал полный.
-                            StepSignal.FULL -> RingService.ringTimer(context, id, fire.run.name, fire.run.state == TimerState.RINGING, fire.sound)
+                            StepSignal.FULL -> RingService.ringTimer(context, id, fire.run.name, fire.run.state == TimerState.RINGING, fire.sound, fire.endedAt)
                             StepSignal.SLEEP -> MediaStop.fadeAndPause(context)
                             StepSignal.NONE, null -> Unit
                         }

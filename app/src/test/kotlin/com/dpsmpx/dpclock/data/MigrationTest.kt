@@ -177,6 +177,23 @@ class MigrationTest {
         assertEquals("15", settings["bedtimeLeadMinutes"])
     }
 
+    @Test
+    fun migration5To6KeepsJournalAndAddsTitle() = withDb { db ->
+        SchemaFile.read(5).create(db)
+        db.execSQL("INSERT INTO alarm_occurrence (alarmId, scheduledAt, state, snoozedUntil) VALUES ('a', 100, 'SNOOZED', 700)")
+        db.execSQL(
+            "INSERT INTO signal_event (id, source, sourceId, scheduledAt, firedAt, outcome) VALUES ('e', 'ALARM', 'a', 100, 103, 'SNOOZED')",
+        )
+        MIGRATION_5_6.migrate(db)
+
+        val occurrence = row(db, "SELECT * FROM alarm_occurrence")
+        assertEquals("700", occurrence["snoozedUntil"])
+        assertEquals(null, occurrence["expectedAt"])
+        val event = row(db, "SELECT * FROM signal_event")
+        assertEquals("103", event["firedAt"])
+        assertEquals("", event["title"])
+    }
+
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)
 
     private data class Table(val columns: Map<String, Column>, val indices: Set<String>, val foreignKeys: Set<String>)

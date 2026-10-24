@@ -376,4 +376,22 @@
     <string name="backup_replace_text">Сначала удалятся ваши будильники, группы, шаблоны, исключения и пресеты.</string>
     <string name="backup_with_settings">Взять настройки из файла</string>
     <string name="backup_load_button">Загрузить</string>
+    <string name="journal">Журнал срабатываний</string>
+    <string name="journal_text">Когда звонили будильники и таймеры и на сколько опоздали</string>
+    <string name="journal_hint">Последние 1000 сигналов. Опоздание — от расчётного времени до начала звонка; после «Отложить» — от конца отложенного.</string>
+    <string name="journal_empty">Пока ничего не звонило.</string>
+    <string name="journal_alarm">Будильник</string>
+    <string name="journal_alarm_named">Будильник «%1$s»</string>
+    <string name="journal_timer">Таймер</string>
+    <string name="journal_timer_named">Таймер «%1$s»</string>
+    <string name="journal_share">Поделиться журналом</string>
+    <string name="journal_share_title">Журнал срабатываний DP Clock</string>
+    <string name="outcome_dismissed">выключен</string>
+    <string name="outcome_snoozed">отложен</string>
+    <string name="outcome_auto_stopped">стих сам</string>
+    <string name="outcome_missed">пропущен</string>
+    <string name="late_on_time">вовремя</string>
+    <string name="late_seconds">+%1$d с</string>
+    <string name="late_minutes">+%1$d мин %2$d с</string>
+    <string name="late_hours">+%1$d ч %2$d мин</string>
 </resources>

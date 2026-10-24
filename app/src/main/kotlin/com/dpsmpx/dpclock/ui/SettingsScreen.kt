@@ -209,6 +209,13 @@ fun SettingsScreen(onBack: () -> Unit) {
                     }
                 }
             }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.journal)) },
+                    supportingContent = { Text(stringResource(R.string.journal_text)) },
+                    modifier = Modifier.clickable { dialog = "journal" },
+                )
+            }
             item { Header(R.string.settings_transfer) }
             item {
                 ListItem(
@@ -306,6 +313,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 update { it.copy(bedtime = it.bedtime.copy(hour = h, minute = m)) }
             },
         )
+        "journal" -> JournalDialog(onDismiss = { dialog = null })
         "volume" -> ChoiceDialog(
             title = stringResource(R.string.volume_buttons),
             choices = VolumeButtons.entries,

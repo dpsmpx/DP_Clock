@@ -89,3 +89,13 @@ val MIGRATION_4_5 = SqlMigration(
         "ALTER TABLE `settings` ADD COLUMN `bedtimeLeadMinutes` INTEGER NOT NULL DEFAULT 15",
     ),
 )
+
+/** 0.7.1: журнал срабатываний — название и ожидаемое время звонка. */
+val MIGRATION_5_6 = SqlMigration(
+    5,
+    6,
+    listOf(
+        "ALTER TABLE `alarm_occurrence` ADD COLUMN `expectedAt` INTEGER",
+        "ALTER TABLE `signal_event` ADD COLUMN `title` TEXT NOT NULL DEFAULT ''",
+    ),
+)

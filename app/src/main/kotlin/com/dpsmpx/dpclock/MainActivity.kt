@@ -250,7 +250,7 @@ private fun AppRoot(request: SectionRequest) {
                     onQuickHandled = { handledQuick = it },
                 )
                 Section.STOPWATCH -> StopwatchScreen()
-                Section.CLOCK -> ClockScreen()
+                Section.CLOCK -> ClockScreen(visible = pager.currentPage == Section.CLOCK.ordinal)
                 Section.WORLD -> WorldClockScreen(visible = pager.currentPage == Section.WORLD.ordinal && !pager.isScrollInProgress)
             }
         }

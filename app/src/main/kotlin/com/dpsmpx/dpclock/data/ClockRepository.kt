@@ -24,6 +24,7 @@ import com.dpsmpx.dpclock.model.TimerRules
 import com.dpsmpx.dpclock.model.TimerRun
 import com.dpsmpx.dpclock.model.TimerState
 import com.dpsmpx.dpclock.model.isRepeating
+import com.dpsmpx.dpclock.platform.Appearances
 import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.platform.Notifier
 import com.dpsmpx.dpclock.platform.Ringing
@@ -162,6 +163,7 @@ class ClockRepository(
         // Праздники включили или выключили — у будильников другие даты.
         if (old.holidaysRu != new.holidaysRu) rescheduleAllLocked()
         if (old.bedtime != new.bedtime) alarmsChanged = true
+        if (old.appearance != new.appearance) Appearances.apply(context, new.appearance)
     }
 
     // Будильники
@@ -647,6 +649,7 @@ class ClockRepository(
         if (withSettings && settings != null) {
             // Отметка про Xiaomi — о настройке этого телефона, её файл не меняет.
             dao.upsertSettings(settings.copy(xiaomiHintsDone = dao.currentSettings().toModel().xiaomiHintsDone).toEntity())
+            Appearances.apply(context, settings.appearance)
         }
         alarmsChanged = true
         rescheduleAllLocked()

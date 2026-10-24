@@ -16,6 +16,8 @@ data class Settings(
     val bedtime: Bedtime = Bedtime(),
     /** Погода вашего города в «Мировых часах» (D-019). */
     val weather: WeatherSettings = WeatherSettings(),
+    /** Тема, цвет, стиль часов, фон, шум (D-021). */
+    val appearance: Appearance = Appearance(),
 ) {
     companion object {
         const val DEFAULT_SNOOZE = 10

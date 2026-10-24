@@ -215,6 +215,17 @@ object BackupFormat {
         "signalStyle" to settings.signalStyle.name,
         "volumeButtons" to settings.volumeButtons.name,
         "holidaysRu" to settings.holidaysRu,
+        "appearance" to settings.appearance.let {
+            mapOf(
+                "theme" to it.theme.name,
+                "seedColor" to it.seedColor?.let { color -> "#" + Integer.toHexString(color).uppercase().padStart(8, '0') },
+                "clockStyle" to it.clockStyle.name,
+                "clockFont" to it.clockFont.name,
+                "clockSize" to it.clockSize,
+                "nightNoise" to it.nightNoise.name,
+                "background" to it.background.name,
+            )
+        },
         "weather" to settings.weather.let { weather ->
             mapOf(
                 "mode" to weather.mode.name,
@@ -339,6 +350,21 @@ object BackupFormat {
                     place = weather.obj("place")?.let { WeatherPlace(it.string("name", ""), it.double("latitude"), it.double("longitude")) },
                 )
             } ?: defaults.weather,
+            appearance = o.obj("appearance")?.let {
+                val base = Appearance()
+                Appearance(
+                    theme = it.enum("theme", base.theme),
+                    seedColor = it.stringOrNull("seedColor")?.let { text ->
+                        text.removePrefix("#").toLongOrNull(16)?.toInt() ?: throw BackupException(BackupException.Reason.BROKEN, "цвет $text")
+                    },
+                    clockStyle = it.enum("clockStyle", base.clockStyle),
+                    clockFont = it.enum("clockFont", base.clockFont),
+                    clockSize = it.int("clockSize", base.clockSize).coerceIn(Appearance.MIN_SIZE, Appearance.MAX_SIZE),
+                    nightNoise = it.enum("nightNoise", base.nightNoise),
+                    // Своя картинка — файл на телефоне, в перенос не входит: на новом телефоне фон «нет».
+                    background = it.enum("background", base.background).takeIf { bg -> bg != ClockBackground.IMAGE } ?: ClockBackground.NONE,
+                )
+            } ?: defaults.appearance,
         )
     }
 

@@ -213,6 +213,27 @@ class MigrationTest {
         assertEquals(emptyList<Map<String, String?>>(), rows(db, "SELECT * FROM world_city"))
     }
 
+    @Test
+    fun migration7To8KeepsSettingsAndAddsAppearanceDefaults() = withDb { db ->
+        SchemaFile.read(7).create(db)
+        db.execSQL(
+            "INSERT INTO settings (id, snoozeMinutes, autoStopMinutes, alarmOrder, xiaomiHintsDone, signalStyle, volumeButtons, holidaysRu, " +
+                "bedtimeMode, sleepMinutes, bedtimeHour, bedtimeMinute, bedtimeDays, bedtimeLeadMinutes, weatherMode, weatherPlace) " +
+                "VALUES (0, 10, 10, 'TIME_OF_DAY', 0, 'FULL_SCREEN', 'SNOOZE', 0, 'OFF', 480, 23, 0, 127, 15, 'CITY', 'Тула')",
+        )
+        MIGRATION_7_8.migrate(db)
+
+        val settings = row(db, "SELECT * FROM settings")
+        assertEquals("CITY", settings["weatherMode"])
+        assertEquals("Тула", settings["weatherPlace"])
+        assertEquals("SYSTEM", settings["theme"])
+        assertEquals(null, settings["seedColor"])
+        assertEquals("CIRCLE", settings["clockStyle"])
+        assertEquals("100", settings["clockSize"])
+        assertEquals("NONE", settings["nightNoise"])
+        assertEquals("NONE", settings["background"])
+    }
+
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)
 
     private data class Table(val columns: Map<String, Column>, val indices: Set<String>, val foreignKeys: Set<String>)

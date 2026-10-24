@@ -178,6 +178,14 @@ data class SettingsEntity(
     val weatherPlace: String = "",
     val weatherLat: Double? = null,
     val weatherLon: Double? = null,
+    /** Оформление (D-021): ThemeMode, цвет ARGB (null — из обоев), ClockStyle, ClockFont, размер, NoiseKind, ClockBackground. */
+    val theme: String = "SYSTEM",
+    val seedColor: Int? = null,
+    val clockStyle: String = "CIRCLE",
+    val clockFont: String = "REGULAR",
+    val clockSize: Int = 100,
+    val nightNoise: String = "NONE",
+    val background: String = "NONE",
 )
 
 /** Город мировых часов (D-019): пояс tz и место в списке. */
@@ -410,10 +418,10 @@ abstract class ClockDatabase : RoomDatabase() {
         const val NAME = "dpclock.db"
 
         /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
-        const val VERSION = 7
+        const val VERSION = 8
 
         /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
-        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки

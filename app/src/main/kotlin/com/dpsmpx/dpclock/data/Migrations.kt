@@ -113,3 +113,18 @@ val MIGRATION_6_7 = SqlMigration(
         "ALTER TABLE `settings` ADD COLUMN `weatherLon` REAL",
     ),
 )
+
+/** 0.10.0 (D-021): тема, цвет, стиль часов, шум ночных часов, фон. */
+val MIGRATION_7_8 = SqlMigration(
+    7,
+    8,
+    listOf(
+        "ALTER TABLE `settings` ADD COLUMN `theme` TEXT NOT NULL DEFAULT 'SYSTEM'",
+        "ALTER TABLE `settings` ADD COLUMN `seedColor` INTEGER",
+        "ALTER TABLE `settings` ADD COLUMN `clockStyle` TEXT NOT NULL DEFAULT 'CIRCLE'",
+        "ALTER TABLE `settings` ADD COLUMN `clockFont` TEXT NOT NULL DEFAULT 'REGULAR'",
+        "ALTER TABLE `settings` ADD COLUMN `clockSize` INTEGER NOT NULL DEFAULT 100",
+        "ALTER TABLE `settings` ADD COLUMN `nightNoise` TEXT NOT NULL DEFAULT 'NONE'",
+        "ALTER TABLE `settings` ADD COLUMN `background` TEXT NOT NULL DEFAULT 'NONE'",
+    ),
+)

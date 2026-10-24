@@ -43,6 +43,11 @@ import com.dpsmpx.dpclock.BuildConfig
 import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
 import com.dpsmpx.dpclock.model.AlarmOrder
+import com.dpsmpx.dpclock.model.Appearance
+import com.dpsmpx.dpclock.model.ClockFont
+import com.dpsmpx.dpclock.model.ClockStyle
+import com.dpsmpx.dpclock.model.NoiseKind
+import com.dpsmpx.dpclock.model.ThemeMode
 import com.dpsmpx.dpclock.model.Bedtime
 import com.dpsmpx.dpclock.model.BedtimeMode
 import com.dpsmpx.dpclock.model.Settings
@@ -170,6 +175,51 @@ fun SettingsScreen(onBack: () -> Unit) {
                     modifier = Modifier.clickable {
                         noDream = runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_DREAM_SETTINGS)) }.isFailure
                     },
+                )
+            }
+            item { Header(R.string.settings_appearance) }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.appearance_theme)) },
+                    supportingContent = { Text(stringResource(themeTitle(settings.appearance.theme))) },
+                    modifier = Modifier.clickable { dialog = "theme" },
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.appearance_color)) },
+                    supportingContent = { ColorLabel(settings.appearance.seedColor) },
+                    modifier = Modifier.clickable { dialog = "color" },
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.clock_style)) },
+                    supportingContent = { Text(stringResource(clockStyleTitle(settings.appearance.clockStyle))) },
+                    modifier = Modifier.clickable { dialog = "clockStyle" },
+                )
+            }
+            if (settings.appearance.clockStyle == ClockStyle.DIGITS) {
+                item {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.clock_font)) },
+                        supportingContent = { Text(stringResource(clockFontTitle(settings.appearance.clockFont))) },
+                        modifier = Modifier.clickable { dialog = "clockFont" },
+                    )
+                }
+                item {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.clock_size)) },
+                        supportingContent = { Text(stringResource(R.string.percent_value, settings.appearance.clockSize)) },
+                        modifier = Modifier.clickable { dialog = "clockSize" },
+                    )
+                }
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.night_noise)) },
+                    supportingContent = { Text(stringResource(noiseTitle(settings.appearance.nightNoise))) },
+                    modifier = Modifier.clickable { dialog = "noise" },
                 )
             }
             item { Header(R.string.settings_world) }
@@ -323,6 +373,54 @@ fun SettingsScreen(onBack: () -> Unit) {
             },
         )
         "journal" -> JournalDialog(onDismiss = { dialog = null })
+        "theme" -> ChoiceDialog(
+            title = stringResource(R.string.appearance_theme),
+            choices = ThemeMode.entries,
+            selected = settings.appearance.theme,
+            label = { stringResource(themeTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(theme = value)) } },
+        )
+        "color" -> ColorDialog(
+            current = settings.appearance.seedColor,
+            onDismiss = { dialog = null },
+            onPick = { value ->
+                dialog = null
+                update { it.copy(appearance = it.appearance.copy(seedColor = value)) }
+            },
+        )
+        "clockStyle" -> ChoiceDialog(
+            title = stringResource(R.string.clock_style),
+            choices = ClockStyle.entries,
+            selected = settings.appearance.clockStyle,
+            label = { stringResource(clockStyleTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(clockStyle = value)) } },
+        )
+        "clockFont" -> ChoiceDialog(
+            title = stringResource(R.string.clock_font),
+            choices = ClockFont.entries,
+            selected = settings.appearance.clockFont,
+            label = { stringResource(clockFontTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(clockFont = value)) } },
+        )
+        "clockSize" -> ChoiceDialog(
+            title = stringResource(R.string.clock_size),
+            choices = Appearance.SIZE_CHOICES,
+            selected = settings.appearance.clockSize,
+            label = { stringResource(R.string.percent_value, it) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(clockSize = value)) } },
+        )
+        "noise" -> ChoiceDialog(
+            title = stringResource(R.string.night_noise),
+            choices = NoiseKind.entries,
+            selected = settings.appearance.nightNoise,
+            label = { stringResource(noiseTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(nightNoise = value)) } },
+        )
         "volume" -> ChoiceDialog(
             title = stringResource(R.string.volume_buttons),
             choices = VolumeButtons.entries,

@@ -74,11 +74,23 @@ val NightFace = FaceColors(Color(0xFF9A2B2B), Color(0xFF5E1E1E), Color(0xFF9A2B2
  * или минимализм, крупные цифры или «табло». [night] — ночные часы: красным,
  * без круга и без секундной стрелки. [size] — сторона области под часы.
  * [active] — часы на экране: иначе стоят и не тратят батарею (раздел рядом в ленте).
+ * [onBackdrop] — под часами фон (D-021, п. 6): часы белые на тёмной подложке.
  */
 @Composable
-fun ClockFace(appearance: Appearance, night: Boolean, size: Dp, modifier: Modifier = Modifier, active: Boolean = true) {
+fun ClockFace(
+    appearance: Appearance,
+    night: Boolean,
+    size: Dp,
+    modifier: Modifier = Modifier,
+    active: Boolean = true,
+    onBackdrop: Boolean = false,
+) {
     val scheme = MaterialTheme.colorScheme
-    val colors = if (night) NightFace else FaceColors(scheme.onPrimaryContainer, scheme.outline, scheme.primary, scheme.primaryContainer)
+    val colors = when {
+        night -> NightFace
+        onBackdrop -> FaceColors(Color.White, Color.White.copy(alpha = 0.7f), scheme.inversePrimary, Color.Black.copy(alpha = 0.28f))
+        else -> FaceColors(scheme.onPrimaryContainer, scheme.outline, scheme.primary, scheme.primaryContainer)
+    }
     CompositionLocalProvider(LocalClockActive provides active) {
         when (appearance.clockStyle) {
             ClockStyle.CIRCLE -> CircleFace(colors, night, size, modifier)

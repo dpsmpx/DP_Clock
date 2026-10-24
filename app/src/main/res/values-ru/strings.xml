@@ -512,4 +512,14 @@
     <string name="noise_white">Белый</string>
     <string name="noise_pink">Розовый</string>
     <string name="noise_brown">Коричневый</string>
+    <string name="clock_background">Фон раздела «Часы»</string>
+    <string name="background_none">Нет</string>
+    <string name="background_image">Своя картинка</string>
+    <string name="background_sky">Небо по времени суток</string>
+    <string name="background_waves">Волны</string>
+    <string name="background_stars">Звёзды</string>
+    <string name="background_weather">Погода вашего города</string>
+    <string name="background_particles">Частицы — касание и наклон</string>
+    <string name="background_live_sky">Живое небо — касание и наклон</string>
+    <string name="background_failed">Не получилось открыть картинку</string>
 </resources>

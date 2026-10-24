@@ -513,4 +513,14 @@
     <string name="noise_white">White</string>
     <string name="noise_pink">Pink</string>
     <string name="noise_brown">Brown</string>
+    <string name="clock_background">Background of Clock</string>
+    <string name="background_none">None</string>
+    <string name="background_image">Your picture</string>
+    <string name="background_sky">Sky by time of day</string>
+    <string name="background_waves">Waves</string>
+    <string name="background_stars">Stars</string>
+    <string name="background_weather">Weather in your city</string>
+    <string name="background_particles">Particles — touch and tilt</string>
+    <string name="background_live_sky">Live sky — touch and tilt</string>
+    <string name="background_failed">Could not open the picture</string>
 </resources>

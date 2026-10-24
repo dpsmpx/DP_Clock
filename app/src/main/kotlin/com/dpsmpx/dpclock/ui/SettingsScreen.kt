@@ -1,6 +1,9 @@
 package com.dpsmpx.dpclock.ui
 
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
@@ -30,12 +33,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -44,6 +49,7 @@ import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
 import com.dpsmpx.dpclock.model.AlarmOrder
 import com.dpsmpx.dpclock.model.Appearance
+import com.dpsmpx.dpclock.model.ClockBackground
 import com.dpsmpx.dpclock.model.ClockFont
 import com.dpsmpx.dpclock.model.ClockStyle
 import com.dpsmpx.dpclock.model.NoiseKind
@@ -55,6 +61,7 @@ import com.dpsmpx.dpclock.model.SignalStyle
 import com.dpsmpx.dpclock.model.VolumeButtons
 import com.dpsmpx.dpclock.persistLater
 import com.dpsmpx.dpclock.platform.TimeText
+import kotlinx.coroutines.launch
 import java.time.format.TextStyle
 
 /** Настройки MVP (SCREEN_MAP.md, п. 9). */
@@ -73,6 +80,19 @@ fun SettingsScreen(onBack: () -> Unit) {
     val weatherChoice = rememberWeatherChoice()
 
     fun update(change: (Settings) -> Settings) = persistLater { repository.updateSettings(change) }
+
+    val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            if (saveBackground(context, uri)) {
+                update { it.copy(appearance = it.appearance.copy(background = ClockBackground.IMAGE)) }
+            } else {
+                snackbar.showSnackbar(resources.getString(R.string.background_failed))
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -214,6 +234,13 @@ fun SettingsScreen(onBack: () -> Unit) {
                         modifier = Modifier.clickable { dialog = "clockSize" },
                     )
                 }
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.clock_background)) },
+                    supportingContent = { Text(stringResource(backgroundTitle(settings.appearance.background))) },
+                    modifier = Modifier.clickable { dialog = "background" },
+                )
             }
             item {
                 ListItem(
@@ -412,6 +439,21 @@ fun SettingsScreen(onBack: () -> Unit) {
             label = { stringResource(R.string.percent_value, it) },
             onDismiss = { dialog = null },
             onSelect = { value -> update { it.copy(appearance = it.appearance.copy(clockSize = value)) } },
+        )
+        "background" -> ChoiceDialog(
+            title = stringResource(R.string.clock_background),
+            choices = ClockBackground.entries,
+            selected = settings.appearance.background,
+            label = { stringResource(backgroundTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value ->
+                // Своя картинка — сначала выбрать её; фон меняется, когда она сохранена.
+                if (value == ClockBackground.IMAGE) {
+                    pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                } else {
+                    update { it.copy(appearance = it.appearance.copy(background = value)) }
+                }
+            },
         )
         "noise" -> ChoiceDialog(
             title = stringResource(R.string.night_noise),

@@ -43,6 +43,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.dpsmpx.dpclock.R
+import com.dpsmpx.dpclock.model.ClockBackground
 import com.dpsmpx.dpclock.model.ClockFont
 import com.dpsmpx.dpclock.model.ClockStyle
 import com.dpsmpx.dpclock.model.Palette
@@ -144,6 +145,17 @@ fun clockStyleTitle(style: ClockStyle): Int = when (style) {
     ClockStyle.ANALOG_CLASSIC -> R.string.clock_style_classic
     ClockStyle.ANALOG_MINIMAL -> R.string.clock_style_minimal
     ClockStyle.DIGITS -> R.string.clock_style_digits
+}
+
+fun backgroundTitle(background: ClockBackground): Int = when (background) {
+    ClockBackground.NONE -> R.string.background_none
+    ClockBackground.IMAGE -> R.string.background_image
+    ClockBackground.SKY -> R.string.background_sky
+    ClockBackground.WAVES -> R.string.background_waves
+    ClockBackground.STARS -> R.string.background_stars
+    ClockBackground.WEATHER -> R.string.background_weather
+    ClockBackground.PARTICLES -> R.string.background_particles
+    ClockBackground.LIVE_SKY -> R.string.background_live_sky
 }
 
 fun clockFontTitle(font: ClockFont): Int = when (font) {

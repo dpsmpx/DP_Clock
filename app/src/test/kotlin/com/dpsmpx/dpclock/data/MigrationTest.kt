@@ -85,8 +85,42 @@ class MigrationTest {
             label = alarm.getValue("label")!!, sound = alarm.getValue("sound")!!, soundTitle = alarm.getValue("soundTitle")!!,
             vibrate = alarm["vibrate"] == "1", rampSeconds = alarm.getValue("rampSeconds")!!.toInt(),
             snoozeMinutes = null, skipDate = null, repeatDate = null,
+            honorExceptions = true, groupId = null, cycleAnchor = null, cycleDays = null, workdays = false,
         ).toModel()
         assertEquals(com.dpsmpx.dpclock.model.Alarm("a", 7, 30, com.dpsmpx.dpclock.model.Repeat.fromBits(31), true, 1000), model)
+    }
+
+    @Test
+    fun migration2To3KeepsAlarmsAndAddsGroupsTemplatesExceptions() = withDb { db ->
+        SchemaFile.read(2).create(db)
+        db.execSQL(
+            "INSERT INTO alarm (id, hour, minute, repeatDays, enabled, createdAt, label, sound, soundTitle, vibrate, rampSeconds) " +
+                "VALUES ('a', 6, 0, 31, 1, 1, 'Работа', 'builtin:dawn', '', 0, 30)",
+        )
+        db.execSQL(
+            "INSERT INTO settings (id, snoozeMinutes, autoStopMinutes, alarmOrder, xiaomiHintsDone, signalStyle, volumeButtons) " +
+                "VALUES (0, 10, 10, 'TIME_OF_DAY', 0, 'FULL_SCREEN', 'DISMISS')",
+        )
+        MIGRATION_2_3.migrate(db)
+
+        val alarm = row(db, "SELECT * FROM alarm")
+        assertEquals("Работа", alarm["label"])
+        assertEquals("builtin:dawn", alarm["sound"])
+        assertEquals("30", alarm["rampSeconds"])
+        // Исключения по умолчанию учитываются; группы, графика и рабочих дней нет.
+        assertEquals("1", alarm["honorExceptions"])
+        assertEquals(null, alarm["groupId"])
+        assertEquals(null, alarm["cycleAnchor"])
+        assertEquals(null, alarm["cycleDays"])
+        assertEquals("0", alarm["workdays"])
+
+        val settings = row(db, "SELECT * FROM settings")
+        assertEquals("DISMISS", settings["volumeButtons"])
+        assertEquals("0", settings["holidaysRu"])
+
+        for (table in listOf("alarm_group", "alarm_template", "exception_period")) {
+            assertEquals(table, "0", row(db, "SELECT COUNT(*) AS n FROM `$table`")["n"])
+        }
     }
 
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)

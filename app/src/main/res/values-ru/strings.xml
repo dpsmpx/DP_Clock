@@ -168,4 +168,71 @@
     <string name="version_value">Версия %1$s</string>
     <string name="licenses">Библиотеки с открытым кодом</string>
     <string name="licenses_text">Jetpack Compose, Material 3, AndroidX Activity, Lifecycle и Room, стандартная библиотека Kotlin и корутины — Apache License 2.0.</string>
+
+    <!-- Графики, исключения, группы и шаблоны (D-014) -->
+    <string name="more">Ещё</string>
+    <string name="exceptions_title">Исключения и праздники</string>
+    <string name="new_group">Новая группа</string>
+    <string name="from_template">Из шаблона</string>
+    <string name="group_empty">В группе пока нет будильников: нажмите + в её заголовке.</string>
+    <string name="group_rename">Переименовать</string>
+    <string name="save_as_template">Сохранить как шаблон</string>
+    <string name="template_saved">Шаблон «%1$s» сохранён</string>
+    <string name="group_delete_with_alarms_title">Удалить «%1$s» вместе с будильниками?</string>
+    <string name="group_delete_with_alarms_text">Будильники группы будут удалены. Тот, что звонит сейчас, останется.</string>
+    <string name="group_delete_with_alarms">Удалить с будильниками</string>
+    <string name="group_ungroup">Удалить группу, оставить будильники</string>
+    <string name="group_honor_exceptions">Не звонить в исключения — всем</string>
+    <string name="group_ignore_exceptions">Звонить и в исключения — всем</string>
+    <string name="new_alarm_in_group">Новый будильник в группе «%1$s»</string>
+    <string name="templates_empty">Шаблонов пока нет. Шаблон сохраняется из группы: меню группы → «Сохранить как шаблон».</string>
+    <string name="name">Название</string>
+    <string name="all_dates_excepted">Все даты — в исключениях</string>
+    <string name="next_after_exceptions">Исключения: ближайший — %1$s</string>
+    <string name="repeat_cycle_days">Сменный график, цикл %1$d дн.</string>
+    <string name="repeat_workdays">Рабочие дни (РФ)</string>
+    <string name="repeat_cycle">Сменный график</string>
+    <string name="workdays_hint">Производственный календарь России: праздники и переносы. Встроены постановления Правительства на %1$d–%2$d годы; дальше — праздники по Трудовому кодексу.</string>
+    <string name="upcoming">Ближайшие:</string>
+    <string name="honor_exceptions">Не звонить в исключения</string>
+    <string name="group">Группа</string>
+    <string name="no_group">Без группы</string>
+    <string name="cycle_anchor">Первый день цикла: %1$s</string>
+    <string name="cycle_day">День %1$d</string>
+    <string name="cycle_off">Выходной</string>
+    <string name="cycle_add_day">Добавить день</string>
+    <string name="cycle_remove_day">Убрать последний день</string>
+    <string name="cycle_two_two">2/2</string>
+    <string name="cycle_day_three">Сутки через трое</string>
+    <string name="cycle_day_night">День, ночь, два выходных</string>
+    <string name="exceptions_none">Список исключений пуст</string>
+    <string name="exceptions_holidays_only">Праздники РФ</string>
+    <string name="exceptions_holidays_short">праздники</string>
+    <string name="holidays_ru">Праздники и переносы РФ</string>
+    <string name="holidays_ru_text">Производственный календарь: встроены постановления Правительства на %1$d–%2$d годы; дальше — праздники по Трудовому кодексу.</string>
+    <string name="holidays_upcoming">Ближайшие выходные дни: %1$s</string>
+    <string name="own_periods">Свои даты и периоды</string>
+    <string name="periods_empty">Пока нет: добавьте отпуск или отдельную дату.</string>
+    <string name="add_period">Добавить</string>
+    <string name="period">Период</string>
+    <string name="exceptions_footnote">Исключения действуют на повторяющиеся будильники, у которых включено «Не звонить в исключения».</string>
+    <string name="untitled">Без названия</string>
+    <plurals name="alarms_count">
+        <item quantity="one">%1$d будильник</item>
+        <item quantity="few">%1$d будильника</item>
+        <item quantity="many">%1$d будильников</item>
+        <item quantity="other">%1$d будильника</item>
+    </plurals>
+    <plurals name="cycle_summary">
+        <item quantity="one">%1$d день в цикле, рабочих — %2$d</item>
+        <item quantity="few">%1$d дня в цикле, рабочих — %2$d</item>
+        <item quantity="many">%1$d дней в цикле, рабочих — %2$d</item>
+        <item quantity="other">%1$d дня в цикле, рабочих — %2$d</item>
+    </plurals>
+    <plurals name="exceptions_periods">
+        <item quantity="one">%1$d период</item>
+        <item quantity="few">%1$d периода</item>
+        <item quantity="many">%1$d периодов</item>
+        <item quantity="other">%1$d периода</item>
+    </plurals>
 </resources>

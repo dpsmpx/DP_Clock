@@ -36,6 +36,43 @@ data class AlarmEntity(
     val skipDate: Long?,
     /** Будильник на дату: день от эпохи; null — однократно или по дням недели. */
     val repeatDate: Long?,
+    /** Не звонить в исключения (D-014, п. 4). */
+    val honorExceptions: Boolean,
+    /** Группа; null — без группы. */
+    val groupId: String?,
+    /** Сменный график: первый день цикла, день от эпохи; null — не график. */
+    val cycleAnchor: Long?,
+    /** Сменный график: Repeat.Cycle.encodeDays(). */
+    val cycleDays: String?,
+    /** Рабочие дни по производственному календарю России. */
+    val workdays: Boolean,
+)
+
+/** Группа будильников (D-014, п. 5). */
+@Entity(tableName = "alarm_group")
+data class GroupEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val createdAt: Long,
+)
+
+/** Шаблон — набор будильников (D-014, п. 6). */
+@Entity(tableName = "alarm_template")
+data class TemplateEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    /** AlarmTemplate.encodeAlarms(). */
+    val alarms: String,
+    val createdAt: Long,
+)
+
+/** Период общего списка исключений (D-014, п. 4); дни от эпохи, оба входят. */
+@Entity(tableName = "exception_period")
+data class ExceptionEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val startDay: Long,
+    val endDay: Long,
 )
 
 /** Текущее срабатывание будильника (DATA_MODEL.md, п. 3). */
@@ -102,6 +139,8 @@ data class SettingsEntity(
     val signalStyle: String,
     /** VolumeButtons. */
     val volumeButtons: String,
+    /** Праздники и переносы по производственному календарю России — в исключениях. */
+    val holidaysRu: Boolean,
 )
 
 /** Журнал срабатываний (DATA_MODEL.md, п. 7), последние [ClockDao.LOG_LIMIT] событий. */
@@ -133,6 +172,48 @@ interface ClockDao {
 
     @Query("DELETE FROM alarm WHERE id = :id")
     suspend fun deleteAlarm(id: String)
+
+    @Query("SELECT * FROM alarm WHERE groupId = :groupId")
+    suspend fun alarmsInGroup(groupId: String): List<AlarmEntity>
+
+    @Query("UPDATE alarm SET groupId = NULL WHERE groupId = :groupId")
+    suspend fun ungroup(groupId: String)
+
+    @Query("SELECT * FROM alarm_group ORDER BY createdAt")
+    fun groups(): Flow<List<GroupEntity>>
+
+    @Query("SELECT * FROM alarm_group WHERE id = :id")
+    suspend fun group(id: String): GroupEntity?
+
+    @Upsert
+    suspend fun upsertGroup(group: GroupEntity)
+
+    @Query("DELETE FROM alarm_group WHERE id = :id")
+    suspend fun deleteGroup(id: String)
+
+    @Query("SELECT * FROM alarm_template ORDER BY createdAt")
+    fun templates(): Flow<List<TemplateEntity>>
+
+    @Query("SELECT * FROM alarm_template WHERE id = :id")
+    suspend fun template(id: String): TemplateEntity?
+
+    @Upsert
+    suspend fun upsertTemplate(template: TemplateEntity)
+
+    @Query("DELETE FROM alarm_template WHERE id = :id")
+    suspend fun deleteTemplate(id: String)
+
+    @Query("SELECT * FROM exception_period ORDER BY startDay")
+    fun exceptionsFlow(): Flow<List<ExceptionEntity>>
+
+    @Query("SELECT * FROM exception_period ORDER BY startDay")
+    suspend fun allExceptions(): List<ExceptionEntity>
+
+    @Upsert
+    suspend fun upsertException(period: ExceptionEntity)
+
+    @Query("DELETE FROM exception_period WHERE id = :id")
+    suspend fun deleteException(id: String)
 
     @Query("SELECT * FROM alarm_occurrence")
     suspend fun occurrences(): List<OccurrenceEntity>
@@ -224,6 +305,9 @@ interface ClockDao {
         StopwatchEntity::class,
         SettingsEntity::class,
         SignalEventEntity::class,
+        GroupEntity::class,
+        TemplateEntity::class,
+        ExceptionEntity::class,
     ],
     version = ClockDatabase.VERSION,
     exportSchema = true,
@@ -235,10 +319,10 @@ abstract class ClockDatabase : RoomDatabase() {
         const val NAME = "dpclock.db"
 
         /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
-        const val VERSION = 2
+        const val VERSION = 3
 
         /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
-        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2)
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки

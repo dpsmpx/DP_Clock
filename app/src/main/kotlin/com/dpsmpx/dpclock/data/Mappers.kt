@@ -1,8 +1,11 @@
 package com.dpsmpx.dpclock.data
 
 import com.dpsmpx.dpclock.model.Alarm
+import com.dpsmpx.dpclock.model.AlarmGroup
 import com.dpsmpx.dpclock.model.AlarmOrder
 import com.dpsmpx.dpclock.model.AlarmSound
+import com.dpsmpx.dpclock.model.AlarmTemplate
+import com.dpsmpx.dpclock.model.ExceptionPeriod
 import com.dpsmpx.dpclock.model.Moment
 import com.dpsmpx.dpclock.model.Repeat
 import com.dpsmpx.dpclock.model.Settings
@@ -23,7 +26,12 @@ fun AlarmEntity.toModel() = Alarm(
     id = id,
     hour = hour,
     minute = minute,
-    repeat = if (repeatDate != null) Repeat.OnDate(LocalDate.ofEpochDay(repeatDate)) else Repeat.fromBits(repeatDays),
+    repeat = when {
+        workdays -> Repeat.Workdays
+        cycleAnchor != null && cycleDays != null -> Repeat.Cycle(LocalDate.ofEpochDay(cycleAnchor), Repeat.Cycle.decodeDays(cycleDays))
+        repeatDate != null -> Repeat.OnDate(LocalDate.ofEpochDay(repeatDate))
+        else -> Repeat.fromBits(repeatDays)
+    },
     enabled = enabled,
     createdAt = createdAt,
     label = label,
@@ -32,6 +40,8 @@ fun AlarmEntity.toModel() = Alarm(
     rampSeconds = rampSeconds,
     snoozeMinutes = snoozeMinutes,
     skipDate = skipDate?.let(LocalDate::ofEpochDay),
+    honorExceptions = honorExceptions,
+    groupId = groupId,
 )
 
 fun Alarm.toEntity() = AlarmEntity(
@@ -49,7 +59,24 @@ fun Alarm.toEntity() = AlarmEntity(
     snoozeMinutes = snoozeMinutes,
     skipDate = skipDate?.toEpochDay(),
     repeatDate = (repeat as? Repeat.OnDate)?.date?.toEpochDay(),
+    honorExceptions = honorExceptions,
+    groupId = groupId,
+    cycleAnchor = (repeat as? Repeat.Cycle)?.anchor?.toEpochDay(),
+    cycleDays = (repeat as? Repeat.Cycle)?.encodeDays(),
+    workdays = repeat == Repeat.Workdays,
 )
+
+fun GroupEntity.toModel() = AlarmGroup(id, name, createdAt)
+
+fun AlarmGroup.toEntity() = GroupEntity(id, name, createdAt)
+
+fun TemplateEntity.toModel() = AlarmTemplate(id, name, AlarmTemplate.decodeAlarms(alarms), createdAt)
+
+fun AlarmTemplate.toEntity() = TemplateEntity(id, name, encodeAlarms(), createdAt)
+
+fun ExceptionEntity.toModel() = ExceptionPeriod(id, name, LocalDate.ofEpochDay(startDay), LocalDate.ofEpochDay(endDay))
+
+fun ExceptionPeriod.toEntity() = ExceptionEntity(id, name, start.toEpochDay(), end.toEpochDay())
 
 fun PresetEntity.toModel() = TimerPreset(id, name, TimerProgram.decode(program), createdAt)
 
@@ -106,6 +133,7 @@ fun SettingsEntity?.toModel(): Settings = if (this == null) Settings() else Sett
     xiaomiHintsDone = xiaomiHintsDone,
     signalStyle = enumOr(signalStyle, SignalStyle.FULL_SCREEN),
     volumeButtons = enumOr(volumeButtons, VolumeButtons.SNOOZE),
+    holidaysRu = holidaysRu,
 )
 
 fun Settings.toEntity() = SettingsEntity(
@@ -115,6 +143,7 @@ fun Settings.toEntity() = SettingsEntity(
     xiaomiHintsDone = xiaomiHintsDone,
     signalStyle = signalStyle.name,
     volumeButtons = volumeButtons.name,
+    holidaysRu = holidaysRu,
 )
 
 /** Неизвестное значение (например, из копии новой версии) — значение по умолчанию. */

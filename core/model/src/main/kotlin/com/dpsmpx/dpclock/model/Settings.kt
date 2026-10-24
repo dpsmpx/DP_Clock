@@ -10,6 +10,8 @@ data class Settings(
     val xiaomiHintsDone: Boolean = false,
     val signalStyle: SignalStyle = SignalStyle.FULL_SCREEN,
     val volumeButtons: VolumeButtons = VolumeButtons.SNOOZE,
+    /** Праздники и переносы производственного календаря России — в общем списке исключений (D-014, п. 3). */
+    val holidaysRu: Boolean = false,
 ) {
     companion object {
         const val DEFAULT_SNOOZE = 10

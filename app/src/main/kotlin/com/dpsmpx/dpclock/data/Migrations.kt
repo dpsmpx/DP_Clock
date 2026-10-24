@@ -36,3 +36,22 @@ val MIGRATION_1_2 = SqlMigration(
         "ALTER TABLE `settings` ADD COLUMN `volumeButtons` TEXT NOT NULL DEFAULT 'SNOOZE'",
     ),
 )
+
+/** 0.3.0 (D-014): сменные графики, рабочие дни, исключения, группы и шаблоны. */
+val MIGRATION_2_3 = SqlMigration(
+    2,
+    3,
+    listOf(
+        "ALTER TABLE `alarm` ADD COLUMN `honorExceptions` INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE `alarm` ADD COLUMN `groupId` TEXT",
+        "ALTER TABLE `alarm` ADD COLUMN `cycleAnchor` INTEGER",
+        "ALTER TABLE `alarm` ADD COLUMN `cycleDays` TEXT",
+        "ALTER TABLE `alarm` ADD COLUMN `workdays` INTEGER NOT NULL DEFAULT 0",
+        "CREATE TABLE IF NOT EXISTS `alarm_group` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "CREATE TABLE IF NOT EXISTS `alarm_template` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `alarms` TEXT NOT NULL, " +
+            "`createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "CREATE TABLE IF NOT EXISTS `exception_period` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `startDay` INTEGER NOT NULL, " +
+            "`endDay` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "ALTER TABLE `settings` ADD COLUMN `holidaysRu` INTEGER NOT NULL DEFAULT 0",
+    ),
+)

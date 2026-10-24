@@ -175,4 +175,65 @@
     <string name="version_value">Version %1$s</string>
     <string name="licenses">Open source libraries</string>
     <string name="licenses_text">Jetpack Compose, Material 3, AndroidX Activity, Lifecycle and Room, Kotlin standard library and coroutines — Apache License 2.0.</string>
+
+    <!-- Графики, исключения, группы и шаблоны (D-014) -->
+    <string name="more">More</string>
+    <string name="exceptions_title">Exceptions and holidays</string>
+    <string name="new_group">New group</string>
+    <string name="from_template">From a template</string>
+    <string name="group_empty">No alarms in this group yet: tap + in its header.</string>
+    <string name="group_rename">Rename</string>
+    <string name="save_as_template">Save as template</string>
+    <string name="template_saved">Template “%1$s” saved</string>
+    <string name="group_delete_with_alarms_title">Delete “%1$s” with its alarms?</string>
+    <string name="group_delete_with_alarms_text">The alarms of this group will be deleted. An alarm that is ringing now stays.</string>
+    <string name="group_delete_with_alarms">Delete with alarms</string>
+    <string name="group_ungroup">Delete group, keep alarms</string>
+    <string name="group_honor_exceptions">Skip exceptions for all</string>
+    <string name="group_ignore_exceptions">Ring on exceptions for all</string>
+    <string name="new_alarm_in_group">New alarm in %1$s</string>
+    <string name="templates_empty">No templates yet. Save one from a group: group menu → Save as template.</string>
+    <string name="name">Name</string>
+    <string name="all_dates_excepted">All dates fall on exceptions</string>
+    <string name="next_after_exceptions">Exceptions: next on %1$s</string>
+    <string name="repeat_cycle_days">Shift pattern, %1$d-day cycle</string>
+    <string name="repeat_workdays">Working days (Russia)</string>
+    <string name="repeat_cycle">Shift pattern</string>
+    <string name="workdays_hint">Production calendar of Russia: public holidays and moved days off. Built in: Government decrees for the years %1$d–%2$d. Later years follow the Labour Code.</string>
+    <string name="upcoming">Next:</string>
+    <string name="honor_exceptions">Skip exceptions</string>
+    <string name="group">Group</string>
+    <string name="no_group">No group</string>
+    <string name="cycle_anchor">First day of the cycle: %1$s</string>
+    <string name="cycle_day">Day %1$d</string>
+    <string name="cycle_off">Day off</string>
+    <string name="cycle_add_day">Add a day</string>
+    <string name="cycle_remove_day">Remove the last day</string>
+    <string name="cycle_two_two">2 on, 2 off</string>
+    <string name="cycle_day_three">1 on, 3 off</string>
+    <string name="cycle_day_night">Day, night, 2 off</string>
+    <string name="exceptions_none">The list of exceptions is empty</string>
+    <string name="exceptions_holidays_only">Holidays of Russia</string>
+    <string name="exceptions_holidays_short">holidays</string>
+    <string name="holidays_ru">Holidays and moved days off (Russia)</string>
+    <string name="holidays_ru_text">Production calendar. Built in: Government decrees for the years %1$d–%2$d. Later years: public holidays by the Labour Code.</string>
+    <string name="holidays_upcoming">Next days off: %1$s</string>
+    <string name="own_periods">Your dates and periods</string>
+    <string name="periods_empty">None yet: add a vacation or a single date.</string>
+    <string name="add_period">Add</string>
+    <string name="period">Period</string>
+    <string name="exceptions_footnote">Exceptions apply to repeating alarms that have “Skip exceptions” on.</string>
+    <string name="untitled">Untitled</string>
+    <plurals name="alarms_count">
+        <item quantity="one">%1$d alarm</item>
+        <item quantity="other">%1$d alarms</item>
+    </plurals>
+    <plurals name="cycle_summary">
+        <item quantity="one">%1$d day in the cycle, %2$d working</item>
+        <item quantity="other">%1$d days in the cycle, %2$d working</item>
+    </plurals>
+    <plurals name="exceptions_periods">
+        <item quantity="one">%1$d period</item>
+        <item quantity="other">%1$d periods</item>
+    </plurals>
 </resources>

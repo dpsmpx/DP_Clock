@@ -43,6 +43,17 @@ object TimeText {
         return DateTimeFormatter.ofPattern(pattern, locale).format(date)
     }
 
+    /** Дата коротко, без дня недели: «27 окт.»; год — если не текущий. */
+    fun shortDate(context: Context, date: LocalDate): String {
+        val locale = context.resources.configuration.locales[0]
+        val pattern = SystemTimeFormat.getBestDateTimePattern(locale, if (date.year != LocalDate.now().year) "dMMMyyyy" else "dMMM")
+        return DateTimeFormatter.ofPattern(pattern, locale).format(date)
+    }
+
+    /** Период дат: «1 янв. – 9 янв.»; одна дата — одна. */
+    fun dateRange(context: Context, start: LocalDate, end: LocalDate): String =
+        if (start == end) shortDate(context, start) else shortDate(context, start) + " – " + shortDate(context, end)
+
     /** Обратный отсчёт: 1:05:03 или 5:03. */
     fun countdown(millis: Long): String = hms(Hms.ofCountdown(millis))
 

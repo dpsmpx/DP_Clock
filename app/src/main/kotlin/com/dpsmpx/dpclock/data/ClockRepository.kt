@@ -2,7 +2,11 @@ package com.dpsmpx.dpclock.data
 
 import android.content.Context
 import com.dpsmpx.dpclock.model.Alarm
+import com.dpsmpx.dpclock.model.AlarmGroup
 import com.dpsmpx.dpclock.model.AlarmRules
+import com.dpsmpx.dpclock.model.AlarmTemplate
+import com.dpsmpx.dpclock.model.ExceptionPeriod
+import com.dpsmpx.dpclock.model.Exceptions
 import com.dpsmpx.dpclock.model.Repeat
 import com.dpsmpx.dpclock.model.Settings
 import com.dpsmpx.dpclock.model.SignalOutcome
@@ -20,6 +24,7 @@ import com.dpsmpx.dpclock.platform.Notifier
 import com.dpsmpx.dpclock.platform.Ringing
 import com.dpsmpx.dpclock.platform.Scheduler
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -64,6 +69,13 @@ class ClockRepository(
     val presets: Flow<List<TimerPreset>> = dao.presets().map { list -> list.map { it.toModel() } }
     val timerRuns: Flow<List<TimerRun>> = dao.timerRuns().map { list -> list.map { it.toModel() } }
     val stopwatch: Flow<Stopwatch> = dao.stopwatch().map { it.toModel() }
+    val groups: Flow<List<AlarmGroup>> = dao.groups().map { list -> list.map { it.toModel() } }
+    val templates: Flow<List<AlarmTemplate>> = dao.templates().map { list -> list.map { it.toModel() } }
+
+    /** Общий список исключений: свои периоды и праздники, если включены (D-014, п. 4). */
+    val exceptions: Flow<Exceptions> = combine(dao.exceptionsFlow(), settings) { periods, settings ->
+        Exceptions(periods.map { it.toModel() }, settings.holidaysRu)
+    }
 
     /** Отложенные будильники: id → конец «Отложить». */
     val snoozed: Flow<Map<String, Long>> = dao.occurrencesFlow().map { list ->
@@ -89,23 +101,119 @@ class ClockRepository(
     suspend fun currentSettings(): Settings = locked { dao.currentSettings().toModel() }
 
     suspend fun updateSettings(change: (Settings) -> Settings) = locked {
-        dao.upsertSettings(change(dao.currentSettings().toModel()).toEntity())
+        val old = dao.currentSettings().toModel()
+        val new = change(old)
+        dao.upsertSettings(new.toEntity())
+        // Праздники включили или выключили — у будильников другие даты.
+        if (old.holidaysRu != new.holidaysRu) rescheduleAllLocked()
     }
 
     // Будильники
 
-    /** Новый будильник — однократный и включённый (SCREEN_MAP.md, п. 1). Возвращает момент срабатывания. */
-    suspend fun addAlarm(hour: Int, minute: Int): Long = locked {
-        val alarm = Alarm(UUID.randomUUID().toString(), hour, minute, Repeat.Once, enabled = true, createdAt = now())
+    /** Новый будильник — однократный и включённый (SCREEN_MAP.md, п. 1), можно сразу в группе. Возвращает момент срабатывания. */
+    suspend fun addAlarm(hour: Int, minute: Int, groupId: String? = null): Long = locked {
+        val alarm = Alarm(UUID.randomUUID().toString(), hour, minute, Repeat.Once, enabled = true, createdAt = now(), groupId = groupId)
         dao.upsertAlarm(alarm.toEntity())
         scheduleAlarm(alarm)
     }
 
     /** Сохранить изменённый будильник; прежнее срабатывание и «Отложить» отменяются. */
     suspend fun saveAlarm(alarm: Alarm): Long = locked {
-        dao.upsertAlarm(alarm.toEntity())
-        resetOccurrence(alarm.id)
-        scheduleAlarm(alarm)
+        val stored = normalized(alarm)
+        dao.upsertAlarm(stored.toEntity())
+        resetOccurrence(stored.id)
+        scheduleAlarm(stored)
+    }
+
+    // Группы и шаблоны (D-014, п. 5–6)
+
+    suspend fun createGroup(name: String): String = locked {
+        val group = AlarmGroup(UUID.randomUUID().toString(), name, now())
+        dao.upsertGroup(group.toEntity())
+        group.id
+    }
+
+    suspend fun renameGroup(id: String, name: String) = locked {
+        val group = dao.group(id) ?: return@locked
+        dao.upsertGroup(group.copy(name = name))
+    }
+
+    /** Удалить группу: будильники остаются без группы или удаляются с ней (кроме звонящего). */
+    suspend fun deleteGroup(id: String, withAlarms: Boolean) = locked {
+        if (withAlarms) {
+            for (alarm in dao.alarmsInGroup(id)) {
+                if (dao.occurrence(alarm.id)?.state == Occ.RINGING) continue
+                dao.deleteAlarm(alarm.id)
+                dao.deleteOccurrence(alarm.id)
+                scheduler.cancelAlarm(alarm.id)
+                notifier.cancelSnoozed(alarm.id)
+            }
+        }
+        dao.ungroup(id)
+        dao.deleteGroup(id)
+    }
+
+    /** Общее включение группы. Возвращает ближайшее срабатывание включённых (0 — нет). */
+    suspend fun setGroupEnabled(id: String, enabled: Boolean): Long = locked {
+        val exceptions = currentExceptions()
+        dao.alarmsInGroup(id).map { it.toModel() }
+            .filter { it.enabled != enabled }
+            .map { alarm ->
+                val updated = alarm.copy(enabled = enabled)
+                dao.upsertAlarm(updated.toEntity())
+                resetOccurrence(alarm.id)
+                scheduleAlarm(updated, exceptions)
+            }
+            .filter { it > 0 }
+            .minOrNull() ?: 0L
+    }
+
+    /** «Не звонить в исключения» — всем будильникам группы. */
+    suspend fun setGroupHonorExceptions(id: String, honor: Boolean) = locked {
+        val exceptions = currentExceptions()
+        for (alarm in dao.alarmsInGroup(id).map { it.toModel() }) {
+            val updated = alarm.copy(honorExceptions = honor)
+            dao.upsertAlarm(updated.toEntity())
+            resetOccurrence(alarm.id)
+            scheduleAlarm(updated, exceptions)
+        }
+    }
+
+    /** Шаблон из будильников группы. */
+    suspend fun saveTemplate(groupId: String, name: String) = locked {
+        val group = dao.group(groupId)?.toModel() ?: return@locked
+        val alarms = dao.alarmsInGroup(groupId).map { it.toModel() }.sortedWith(compareBy({ it.minuteOfDay }, { it.createdAt }))
+        if (alarms.isEmpty()) return@locked
+        dao.upsertTemplate(AlarmTemplate.from(group, alarms, UUID.randomUUID().toString(), now(), name).toEntity())
+    }
+
+    /** Развернуть шаблон в новую группу с включёнными будильниками. Возвращает ближайшее срабатывание (0 — нет). */
+    suspend fun applyTemplate(templateId: String): Long = locked {
+        val template = dao.template(templateId)?.toModel() ?: return@locked 0L
+        val now = now()
+        val group = AlarmGroup(UUID.randomUUID().toString(), template.name, now)
+        dao.upsertGroup(group.toEntity())
+        val exceptions = currentExceptions()
+        template.alarms.mapIndexed { index, blueprint ->
+            // Порядок создания — порядок шаблона.
+            val alarm = normalized(blueprint.copy(id = UUID.randomUUID().toString(), createdAt = now + index, groupId = group.id))
+            dao.upsertAlarm(alarm.toEntity())
+            scheduleAlarm(alarm, exceptions)
+        }.filter { it > 0 }.minOrNull() ?: 0L
+    }
+
+    suspend fun deleteTemplate(id: String) = locked { dao.deleteTemplate(id) }
+
+    // Исключения (D-014, п. 4)
+
+    suspend fun saveException(period: ExceptionPeriod) = locked {
+        dao.upsertException(period.toEntity())
+        rescheduleAllLocked()
+    }
+
+    suspend fun deleteException(id: String) = locked {
+        dao.deleteException(id)
+        rescheduleAllLocked()
     }
 
     suspend fun setAlarmEnabled(id: String, enabled: Boolean) = locked {
@@ -188,8 +296,11 @@ class ClockRepository(
      * Пересчитать все расписания (D-008, п. 5): запуск приложения, загрузка,
      * смена времени и пояса, обновление, выдача разрешения. Идемпотентно.
      */
-    suspend fun rescheduleAll() = locked {
+    suspend fun rescheduleAll() = locked { rescheduleAllLocked() }
+
+    private suspend fun rescheduleAllLocked() {
         val now = now()
+        val exceptions = currentExceptions()
         val occurrences = dao.occurrences().associateBy { it.alarmId }
         for (alarm in dao.allAlarms().map { it.toModel() }) {
             val occ = occurrences[alarm.id]
@@ -219,12 +330,21 @@ class ClockRepository(
                 occ?.state == Occ.SNOOZED -> scheduler.setAlarm(alarm.id, due!!)
                 else -> {
                     if (occ != null) dao.deleteOccurrence(alarm.id)
-                    scheduleAlarm(alarm)
+                    scheduleAlarm(alarm, exceptions)
                 }
             }
         }
         syncTimers()
         notifier.stopwatch(dao.currentStopwatch().toModel())
+    }
+
+    private suspend fun currentExceptions(): Exceptions =
+        Exceptions(dao.allExceptions().map { it.toModel() }, dao.currentSettings().toModel().holidaysRu)
+
+    /** У сменного графика время будильника — время первого рабочего дня: по нему сортируется список. */
+    private fun normalized(alarm: Alarm): Alarm {
+        val repeat = alarm.repeat as? Repeat.Cycle ?: return alarm
+        return alarm.copy(hour = repeat.firstTime.hour, minute = repeat.firstTime.minute)
     }
 
     /** Интервал «Отложить» будильника: свой или общий из настроек (D-013, п. 3). */
@@ -239,7 +359,7 @@ class ClockRepository(
     }
 
     /** Поставить ближайшее срабатывание; возвращает его момент (0 — будильник выключен или больше не сработает). */
-    private suspend fun scheduleAlarm(stored: Alarm): Long {
+    private suspend fun scheduleAlarm(stored: Alarm, knownExceptions: Exceptions? = null): Long {
         val zone = ZoneId.systemDefault()
         val nowInstant = Instant.ofEpochMilli(now())
         var alarm = stored
@@ -260,10 +380,11 @@ class ClockRepository(
             scheduler.cancelAlarm(alarm.id)
             return 0L
         }
-        val at = AlarmRules.nextTrigger(alarm, nowInstant, zone)?.toEpochMilli()
+        val at = AlarmRules.nextTrigger(alarm, nowInstant, zone, knownExceptions ?: currentExceptions())?.toEpochMilli()
         if (at == null) {
-            // Дата прошла: будильник больше не сработает и выключается.
-            dao.upsertAlarm(alarm.copy(enabled = false).toEntity())
+            // Дата прошла — будильник больше не сработает и выключается. У повторяющегося
+            // все даты закрыли исключения: он остаётся включённым до их правки.
+            if (!alarm.repeat.isRepeating) dao.upsertAlarm(alarm.copy(enabled = false).toEntity())
             dao.deleteOccurrence(alarm.id)
             scheduler.cancelAlarm(alarm.id)
             return 0L

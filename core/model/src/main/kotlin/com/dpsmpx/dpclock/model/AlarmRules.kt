@@ -17,8 +17,9 @@ object AlarmRules {
 
     /**
      * Следующее срабатывание: первая подходящая дата, у которой время строго
-     * позже [after], в поясе [zone]; дата [skipDate] пропускается. null — больше
-     * не сработает (дата будильника прошла).
+     * позже [after], в поясе [zone]; дата [skipDate] и даты [exceptions]
+     * пропускаются. null — больше не сработает (дата будильника прошла,
+     * исключения закрыли все даты).
      *
      * - Время пропущено переходом на летнее — сигнал в первый существующий момент после пропуска.
      * - Время наступает дважды переходом на зимнее — один сигнал, в первое наступление.
@@ -30,6 +31,7 @@ object AlarmRules {
         after: Instant,
         zone: ZoneId,
         skipDate: LocalDate? = null,
+        exceptions: Exceptions = Exceptions.NONE,
     ): Instant? {
         val time = LocalTime.of(hour, minute)
         val start = after.atZone(zone).toLocalDate()
@@ -39,20 +41,44 @@ object AlarmRules {
         }
         for (offset in 0L..SEARCH_DAYS) {
             val date = start.plusDays(offset)
-            if (repeat is Repeat.Weekly && date.dayOfWeek !in repeat.days) continue
-            if (date == skipDate) continue
-            val candidate = resolve(LocalDateTime.of(date, time), zone)
+            val at = repeat.timeOn(date, time) ?: continue
+            if (date == skipDate || exceptions.excludes(date)) continue
+            val candidate = resolve(LocalDateTime.of(date, at), zone)
             if (candidate.isAfter(after)) return candidate
         }
         return null
     }
 
-    fun nextTrigger(alarm: Alarm, after: Instant, zone: ZoneId): Instant? =
-        nextTrigger(alarm.hour, alarm.minute, alarm.repeat, after, zone, alarm.skipDate.takeIf { alarm.repeat.isRepeating })
+    /**
+     * Следующее срабатывание будильника. Пропуск и исключения — только у
+     * повторяющегося: однократный и на дату звонят, когда сказано (D-014, п. 4).
+     */
+    fun nextTrigger(alarm: Alarm, after: Instant, zone: ZoneId, exceptions: Exceptions = Exceptions.NONE): Instant? {
+        val repeating = alarm.repeat.isRepeating
+        return nextTrigger(
+            alarm.hour,
+            alarm.minute,
+            alarm.repeat,
+            after,
+            zone,
+            skipDate = alarm.skipDate.takeIf { repeating },
+            exceptions = if (repeating && alarm.honorExceptions) exceptions else Exceptions.NONE,
+        )
+    }
 
     /** Ближайшее срабатывание без учёта пропуска — его дата и становится пропущенной (D-013, п. 3). */
-    fun nextIgnoringSkip(alarm: Alarm, after: Instant, zone: ZoneId): Instant? =
-        nextTrigger(alarm.copy(skipDate = null), after, zone)
+    fun nextIgnoringSkip(alarm: Alarm, after: Instant, zone: ZoneId, exceptions: Exceptions = Exceptions.NONE): Instant? =
+        nextTrigger(alarm.copy(skipDate = null), after, zone, exceptions)
+
+    /** Несколько ближайших срабатываний — для предпросмотра графика. */
+    fun upcoming(alarm: Alarm, after: Instant, zone: ZoneId, exceptions: Exceptions, count: Int): List<Instant> = buildList {
+        var from = after
+        while (size < count) {
+            val next = nextTrigger(alarm, from, zone, exceptions) ?: break
+            add(next)
+            from = next
+        }
+    }
 
     /** Местное время — в момент: пропуск — к концу пропуска, повтор — к первому наступлению. */
     internal fun resolve(local: LocalDateTime, zone: ZoneId): Instant {
@@ -66,16 +92,22 @@ object AlarmRules {
     fun isMissed(scheduledAt: Long, now: Long): Boolean = now - scheduledAt > MISSED_AFTER_MILLIS
 
     /** Ближайшее срабатывание среди включённых будильников. */
-    fun nearest(alarms: List<Alarm>, after: Instant, zone: ZoneId): Instant? =
-        alarms.filter { it.enabled }.mapNotNull { nextTrigger(it, after, zone) }.minOrNull()
+    fun nearest(alarms: List<Alarm>, after: Instant, zone: ZoneId, exceptions: Exceptions = Exceptions.NONE): Instant? =
+        alarms.filter { it.enabled }.mapNotNull { nextTrigger(it, after, zone, exceptions) }.minOrNull()
 
     /** Список в выбранном порядке (D-010, п. 6); при равенстве — по созданию. */
-    fun sorted(alarms: List<Alarm>, order: AlarmOrder, now: Instant, zone: ZoneId): List<Alarm> =
+    fun sorted(
+        alarms: List<Alarm>,
+        order: AlarmOrder,
+        now: Instant,
+        zone: ZoneId,
+        exceptions: Exceptions = Exceptions.NONE,
+    ): List<Alarm> =
         when (order) {
             AlarmOrder.TIME_OF_DAY -> alarms.sortedWith(compareBy({ it.minuteOfDay }, { it.createdAt }))
             AlarmOrder.CREATED -> alarms.sortedWith(compareBy({ it.createdAt }, { it.id }))
             AlarmOrder.NEXT -> {
-                val next = alarms.associate { it.id to if (it.enabled) nextTrigger(it, now, zone) else null }
+                val next = alarms.associate { it.id to if (it.enabled) nextTrigger(it, now, zone, exceptions) else null }
                 alarms.sortedWith(
                     compareBy<Alarm>({ next[it.id] == null }, { next[it.id] })
                         .thenBy { it.minuteOfDay }

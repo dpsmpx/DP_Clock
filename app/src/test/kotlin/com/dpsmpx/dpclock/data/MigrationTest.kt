@@ -55,6 +55,28 @@ class MigrationTest {
     }
 
     @Test
+    fun migration11To12KeepsSettingsAndDefaultsCountdownOff() = withDb { db ->
+        SchemaFile.read(11).create(db)
+        db.execSQL(
+            "INSERT INTO settings (id, snoozeMinutes, autoStopMinutes, alarmOrder, xiaomiHintsDone, signalStyle, volumeButtons, " +
+                "holidaysRu, bedtimeMode, sleepMinutes, bedtimeHour, bedtimeMinute, bedtimeDays, bedtimeLeadMinutes, " +
+                "weatherMode, weatherPlace, weatherLat, weatherLon, theme, seedColor, clockStyle, clockFont, clockSize, " +
+                "nightNoise, background, highContrast) VALUES " +
+                "(0, 15, NULL, 'NEXT', 1, 'NOTIFICATION', 'NOTHING', 1, 'SCHEDULE', 450, 22, 30, 3, 30, " +
+                "'CITY', 'Tula', 54.1931, 37.6177, 'DARK', NULL, 'DIGITS', 'BOLD', 90, 'PINK', 'STARS', 1)",
+        )
+
+        MIGRATION_11_12.migrate(db)
+
+        val settings = row(db, "SELECT * FROM settings")
+        assertEquals("15", settings["snoozeMinutes"])
+        assertEquals("NEXT", settings["alarmOrder"])
+        assertEquals("NOTIFICATION", settings["signalStyle"])
+        assertEquals("1", settings["highContrast"])
+        assertEquals("0", settings["showAlarmCountdown"])
+    }
+
+    @Test
     fun migration1To2KeepsAlarmsAndSettings() = withDb { db ->
         SchemaFile.read(1).create(db)
         db.execSQL("INSERT INTO alarm (id, hour, minute, repeatDays, enabled, createdAt) VALUES ('a', 7, 30, 31, 1, 1000)")

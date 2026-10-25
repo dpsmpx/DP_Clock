@@ -121,7 +121,7 @@ class NextAlarmTile : DpClockTile() {
         val (id, at) = Surfaces.skipped(this) ?: return null
         val alarm = data.alarms.firstOrNull { it.id == id }
         val valid = alarm != null && at > System.currentTimeMillis() && if (alarm.repeat.isRepeating) {
-            alarm.skipDate == Instant.ofEpochMilli(at).atZone(zone).toLocalDate()
+            AlarmRules.isSkipped(alarm, Instant.ofEpochMilli(at), zone)
         } else {
             !alarm.enabled
         }
@@ -144,13 +144,13 @@ class NextAlarmTile : DpClockTile() {
         val skipped = skipped(data)
         if (skipped != null) {
             val alarm = data.alarms.first { it.id == skipped.first }
-            if (alarm.repeat.isRepeating) repository.saveAlarm(alarm.copy(skipDate = null)) else repository.setAlarmEnabled(alarm.id, true)
+            if (alarm.repeat.isRepeating) repository.saveAlarm(alarm.copy(skipDate = null, skipTime = null)) else repository.setAlarmEnabled(alarm.id, true)
             Surfaces.setSkipped(this, null)
             return
         }
         val (alarm, at) = AlarmRules.nearestAlarm(data.alarms, Instant.now(), zone, data.exceptions) ?: return openSection(Section.ALARMS)
         if (alarm.repeat.isRepeating) {
-            repository.saveAlarm(alarm.copy(skipDate = at.atZone(zone).toLocalDate()))
+            repository.saveAlarm(AlarmRules.skipping(alarm, at, zone))
         } else {
             repository.setAlarmEnabled(alarm.id, false)
         }

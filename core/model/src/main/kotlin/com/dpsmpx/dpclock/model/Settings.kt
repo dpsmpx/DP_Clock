@@ -8,6 +8,8 @@ data class Settings(
     val alarmOrder: AlarmOrder = AlarmOrder.TIME_OF_DAY,
     /** Показывать в строке включённых будильников время до следующего срабатывания. */
     val showAlarmCountdown: Boolean = false,
+    /** Показывать в строке включённых будильников полную дату и время срабатывания (D-025, п. 2). */
+    val showAlarmDate: Boolean = false,
     /** Человек отметил, что настроил автозапуск и батарею на Xiaomi (SCREEN_MAP.md, п. 10). */
     val xiaomiHintsDone: Boolean = false,
     val signalStyle: SignalStyle = SignalStyle.FULL_SCREEN,
@@ -20,6 +22,14 @@ data class Settings(
     val weather: WeatherSettings = WeatherSettings(),
     /** Тема, цвет, стиль часов, фон, шум (D-021). */
     val appearance: Appearance = Appearance(),
+    /** Предупреждения до сигнала у новых будильников, минуты (D-025, п. 5). */
+    val defaultWarnings: List<Int> = emptyList(),
+    /** Предупреждение со звуком; иначе — тихое уведомление. */
+    val warningSound: Boolean = false,
+    /** Куранты (D-025, п. 4). */
+    val chimes: Chimes = Chimes(),
+    /** Последние настройки помидора (D-025, п. 1). */
+    val pomodoro: Pomodoro = Pomodoro(),
 ) {
     companion object {
         const val DEFAULT_SNOOZE = 10

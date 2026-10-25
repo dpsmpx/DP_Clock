@@ -27,6 +27,11 @@ data class Alarm(
     val snoozeMinutes: Int? = null,
     /** Дата одного пропускаемого срабатывания; null — без пропуска. */
     val skipDate: LocalDate? = null,
+    /**
+     * Время пропускаемого срабатывания в дату [skipDate] — у сложного повтора, где
+     * в день бывает несколько срабатываний (D-025, п. 3); null — пропускается вся дата.
+     */
+    val skipTime: LocalTime? = null,
     /** Не звонить в даты исключений (D-014, п. 4); действует только у повторяющегося. */
     val honorExceptions: Boolean = true,
     /** Группа (D-014, п. 5); null — без группы. */
@@ -42,6 +47,8 @@ data class Alarm(
      * null — обычный будильник. Такие будильники ставит и убирает календарь.
      */
     val calendarEventAt: Long? = null,
+    /** Предупредить за столько минут до срабатывания (D-025, п. 5); пусто — без предупреждений. */
+    val warnings: List<Int> = emptyList(),
 ) {
     init {
         require(hour in 0..23) { "час $hour" }
@@ -49,6 +56,7 @@ data class Alarm(
         require(rampSeconds >= 0) { "нарастание $rampSeconds" }
         require(snoozeMinutes == null || snoozeMinutes > 0) { "«Отложить» $snoozeMinutes" }
         require(gentleMinutes >= 0) { "мягкое пробуждение $gentleMinutes" }
+        require(warnings.size <= Warnings.MAX && warnings.all { it in 1..Warnings.MAX_MINUTES }) { "предупреждения $warnings" }
     }
 
     /** Минута суток: ключ сортировки «по времени суток». */
@@ -108,6 +116,29 @@ sealed interface Repeat {
     /** Рабочие дни по производственному календарю России (D-014, п. 3). */
     data object Workdays : Repeat
 
+    /**
+     * Сложный повтор (D-025, п. 3): несколько правил — у каждого свои даты и
+     * времена, — кроме дат [except]. В одну дату может быть несколько срабатываний.
+     */
+    data class Rules(val rules: List<RepeatRule>, val except: List<DatePattern> = emptyList()) : Repeat {
+        init {
+            require(rules.size in 1..MAX_RULES) { "правил ${rules.size}" }
+            require(except.size <= MAX_EXCEPT) { "«кроме» ${except.size}" }
+        }
+
+        /** Времена в дату [date] по порядку; пусто — не звонит. */
+        fun timesOn(date: LocalDate): List<LocalTime> =
+            if (except.any { it.matches(date) }) emptyList() else rules.flatMap { it.timesOn(date) }.distinct().sorted()
+
+        /** Самое раннее время — для сортировки и показа. */
+        val firstTime: LocalTime get() = rules.minOf { it.firstTime }
+
+        companion object {
+            const val MAX_RULES = 8
+            const val MAX_EXCEPT = 8
+        }
+    }
+
     companion object {
         /** Ни одного дня — однократно (SCREEN_MAP.md, п. 2). */
         fun of(days: Set<DayOfWeek>): Repeat = if (days.isEmpty()) Once else Weekly(days)
@@ -121,7 +152,7 @@ sealed interface Repeat {
 val Repeat.days: Set<DayOfWeek>
     get() = when (this) {
         is Repeat.Weekly -> days
-        Repeat.Once, is Repeat.OnDate, is Repeat.Cycle, Repeat.Workdays -> emptySet()
+        Repeat.Once, is Repeat.OnDate, is Repeat.Cycle, Repeat.Workdays, is Repeat.Rules -> emptySet()
     }
 
 val Repeat.bits: Int
@@ -129,19 +160,24 @@ val Repeat.bits: Int
 
 /** Звонит больше одного раза: пропуск одного срабатывания и исключения имеют смысл. */
 val Repeat.isRepeating: Boolean
-    get() = this is Repeat.Weekly || this is Repeat.Cycle || this == Repeat.Workdays
+    get() = this is Repeat.Weekly || this is Repeat.Cycle || this == Repeat.Workdays || this is Repeat.Rules
 
-/** Время срабатывания в дату [date] при времени будильника [time]; null — в эту дату не звонит. */
+/** Первое время срабатывания в дату [date] при времени будильника [time]; null — в эту дату не звонит. */
 fun Repeat.timeOn(date: LocalDate, time: LocalTime): LocalTime? = when (this) {
     Repeat.Once -> time
     is Repeat.Weekly -> time.takeIf { date.dayOfWeek in days }
     is Repeat.OnDate -> time.takeIf { date == this.date }
     is Repeat.Cycle -> timeOn(date)
     Repeat.Workdays -> time.takeIf { RuCalendar.isWorkingDay(date) }
+    is Repeat.Rules -> timesOn(date).firstOrNull()
 }
 
-/** Вид повтора для подписи в списке: «Однократно», «Ежедневно», «Пн–Пт», перечень дней, дата, график, рабочие дни. */
-enum class RepeatKind { ONCE, DAILY, WEEKDAYS, DAYS, DATE, CYCLE, WORKDAYS }
+/** Все времена срабатывания в дату [date] по порядку: у сложного повтора их может быть несколько. */
+fun Repeat.timesOn(date: LocalDate, time: LocalTime): List<LocalTime> =
+    if (this is Repeat.Rules) timesOn(date) else listOfNotNull(timeOn(date, time))
+
+/** Вид повтора для подписи в списке: «Однократно», «Ежедневно», «Пн–Пт», перечень дней, дата, график, рабочие дни, правила. */
+enum class RepeatKind { ONCE, DAILY, WEEKDAYS, DAYS, DATE, CYCLE, WORKDAYS, RULES }
 
 val Repeat.kind: RepeatKind
     get() = when {
@@ -149,6 +185,7 @@ val Repeat.kind: RepeatKind
         this is Repeat.OnDate -> RepeatKind.DATE
         this is Repeat.Cycle -> RepeatKind.CYCLE
         this == Repeat.Workdays -> RepeatKind.WORKDAYS
+        this is Repeat.Rules -> RepeatKind.RULES
         days.size == 7 -> RepeatKind.DAILY
         days == WORKDAYS -> RepeatKind.WEEKDAYS
         else -> RepeatKind.DAYS

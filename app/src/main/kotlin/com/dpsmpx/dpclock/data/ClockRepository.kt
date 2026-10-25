@@ -13,8 +13,10 @@ import com.dpsmpx.dpclock.model.BackupRules
 import com.dpsmpx.dpclock.model.CalendarInstance
 import com.dpsmpx.dpclock.model.CalendarRules
 import com.dpsmpx.dpclock.model.CalendarWake
+import com.dpsmpx.dpclock.model.ChimeRules
 import com.dpsmpx.dpclock.model.ExceptionPeriod
 import com.dpsmpx.dpclock.model.Exceptions
+import com.dpsmpx.dpclock.model.Pomodoro
 import com.dpsmpx.dpclock.model.Repeat
 import com.dpsmpx.dpclock.model.Settings
 import com.dpsmpx.dpclock.model.SignalEvent
@@ -29,9 +31,11 @@ import com.dpsmpx.dpclock.model.TimerProgram
 import com.dpsmpx.dpclock.model.TimerRules
 import com.dpsmpx.dpclock.model.TimerRun
 import com.dpsmpx.dpclock.model.TimerState
+import com.dpsmpx.dpclock.model.Warnings
 import com.dpsmpx.dpclock.model.isRepeating
 import com.dpsmpx.dpclock.platform.Appearances
 import com.dpsmpx.dpclock.platform.Clocks
+import com.dpsmpx.dpclock.platform.FocusMode
 import com.dpsmpx.dpclock.platform.Notifier
 import com.dpsmpx.dpclock.platform.Ringing
 import com.dpsmpx.dpclock.platform.Scheduler
@@ -77,8 +81,14 @@ data class SurfaceData(
     val settings: Settings,
 )
 
-/** Что делать с концом шага таймера; [endedAt] — расчётный конец шага, мс UTC, для журнала. */
+/**
+ * Что делать с концом шага таймера; [endedAt] — расчётный конец шага, мс UTC, для журнала.
+ * [TimerRun.isWaiting] у [run] — таймер ждёт «Дальше» (D-025, п. 1).
+ */
 data class TimerFire(val run: TimerRun, val signal: StepSignal, val sound: AlarmSound = AlarmSound.Default, val endedAt: Long? = null)
+
+/** Пора предупредить о будильнике (D-025, п. 5): за [minutes] минут до [alarmAt], мс UTC. */
+data class WarningFire(val alarm: Alarm, val alarmAt: Long, val minutes: Int)
 
 /**
  * Все изменения данных и расписаний — здесь, по одному за раз: после каждого
@@ -176,13 +186,18 @@ class ClockRepository(
         if (old.holidaysRu != new.holidaysRu) rescheduleAllLocked()
         if (old.bedtime != new.bedtime) alarmsChanged = true
         if (old.appearance != new.appearance) Appearances.apply(context, new.appearance)
+        if (old.chimes != new.chimes) syncChimes(new)
     }
 
     // Будильники
 
-    /** Новый будильник — однократный и включённый (SCREEN_MAP.md, п. 1), можно сразу в группе. Возвращает момент срабатывания. */
+    /**
+     * Новый будильник — однократный и включённый (SCREEN_MAP.md, п. 1), можно сразу в группе,
+     * с общими предупреждениями (D-025, п. 5). Возвращает момент срабатывания.
+     */
     suspend fun addAlarm(hour: Int, minute: Int, groupId: String? = null): Long = locked {
-        val alarm = Alarm(UUID.randomUUID().toString(), hour, minute, Repeat.Once, enabled = true, createdAt = now(), groupId = groupId)
+        val warnings = dao.currentSettings().toModel().defaultWarnings
+        val alarm = Alarm(UUID.randomUUID().toString(), hour, minute, Repeat.Once, enabled = true, createdAt = now(), groupId = groupId, warnings = warnings)
         dao.upsertAlarm(alarm.toEntity())
         scheduleAlarm(alarm)
     }
@@ -221,6 +236,7 @@ class ClockRepository(
                 dao.deleteOccurrence(alarm.id)
                 scheduler.cancelAlarm(alarm.id)
                 notifier.cancelSnoozed(alarm.id)
+                notifier.cancelWarning(alarm.id)
             }
             alarmsChanged = true
         }
@@ -306,6 +322,7 @@ class ClockRepository(
         dao.deleteOccurrence(id)
         scheduler.cancelAlarm(id)
         notifier.cancelSnoozed(id)
+        notifier.cancelWarning(id)
         // Удалённый будильник перед событием календарь в эту дату не вернёт (D-023, п. 3).
         calendarDateOf(alarm)?.let { calendar.setCancelled(it, cancelled = true) }
         alarmsChanged = true
@@ -349,6 +366,7 @@ class ClockRepository(
                 dao.deleteAlarm(alarm.id)
                 dao.deleteOccurrence(alarm.id)
                 scheduler.cancelAlarm(alarm.id)
+                notifier.cancelWarning(alarm.id)
                 alarmsChanged = true
                 continue
             }
@@ -415,6 +433,7 @@ class ClockRepository(
         // Однократный и на дату выполнены — выключаются сразу, «Отложить» их не возвращает в список.
         if (!alarm.repeat.isRepeating) dao.upsertAlarm(alarm.copy(enabled = false).toEntity())
         notifier.cancelSnoozed(id)
+        notifier.cancelWarning(id)
         AlarmFire.Ring(alarm, occ.scheduledAt, snoozeMinutes(alarm))
     }
 
@@ -475,16 +494,54 @@ class ClockRepository(
         val alarm = dao.alarm(id)?.toModel() ?: return@locked
         dao.deleteOccurrence(id)
         scheduler.cancelAlarm(id)
+        notifier.cancelWarning(id)
         log(SignalSource.ALARM, id, occ.scheduledAt, now(), SignalOutcome.DISMISSED, alarm.label)
         runAfterActions(alarm)
-        val zone = ZoneId.systemDefault()
+        skipLocked(alarm, occ.scheduledAt)
+    }
+
+    /**
+     * «Пропустить этот раз» из предупреждения (D-025, п. 5): ближайшее срабатывание
+     * не звонит; повторяющийся идёт к следующему, однократный и на дату выключаются.
+     */
+    suspend fun skipOccurrence(id: String) = locked {
+        val occ = dao.occurrence(id)?.takeIf { it.state == Occ.SCHEDULED } ?: return@locked
+        val alarm = dao.alarm(id)?.toModel() ?: return@locked
+        dao.deleteOccurrence(id)
+        scheduler.cancelAlarm(id)
+        notifier.cancelWarning(id)
+        skipLocked(alarm, occ.scheduledAt)
+    }
+
+    private suspend fun skipLocked(alarm: Alarm, at: Long) {
         val next = if (alarm.repeat.isRepeating) {
-            alarm.copy(skipDate = Instant.ofEpochMilli(occ.scheduledAt).atZone(zone).toLocalDate())
+            AlarmRules.skipping(alarm, Instant.ofEpochMilli(at), ZoneId.systemDefault())
         } else {
             alarm.copy(enabled = false)
         }
         dao.upsertAlarm(next.toEntity())
         scheduleAlarm(next)
+    }
+
+    /**
+     * Пришло предупреждение (D-025, п. 5): будильник ещё ждёт срабатывания [alarmAt] —
+     * что показать; следующее предупреждение о нём же ставится сразу. null — устарело.
+     */
+    suspend fun onWarningFired(id: String, alarmAt: Long): WarningFire? = locked(quiet = true) {
+        val occ = dao.occurrence(id)?.takeIf { it.state == Occ.SCHEDULED && it.scheduledAt == alarmAt } ?: return@locked null
+        val alarm = dao.alarm(id)?.toModel()?.takeIf { it.enabled } ?: return@locked null
+        val now = now()
+        if (occ.scheduledAt <= now) return@locked null
+        // Сработавшее — ближайшее не в будущем: за столько минут и предупреждаем.
+        val minutes = alarm.warnings.filter { occ.scheduledAt - it * 60_000L <= now + WARNING_SLACK_MILLIS }.minOrNull() ?: return@locked null
+        scheduleWarning(alarm, occ.scheduledAt)
+        WarningFire(alarm, occ.scheduledAt, minutes)
+    }
+
+    /** Ближайшее предупреждение о срабатывании [at]; прошли все — снять. */
+    private fun scheduleWarning(alarm: Alarm, at: Long) {
+        val next = Warnings.next(alarm.warnings, at, now())
+        if (next == null) scheduler.cancelWarning(alarm.id) else scheduler.setWarning(alarm.id, next.first, at)
     }
 
     /** Напоминание ложиться — по настройкам и ближайшему срабатыванию (D-017, п. 2). */
@@ -599,22 +656,31 @@ class ClockRepository(
         }
         syncTimers()
         notifier.stopwatch(dao.currentStopwatch().toModel())
+        syncChimes(dao.currentSettings().toModel())
+    }
+
+    // Куранты (D-025, п. 4)
+
+    /** Бой пришёл: следующий — по настройкам. */
+    suspend fun onChimeFired() = locked(quiet = true) { syncChimes(dao.currentSettings().toModel()) }
+
+    private fun syncChimes(settings: Settings) {
+        val next = ChimeRules.next(settings.chimes, Instant.ofEpochMilli(now()), ZoneId.systemDefault())
+        if (next == null) scheduler.cancelChime() else scheduler.setChime(next.toEpochMilli())
     }
 
     private suspend fun currentExceptions(): Exceptions =
         Exceptions(dao.allExceptions().map { it.toModel() }, dao.currentSettings().toModel().holidaysRu, calendar.exceptionDates.value)
 
-    /** У сменного графика время будильника — время первого рабочего дня: по нему сортируется список. */
-    private fun normalized(alarm: Alarm): Alarm {
-        val repeat = alarm.repeat as? Repeat.Cycle ?: return alarm
-        return alarm.copy(hour = repeat.firstTime.hour, minute = repeat.firstTime.minute)
-    }
+    /** У сменного графика и сложного повтора время будильника — самое раннее: по нему сортируется список. */
+    private fun normalized(alarm: Alarm): Alarm = AlarmRules.normalized(alarm)
 
     /** Интервал «Отложить» будильника: свой или общий из настроек (D-013, п. 3). */
     private suspend fun snoozeMinutes(alarm: Alarm): Int =
         alarm.snoozeMinutes ?: dao.currentSettings().toModel().snoozeMinutes
 
     private suspend fun resetOccurrence(id: String) {
+        notifier.cancelWarning(id)
         val occ = dao.occurrence(id) ?: return
         if (occ.state == Occ.RINGING) return
         dao.deleteOccurrence(id)
@@ -648,6 +714,7 @@ class ClockRepository(
         if (!alarm.enabled) {
             dao.deleteOccurrence(alarm.id)
             scheduler.cancelAlarm(alarm.id)
+            notifier.cancelWarning(alarm.id)
             return 0L
         }
         val at = AlarmRules.nextTrigger(alarm, nowInstant, zone, knownExceptions ?: currentExceptions())?.toEpochMilli()
@@ -657,10 +724,12 @@ class ClockRepository(
             if (!alarm.repeat.isRepeating) dao.upsertAlarm(alarm.copy(enabled = false).toEntity())
             dao.deleteOccurrence(alarm.id)
             scheduler.cancelAlarm(alarm.id)
+            notifier.cancelWarning(alarm.id)
             return 0L
         }
         dao.upsertOccurrence(OccurrenceEntity(alarm.id, at, Occ.SCHEDULED, snoozedUntil = null, ringingSince = null, recheckAt = null))
         scheduler.setAlarm(alarm.id, at)
+        scheduleWarning(alarm, at)
         // Мягкое пробуждение — только если до будильника ещё есть всё его время.
         val gentleAt = at - alarm.gentleMinutes * 60_000L
         if (alarm.gentleMinutes > 0 && gentleAt > nowInstant.toEpochMilli()) scheduler.setGentle(alarm.id, gentleAt, at) else scheduler.cancelGentle(alarm.id)
@@ -709,6 +778,7 @@ class ClockRepository(
                 dao.deleteOccurrence(alarm.id)
                 scheduler.cancelAlarm(alarm.id)
                 notifier.cancelSnoozed(alarm.id)
+                notifier.cancelWarning(alarm.id)
             }
             dao.clearGroups()
             dao.clearTemplates()
@@ -790,6 +860,29 @@ class ClockRepository(
         }
     }
 
+    /** Помидор (D-025, п. 1): настройки запоминаются, таймер идёт с первой работы. */
+    suspend fun startPomodoro(pomodoro: Pomodoro, program: TimerProgram, name: String) = locked {
+        dao.upsertSettings(dao.currentSettings().toModel().copy(pomodoro = pomodoro).toEntity())
+        val run = TimerRules.start(UUID.randomUUID().toString(), null, name, program, Clocks.moment())
+        dao.upsertTimerRun(run.toEntity())
+        syncTimers()
+    }
+
+    /** «Дальше»: следующий шаг сейчас; после последнего — таймер закончен и убран (D-025, п. 1). */
+    suspend fun skipStep(id: String) = locked {
+        val run = dao.timerRun(id)?.toModel() ?: return@locked
+        val next = TimerRules.skip(run, Clocks.moment())
+        if (next == null) {
+            logTimer(run, completed = false)
+            dao.deleteTimerRun(id)
+            scheduler.cancelTimer(id)
+            notifier.cancelTimer(id)
+        } else {
+            dao.upsertTimerRun(next.toEntity())
+        }
+        syncTimers()
+    }
+
     suspend fun pauseTimer(id: String) = updateTimer(id) { TimerRules.pause(it, Clocks.moment()) }
 
     suspend fun resumeTimer(id: String) = updateTimer(id) { TimerRules.resume(it, Clocks.moment()) }
@@ -809,6 +902,7 @@ class ClockRepository(
         dao.deleteTimerRun(id)
         scheduler.cancelTimer(id)
         notifier.cancelTimer(id)
+        syncTimers()
     }
 
     /**
@@ -836,6 +930,11 @@ class ClockRepository(
         var signal = if (result.late) StepSignal.NONE else result.signal
         // Конец шага по монотонным часам — перевод времени не искажает опоздание в журнале.
         val endedAt = result.endedAt?.let { now.utc + it.millisAfter(now) }
+        // Помидоры — в статистику (D-025, п. 1); закончившиеся, пока телефон был выключен, не в счёт.
+        if (result.focusEnded > 0 && !result.late) {
+            val end = endedAt ?: now.utc
+            logActivity(ActivityKind.POMODORO, end - result.focusMillis, end, run.name, amountMillis = result.focusMillis, count = result.focusEnded)
+        }
         if (result.run.state == TimerState.RINGING && run.program.sleep) {
             // Таймер засыпания закончился: без сигнала, музыку останавливает приёмник (D-016, п. 1).
             logTimer(run, completed = true)
@@ -877,6 +976,8 @@ class ClockRepository(
             }
             if (run.state == TimerState.RINGING) notifier.cancelTimer(run.id) else notifier.timer(run, now)
         }
+        // «Не беспокоить» — пока идёт работа помидора с этим флажком (D-025, п. 1).
+        FocusMode.apply(context, dao.allTimerRuns().any { it.toModel().wantsDnd })
     }
 
     suspend fun savePreset(preset: TimerPreset) = locked { dao.upsertPreset(preset.toEntity()) }
@@ -930,11 +1031,20 @@ class ClockRepository(
         dao.insertActivity(ActivityEvent(UUID.randomUUID().toString(), kind, startedAt, endedAt, title, refId, amountMillis, count).toEntity())
     }
 
-    /** Таймер кончился или убран; таймер засыпания уже записан при запуске. */
+    /**
+     * Таймер кончился или убран; таймер засыпания уже записан при запуске, помидор —
+     * по шагам работы. Бесконечный — сколько шёл.
+     */
     private suspend fun logTimer(run: TimerRun, completed: Boolean) {
-        if (run.program.sleep) return
-        logActivity(ActivityKind.TIMER, run.createdAt, now(), run.name, run.presetId, run.program.totalMillis, if (completed) 1 else 0)
+        if (run.program.sleep || run.program.isPomodoro) return
+        val amount = if (run.program.forever) now() - run.createdAt else run.program.totalMillis
+        logActivity(ActivityKind.TIMER, run.createdAt, now(), run.name, run.presetId, amount, if (completed) 1 else 0)
     }
 
     private fun now(): Long = System.currentTimeMillis()
+
+    private companion object {
+        /** Предупреждение пришло чуть раньше срока (неточный будильник без разрешения) — всё равно его. */
+        const val WARNING_SLACK_MILLIS = 30_000L
+    }
 }

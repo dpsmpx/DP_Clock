@@ -11,6 +11,8 @@ data class TimerStep(
     val fullSignal: Boolean = true,
     /** Свой звук шага (D-016, п. 2); null — звук программы. */
     val sound: AlarmSound? = null,
+    /** Работа помидора (D-025, п. 1): считается в статистике, на ней — «Не беспокоить». */
+    val focus: Boolean = false,
 ) {
     init {
         require(durationMillis > 0) { "длительность $durationMillis" }
@@ -21,38 +23,59 @@ data class TimerStep(
  * Одна модель для одиночного таймера, пресета, цепочки и цикла (DATA_MODEL.md, п. 5).
  * Одиночный таймер — один шаг с полным сигналом. [sound] — звук программы
  * (D-016, п. 2); [sleep] — таймер засыпания: в конце без сигнала
- * останавливает музыку и видео (D-016, п. 1).
+ * останавливает музыку и видео (D-016, п. 1). [hold] — после шага ждать
+ * «Дальше» (помидор, D-025, п. 1); [forever] — круги, пока не остановят
+ * (каждые N секунд, D-025, п. 4); [dnd] — «Не беспокоить» на шагах работы.
  */
 data class TimerProgram(
     val steps: List<TimerStep>,
     val cycles: Int = 1,
     val sound: AlarmSound = AlarmSound.Default,
     val sleep: Boolean = false,
+    val hold: Boolean = false,
+    val forever: Boolean = false,
+    val dnd: Boolean = false,
 ) {
     init {
         require(steps.isNotEmpty()) { "программа без шагов" }
         require(cycles >= 1) { "кругов $cycles" }
-        require(!sleep || (steps.size == 1 && cycles == 1)) { "таймер засыпания — один шаг" }
+        require(!sleep || (steps.size == 1 && cycles == 1 && !hold && !forever)) { "таймер засыпания — один шаг" }
+        require(!forever || cycles == 1) { "без конца — один круг в записи" }
     }
 
-    val totalMillis: Long get() = steps.sumOf { it.durationMillis } * cycles
+    /** Длина программы; у бесконечной — одного круга. */
+    val totalMillis: Long get() = cycleMillis * cycles
 
-    val isChain: Boolean get() = steps.size > 1 || cycles > 1
+    val cycleMillis: Long get() = steps.sumOf { it.durationMillis }
+
+    val isChain: Boolean get() = steps.size > 1 || cycles > 1 || forever
+
+    /** Помидор: есть шаги работы. */
+    val isPomodoro: Boolean get() = steps.any { it.focus }
 
     /** Звук в конце шага [index]: свой у шага или звук программы. */
     fun soundOf(index: Int): AlarmSound = steps[index].sound ?: sound
 
     /**
-     * Строка для базы: `v2;<круги>;<z|->;<звук>;<название звука>;<мс>:<f|s>:<название>:<звук шага>:<название>;…`,
-     * текст — в URL-кодировке. Звук шага: пусто — как у программы, `default` — мелодия телефона.
+     * Строка для базы: `v3;<круги>;<флаги>;<звук>;<название звука>;<мс>:<флаги шага>:<название>:<звук шага>:<название>;…`,
+     * текст — в URL-кодировке. Флаги: `z` — засыпания, `h` — ждать «Дальше», `r` — без конца,
+     * `d` — «Не беспокоить», `-` — никаких; шага: `f` или `s` — полный или короткий сигнал,
+     * `w` — работа. Звук шага: пусто — как у программы, `default` — мелодия телефона.
      */
     fun encode(): String = buildString {
-        append("v2;").append(cycles)
-        append(';').append(if (sleep) 'z' else '-')
+        append("v3;").append(cycles)
+        val flags = buildString {
+            if (sleep) append('z')
+            if (hold) append('h')
+            if (forever) append('r')
+            if (dnd) append('d')
+        }
+        append(';').append(flags.ifEmpty { "-" })
         append(';').append(url(sound.encode())).append(';').append(url(sound.title))
         for (step in steps) {
             append(';').append(step.durationMillis)
             append(':').append(if (step.fullSignal) 'f' else 's')
+            if (step.focus) append('w')
             append(':').append(url(step.name))
             val code = when (val own = step.sound) {
                 null -> ""
@@ -73,7 +96,17 @@ data class TimerProgram(
         /** Таймер засыпания на [durationMillis]. */
         fun sleep(durationMillis: Long): TimerProgram = TimerProgram(listOf(TimerStep(durationMillis)), sleep = true)
 
-        /** Читает и `v1` — пресеты версий до 0.5.0. */
+        /**
+         * Каждые [stepMillis] — короткий сигнал (D-025, п. 4): [count] раз, последний — полный;
+         * null — пока не остановят.
+         */
+        fun interval(stepMillis: Long, count: Int?, name: String = ""): TimerProgram = TimerProgram(
+            steps = listOf(TimerStep(stepMillis, name, fullSignal = false)),
+            cycles = count ?: 1,
+            forever = count == null,
+        )
+
+        /** Читает и `v1`, `v2` — программы версий до 0.5.0 и до 0.14.0. */
         fun decode(text: String): TimerProgram {
             val parts = text.split(';')
             return when (parts.firstOrNull()) {
@@ -85,7 +118,7 @@ data class TimerProgram(
                     }
                     TimerProgram(steps, parts[1].toInt())
                 }
-                "v2" -> {
+                "v2", "v3" -> {
                     require(parts.size >= 6) { "формат программы: $text" }
                     val steps = parts.drop(5).map { part ->
                         val f = part.split(':')
@@ -95,13 +128,17 @@ data class TimerProgram(
                             STEP_DEFAULT -> AlarmSound.Default
                             else -> AlarmSound.decode(code, unurl(f[4]))
                         }
-                        TimerStep(f[0].toLong(), unurl(f[2]), f[1] == "f", sound)
+                        TimerStep(f[0].toLong(), unurl(f[2]), f[1].startsWith('f'), sound, focus = 'w' in f[1])
                     }
+                    val flags = parts[2]
                     TimerProgram(
                         steps = steps,
                         cycles = parts[1].toInt(),
                         sound = AlarmSound.decode(unurl(parts[3]), unurl(parts[4])),
-                        sleep = parts[2] == "z",
+                        sleep = 'z' in flags,
+                        hold = 'h' in flags,
+                        forever = 'r' in flags,
+                        dnd = 'd' in flags,
                     )
                 }
                 else -> throw IllegalArgumentException("формат программы: $text")
@@ -146,7 +183,15 @@ data class TimerRun(
     val step: TimerStep get() = program.steps[stepIndex]
 
     val isLastStep: Boolean
-        get() = stepIndex == program.steps.lastIndex && cycleIndex == program.cycles - 1
+        get() = !program.forever && stepIndex == program.steps.lastIndex && cycleIndex == program.cycles - 1
+
+    /** Ждёт «Дальше»: шаг закончился, следующий ещё не начат (D-025, п. 1). */
+    val isWaiting: Boolean
+        get() = program.hold && state == TimerState.PAUSED && remainingMillis == program.steps[stepIndex].durationMillis &&
+            (stepIndex > 0 || cycleIndex > 0)
+
+    /** Идёт шаг работы с «Не беспокоить» (D-025, п. 1). */
+    val wantsDnd: Boolean get() = program.dnd && state == TimerState.RUNNING && step.focus
 
     /** Остаток текущего шага на момент [now]. */
     fun remainingAt(now: Moment): Long = when (state) {
@@ -172,6 +217,9 @@ data class TimerAdvance(
     val sound: AlarmSound = AlarmSound.Default,
     /** Расчётный конец последнего закончившегося шага; null — ни один не закончился. Для журнала. */
     val endedAt: Moment? = null,
+    /** Сколько шагов работы помидора закончилось и сколько они длились (D-025, п. 1). */
+    val focusEnded: Int = 0,
+    val focusMillis: Long = 0L,
 )
 
 /** Переходы таймера — чистые функции от «сейчас» (D-009, п. 5). */
@@ -219,7 +267,8 @@ object TimerRules {
     /**
      * Проверить идущий таймер в момент [now]: закончившиеся шаги засчитываются,
      * следующий шаг отсчитывается от конца предыдущего — цепочка не копит
-     * задержку. Конец последнего шага — состояние «звонит».
+     * задержку. Конец последнего шага — состояние «звонит»; у программы с
+     * ожиданием конец шага — пауза в начале следующего (D-025, п. 1).
      */
     fun advance(run: TimerRun, now: Moment): TimerAdvance {
         var current = run
@@ -228,6 +277,8 @@ object TimerRules {
         var ended = 0
         var endedAt: Moment? = null
         var lateness = 0L
+        var focusEnded = 0
+        var focusMillis = 0L
         while (current.state == TimerState.RUNNING) {
             val endsAt = current.stepEndsAt!!
             val left = endsAt.millisAfter(now)
@@ -237,20 +288,41 @@ object TimerRules {
             lateness = -left
             signal = signalAtStepEnd(current)
             sound = current.program.soundOf(current.stepIndex)
+            if (current.step.focus) {
+                focusEnded++
+                focusMillis += current.step.durationMillis
+            }
             current = if (current.isLastStep) {
                 current.copy(state = TimerState.RINGING, stepEndsAt = null, remainingMillis = 0L)
             } else {
-                val lastInCycle = current.stepIndex == current.program.steps.lastIndex
-                val nextStep = if (lastInCycle) 0 else current.stepIndex + 1
-                val nextCycle = if (lastInCycle) current.cycleIndex + 1 else current.cycleIndex
-                current.copy(
-                    stepIndex = nextStep,
-                    cycleIndex = nextCycle,
-                    stepEndsAt = endsAt + current.program.steps[nextStep].durationMillis,
-                )
+                val moved = nextStep(current)
+                if (current.program.hold) {
+                    moved.copy(state = TimerState.PAUSED, stepEndsAt = null, remainingMillis = moved.step.durationMillis)
+                } else {
+                    moved.copy(stepEndsAt = endsAt + moved.step.durationMillis)
+                }
             }
         }
-        return TimerAdvance(current, signal, lateness > AlarmRules.MISSED_AFTER_MILLIS, ended, sound, endedAt)
+        return TimerAdvance(current, signal, lateness > AlarmRules.MISSED_AFTER_MILLIS, ended, sound, endedAt, focusEnded, focusMillis)
+    }
+
+    /**
+     * «Дальше» (D-025, п. 1): текущий шаг досрочно кончается без сигнала, следующий
+     * идёт с [now]. У последнего шага — null: программа закончена.
+     */
+    fun skip(run: TimerRun, now: Moment): TimerRun? {
+        if (run.isLastStep || run.state == TimerState.RINGING) return null
+        val moved = nextStep(run)
+        return moved.copy(state = TimerState.RUNNING, stepEndsAt = now + moved.step.durationMillis, remainingMillis = 0L)
+    }
+
+    /** Индексы следующего шага: после последнего шага круга — первый шаг следующего круга. */
+    private fun nextStep(run: TimerRun): TimerRun {
+        val lastInCycle = run.stepIndex == run.program.steps.lastIndex
+        return run.copy(
+            stepIndex = if (lastInCycle) 0 else run.stepIndex + 1,
+            cycleIndex = if (lastInCycle) run.cycleIndex + 1 else run.cycleIndex,
+        )
     }
 
     /** Какой сигнал будет в конце текущего шага идущего таймера. */

@@ -22,6 +22,9 @@ enum class ActivityKind {
 
     /** Секундомер сброшен: сколько шёл и сколько кругов. */
     STOPWATCH,
+
+    /** Закончилась работа помидора (D-025, п. 1): [ActivityEvent.count] помидоров на [ActivityEvent.amountMillis]. */
+    POMODORO,
 }
 
 /** Запись о действии (D-023, п. 7), мс UTC. Только на телефоне: в перенос не входит. */
@@ -74,6 +77,10 @@ data class TimerStats(
     val stopwatchSessions: Int,
     val stopwatchMillis: Long,
     val laps: Int,
+    /** Помидоры (D-025, п. 1): сколько, сколько работы и в скольких днях. */
+    val pomodoros: Int = 0,
+    val focusMillis: Long = 0L,
+    val pomodoroDays: Int = 0,
 )
 
 data class ReliabilityStats(
@@ -124,7 +131,7 @@ object StatsRules {
         return StatsReport(
             wakes = wakeStats(wakes, zone),
             sleep = sleepStats(wakes, activities, sleepGoalMinutes, zone),
-            timers = timerStats(inActivities),
+            timers = timerStats(inActivities, zone),
             reliability = reliability(inSignals, zone),
         )
     }
@@ -187,8 +194,9 @@ object StatsRules {
         )
     }
 
-    private fun timerStats(activities: List<ActivityEvent>): TimerStats {
+    private fun timerStats(activities: List<ActivityEvent>, zone: ZoneId): TimerStats {
         val timers = activities.filter { it.kind == ActivityKind.TIMER }
+        val pomodoros = activities.filter { it.kind == ActivityKind.POMODORO }
         val stopwatch = activities.filter { it.kind == ActivityKind.STOPWATCH }
         return TimerStats(
             count = timers.size,
@@ -201,6 +209,9 @@ object StatsRules {
             stopwatchSessions = stopwatch.size,
             stopwatchMillis = stopwatch.sumOf { it.amountMillis },
             laps = stopwatch.sumOf { it.count },
+            pomodoros = pomodoros.sumOf { it.count },
+            focusMillis = pomodoros.sumOf { it.amountMillis },
+            pomodoroDays = pomodoros.map { Instant.ofEpochMilli(it.endedAt).atZone(zone).toLocalDate() }.distinct().size,
         )
     }
 

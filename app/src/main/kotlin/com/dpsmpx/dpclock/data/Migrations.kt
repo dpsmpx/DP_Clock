@@ -172,3 +172,19 @@ val MIGRATION_12_13 = SqlMigration(
         "ALTER TABLE `settings` ADD COLUMN `wallpaper` TEXT NOT NULL DEFAULT 'CONSTELLATION'",
     ),
 )
+
+/** 0.14.0 (D-025): сложный повтор, точный пропуск, предупреждения; дата в строке, куранты, помидор. */
+val MIGRATION_13_14 = SqlMigration(
+    13,
+    14,
+    listOf(
+        "ALTER TABLE `alarm` ADD COLUMN `repeatRules` TEXT",
+        "ALTER TABLE `alarm` ADD COLUMN `skipTime` INTEGER",
+        "ALTER TABLE `alarm` ADD COLUMN `warnings` TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE `settings` ADD COLUMN `showAlarmDate` INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE `settings` ADD COLUMN `defaultWarnings` TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE `settings` ADD COLUMN `warningSound` INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE `settings` ADD COLUMN `chimes` TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE `settings` ADD COLUMN `pomodoro` TEXT NOT NULL DEFAULT ''",
+    ),
+)

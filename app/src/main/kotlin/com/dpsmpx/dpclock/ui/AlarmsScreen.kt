@@ -196,6 +196,7 @@ fun AlarmsScreen(
                 snoozedUntil = snoozed[alarm.id],
                 exceptions = exceptions,
                 showCountdown = settings.showAlarmCountdown,
+                showDate = settings.showAlarmDate,
                 now = nowInstant,
                 isSelected = layout.twoPane && alarm.id == editingId,
                 onClick = { editingId = alarm.id },
@@ -613,6 +614,7 @@ private fun AlarmRow(
     snoozedUntil: Long?,
     exceptions: Exceptions,
     showCountdown: Boolean,
+    showDate: Boolean,
     now: Instant,
     isSelected: Boolean,
     onClick: () -> Unit,
@@ -645,15 +647,24 @@ private fun AlarmRow(
                 if (alarm.label.isNotBlank()) {
                     Text(alarm.label, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                // У сменного графика своё время у каждого дня — крупно время ближайшего.
-                val shown = if (alarm.repeat is Repeat.Cycle && next != null) TimeText.time(context, next.toEpochMilli())
+                // У сменного графика и сложного повтора времён несколько — крупно время ближайшего.
+                val several = alarm.repeat is Repeat.Cycle || alarm.repeat is Repeat.Rules
+                val shown = if (several && next != null) TimeText.time(context, next.toEpochMilli())
                 else TimeText.time(context, alarm.hour, alarm.minute)
                 Text(
                     shown,
                     style = MaterialTheme.typography.displaySmall,
                     fontWeight = if (alarm.enabled) FontWeight.Medium else FontWeight.Normal,
                 )
-                Text(repeatText(context, alarm.repeat), style = MaterialTheme.typography.bodyMedium)
+                Text(repeatText(context, alarm.repeat), style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                // Полная дата и время срабатывания (D-025, п. 2).
+                if (showDate && next != null) {
+                    Text(
+                        TimeText.fullDateTime(context, next.toEpochMilli()),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 if (showCountdown && next != null) {
                     val parts = AlarmCountdown.parts(now, next, zone)
                     if (parts.isNotEmpty()) {
@@ -668,7 +679,9 @@ private fun AlarmRow(
                 if (alarm.calendarEventAt != null) Note(stringResource(R.string.calendar_alarm_note))
                 val skipDate = alarm.skipDate
                 if (alarm.enabled && skipDate != null && alarm.repeat.isRepeating) {
-                    Note(stringResource(R.string.skipped_on, TimeText.date(context, skipDate)))
+                    val skipTime = alarm.skipTime
+                    val day = TimeText.date(context, skipDate)
+                    Note(stringResource(R.string.skipped_on, if (skipTime == null) day else day + " " + TimeText.time(context, skipTime.hour, skipTime.minute)))
                 }
                 if (alarm.enabled && alarm.repeat.isRepeating && alarm.honorExceptions) {
                     val plain = AlarmRules.nextTrigger(alarm, now, zone)
@@ -736,6 +749,7 @@ fun repeatText(context: Context, repeat: Repeat): String {
         RepeatKind.DATE -> TimeText.date(context, (repeat as Repeat.OnDate).date)
         RepeatKind.CYCLE -> resources.getString(R.string.repeat_cycle_days, (repeat as Repeat.Cycle).days.size)
         RepeatKind.WORKDAYS -> resources.getString(R.string.repeat_workdays)
+        RepeatKind.RULES -> rulesText(context, repeat as Repeat.Rules)
     }
 }
 

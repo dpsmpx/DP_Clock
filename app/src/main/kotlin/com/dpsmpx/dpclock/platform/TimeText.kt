@@ -6,8 +6,11 @@ import android.icu.text.DecimalFormatSymbols
 import android.icu.util.Calendar
 import android.icu.util.TimeZone
 import com.dpsmpx.dpclock.model.Hms
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Date
 import java.util.Locale
 import android.text.format.DateFormat as SystemTimeFormat
@@ -45,6 +48,13 @@ object TimeText {
         val locale = context.resources.configuration.locales[0]
         val pattern = SystemTimeFormat.getBestDateTimePattern(locale, if (withYear) "EEEdMMMyyyy" else "EEEdMMM")
         return DateTimeFormatter.ofPattern(pattern, locale).format(date)
+    }
+
+    /** Полная дата и время момента (D-025, п. 2): «понедельник, 27 октября 2026 г., 7:00». */
+    fun fullDateTime(context: Context, epochMillis: Long): String {
+        val locale = context.resources.configuration.locales[0]
+        val date = Instant.ofEpochMilli(epochMillis).atZone(ZoneId.systemDefault()).toLocalDate()
+        return DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL).withLocale(locale).format(date) + ", " + time(context, epochMillis)
     }
 
     /** Дата коротко, без дня недели: «27 окт.»; год — если не текущий. */

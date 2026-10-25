@@ -50,7 +50,9 @@ class BackupException(val reason: Reason, message: String, cause: Throwable? = n
  */
 object BackupFormat {
     const val APP = "DP_Clock"
-    const val VERSION = 1
+
+    /** 2 — сложные повторы (D-025): версия до 0.14.0 скажет «файл новее», а не «повреждён». */
+    const val VERSION = 2
     const val MIME = "application/json"
 
     /** Больше файлов DP_Clock не бывает: тысяча будильников — около мегабайта. */
@@ -59,9 +61,11 @@ object BackupFormat {
     fun fileName(date: LocalDate): String = "dp-clock-$date.json"
 
     fun encode(backup: Backup, exportedAt: Instant, appVersion: String): String {
+        // Без сложных повторов файл читают и версии до 0.14.0.
+        val rules = (backup.alarms + backup.templates.flatMap { it.alarms }).any { it.repeat is Repeat.Rules }
         val root = linkedMapOf<String, Any?>(
             "app" to APP,
-            "format" to VERSION,
+            "format" to if (rules) VERSION else 1,
             "appVersion" to appVersion,
             "exportedAt" to exportedAt.toString(),
             "alarms" to backup.alarms.map { alarm(it, blueprint = false) },
@@ -154,7 +158,10 @@ object BackupFormat {
         out["vibrate"] = alarm.vibrate
         out["rampSeconds"] = alarm.rampSeconds
         out["snoozeMinutes"] = alarm.snoozeMinutes
-        if (!blueprint) out["skipDate"] = alarm.skipDate?.toString()
+        if (!blueprint) {
+            out["skipDate"] = alarm.skipDate?.toString()
+            out["skipTime"] = alarm.skipTime?.let { two(it.hour) + ":" + two(it.minute) }
+        }
         out["honorExceptions"] = alarm.honorExceptions
         if (!blueprint) out["groupId"] = alarm.groupId
         out["wakeCheck"] = alarm.wakeCheck.let {
@@ -171,6 +178,7 @@ object BackupFormat {
         out["after"] = alarm.after.let {
             mapOf("presetId" to it.presetId, "reminder" to it.reminder, "reminderMinutes" to it.reminderMinutes, "app" to it.app)
         }
+        out["warnings"] = alarm.warnings
         return out
     }
 
@@ -184,6 +192,7 @@ object BackupFormat {
             "days" to repeat.days.map { time -> time?.let { two(it.hour) + ":" + two(it.minute) } },
         )
         Repeat.Workdays -> mapOf("type" to "workdays")
+        is Repeat.Rules -> mapOf("type" to "rules") + RulesCode.toMap(repeat)
     }
 
     private fun two(value: Int) = value.toString().padStart(2, '0')
@@ -201,10 +210,19 @@ object BackupFormat {
     private fun program(program: TimerProgram): Map<String, Any?> = mapOf(
         "cycles" to program.cycles,
         "sleep" to program.sleep,
+        "hold" to program.hold,
+        "forever" to program.forever,
+        "dnd" to program.dnd,
         "sound" to sound(program.sound),
         "steps" to program.steps.map {
             // Звук шага null — как у программы.
-            mapOf("millis" to it.durationMillis, "name" to it.name, "fullSignal" to it.fullSignal, "sound" to it.sound?.let(::sound))
+            mapOf(
+                "millis" to it.durationMillis,
+                "name" to it.name,
+                "fullSignal" to it.fullSignal,
+                "sound" to it.sound?.let(::sound),
+                "focus" to it.focus,
+            )
         },
     )
 
@@ -213,6 +231,31 @@ object BackupFormat {
         "autoStopMinutes" to settings.autoStopMinutes,
         "alarmOrder" to settings.alarmOrder.name,
         "showAlarmCountdown" to settings.showAlarmCountdown,
+        "showAlarmDate" to settings.showAlarmDate,
+        "defaultWarnings" to settings.defaultWarnings,
+        "warningSound" to settings.warningSound,
+        "chimes" to settings.chimes.let {
+            mapOf(
+                "every" to it.every.name,
+                "vibrate" to it.vibrate,
+                "countHours" to it.countHours,
+                "quiet" to it.quiet,
+                "quietFrom" to two(it.quietFrom.hour) + ":" + two(it.quietFrom.minute),
+                "quietTo" to two(it.quietTo.hour) + ":" + two(it.quietTo.minute),
+                "days" to days(it.days),
+            )
+        },
+        "pomodoro" to settings.pomodoro.let {
+            mapOf(
+                "workMinutes" to it.workMinutes,
+                "shortMinutes" to it.shortMinutes,
+                "longMinutes" to it.longMinutes,
+                "longEvery" to it.longEvery,
+                "sets" to it.sets,
+                "autoAdvance" to it.autoAdvance,
+                "dnd" to it.dnd,
+            )
+        },
         "signalStyle" to settings.signalStyle.name,
         "volumeButtons" to settings.volumeButtons.name,
         "holidaysRu" to settings.holidaysRu,
@@ -267,6 +310,7 @@ object BackupFormat {
             rampSeconds = o.int("rampSeconds", 0),
             snoozeMinutes = o.intOrNull("snoozeMinutes"),
             skipDate = if (blueprint) null else o.stringOrNull("skipDate")?.let(LocalDate::parse),
+            skipTime = if (blueprint) null else o.stringOrNull("skipTime")?.let(LocalTime::parse),
             honorExceptions = o.bool("honorExceptions", true),
             groupId = if (blueprint) null else o.stringOrNull("groupId"),
             wakeCheck = wake?.let {
@@ -288,6 +332,7 @@ object BackupFormat {
                     app = it.string("app", ""),
                 )
             } ?: AfterAlarm(),
+            warnings = Warnings.normalize(o.list("warnings").map { (it as? Long)?.toInt() ?: 0 }),
         )
     }
 
@@ -300,6 +345,7 @@ object BackupFormat {
             o.list("days").map { (it as String?)?.let(LocalTime::parse) },
         )
         "workdays" -> Repeat.Workdays
+        "rules" -> RulesCode.fromMap(o.raw)
         else -> throw BackupException(BackupException.Reason.BROKEN, "повтор «$type»")
     }
 
@@ -314,14 +360,20 @@ object BackupFormat {
         else -> AlarmSound.Default
     }
 
-    private fun program(o: Obj): TimerProgram = TimerProgram(
-        steps = o.objs("steps").map {
-            TimerStep(it.long("millis"), it.string("name", ""), it.bool("fullSignal", true), it.obj("sound")?.let(::sound))
-        },
-        cycles = o.int("cycles", 1).coerceIn(1, TimerProgram.MAX_CYCLES),
-        sound = o.obj("sound")?.let(::sound) ?: AlarmSound.Default,
-        sleep = o.bool("sleep", false),
-    )
+    private fun program(o: Obj): TimerProgram {
+        val forever = o.bool("forever", false)
+        return TimerProgram(
+            steps = o.objs("steps").map {
+                TimerStep(it.long("millis"), it.string("name", ""), it.bool("fullSignal", true), it.obj("sound")?.let(::sound), it.bool("focus", false))
+            },
+            cycles = if (forever) 1 else o.int("cycles", 1).coerceIn(1, TimerProgram.MAX_CYCLES),
+            sound = o.obj("sound")?.let(::sound) ?: AlarmSound.Default,
+            sleep = o.bool("sleep", false),
+            hold = o.bool("hold", false),
+            forever = forever,
+            dnd = o.bool("dnd", false),
+        )
+    }
 
     private fun settings(o: Obj): Settings {
         val defaults = Settings()
@@ -346,6 +398,33 @@ object BackupFormat {
             autoStopMinutes = autoStop,
             alarmOrder = o.enum("alarmOrder", defaults.alarmOrder),
             showAlarmCountdown = o.bool("showAlarmCountdown", defaults.showAlarmCountdown),
+            showAlarmDate = o.bool("showAlarmDate", defaults.showAlarmDate),
+            defaultWarnings = Warnings.normalize(o.list("defaultWarnings").map { (it as? Long)?.toInt() ?: 0 }),
+            warningSound = o.bool("warningSound", defaults.warningSound),
+            chimes = o.obj("chimes")?.let {
+                val base = Chimes()
+                Chimes(
+                    every = it.enum("every", base.every),
+                    vibrate = it.bool("vibrate", base.vibrate),
+                    countHours = it.bool("countHours", base.countHours),
+                    quiet = it.bool("quiet", base.quiet),
+                    quietFrom = it.stringOrNull("quietFrom")?.let(LocalTime::parse) ?: base.quietFrom,
+                    quietTo = it.stringOrNull("quietTo")?.let(LocalTime::parse) ?: base.quietTo,
+                    days = if (it.has("days")) days(it, "days") else base.days,
+                )
+            } ?: defaults.chimes,
+            pomodoro = o.obj("pomodoro")?.let {
+                val base = Pomodoro()
+                Pomodoro(
+                    workMinutes = it.int("workMinutes", base.workMinutes),
+                    shortMinutes = it.int("shortMinutes", base.shortMinutes),
+                    longMinutes = it.int("longMinutes", base.longMinutes),
+                    longEvery = it.int("longEvery", base.longEvery),
+                    sets = it.int("sets", base.sets),
+                    autoAdvance = it.bool("autoAdvance", base.autoAdvance),
+                    dnd = it.bool("dnd", base.dnd),
+                )
+            } ?: defaults.pomodoro,
             signalStyle = o.enum("signalStyle", defaults.signalStyle),
             volumeButtons = o.enum("volumeButtons", defaults.volumeButtons),
             holidaysRu = o.bool("holidaysRu", defaults.holidaysRu),
@@ -409,6 +488,9 @@ object BackupRules {
 
 /** Объект JSON с путём для сообщения об ошибке. */
 private class Obj(private val map: Map<*, *>, private val path: String) {
+    /** Сам объект — для разбора, общего с базой (сложный повтор). */
+    val raw: Map<*, *> get() = map
+
     fun has(key: String): Boolean = map[key] != null
 
     /** Поле есть, хотя бы и null. */

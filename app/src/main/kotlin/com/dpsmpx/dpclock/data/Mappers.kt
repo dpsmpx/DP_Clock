@@ -11,13 +11,16 @@ import com.dpsmpx.dpclock.model.AlarmTemplate
 import com.dpsmpx.dpclock.model.Appearance
 import com.dpsmpx.dpclock.model.Bedtime
 import com.dpsmpx.dpclock.model.BedtimeMode
+import com.dpsmpx.dpclock.model.Chimes
 import com.dpsmpx.dpclock.model.ClockBackground
 import com.dpsmpx.dpclock.model.ClockFont
 import com.dpsmpx.dpclock.model.ClockStyle
 import com.dpsmpx.dpclock.model.ExceptionPeriod
 import com.dpsmpx.dpclock.model.Moment
 import com.dpsmpx.dpclock.model.NoiseKind
+import com.dpsmpx.dpclock.model.Pomodoro
 import com.dpsmpx.dpclock.model.Repeat
+import com.dpsmpx.dpclock.model.RulesCode
 import com.dpsmpx.dpclock.model.Settings
 import com.dpsmpx.dpclock.model.SignalEvent
 import com.dpsmpx.dpclock.model.SignalOutcome
@@ -34,6 +37,7 @@ import com.dpsmpx.dpclock.model.VolumeButtons
 import com.dpsmpx.dpclock.model.WakeCheck
 import com.dpsmpx.dpclock.model.WakeLevel
 import com.dpsmpx.dpclock.model.WakeMethod
+import com.dpsmpx.dpclock.model.Warnings
 import com.dpsmpx.dpclock.model.WeatherMode
 import com.dpsmpx.dpclock.model.WeatherPlace
 import com.dpsmpx.dpclock.model.WeatherSettings
@@ -41,6 +45,7 @@ import com.dpsmpx.dpclock.model.bits
 import com.dpsmpx.dpclock.model.days
 import com.dpsmpx.dpclock.model.isWallpaper
 import java.time.LocalDate
+import java.time.LocalTime
 
 // Строки базы ↔ модель :core:model.
 
@@ -48,7 +53,8 @@ fun AlarmEntity.toModel() = Alarm(
     id = id,
     hour = hour,
     minute = minute,
-    repeat = when {
+    // Испорченная строка правил — однократный: будильник хотя бы виден и правится.
+    repeat = repeatRules?.let { text -> runCatching { RulesCode.decode(text) }.getOrDefault(Repeat.Once) } ?: when {
         workdays -> Repeat.Workdays
         cycleAnchor != null && cycleDays != null -> Repeat.Cycle(LocalDate.ofEpochDay(cycleAnchor), Repeat.Cycle.decodeDays(cycleDays))
         repeatDate != null -> Repeat.OnDate(LocalDate.ofEpochDay(repeatDate))
@@ -62,6 +68,7 @@ fun AlarmEntity.toModel() = Alarm(
     rampSeconds = rampSeconds,
     snoozeMinutes = snoozeMinutes,
     skipDate = skipDate?.let(LocalDate::ofEpochDay),
+    skipTime = skipTime?.takeIf { it in 0 until 24 * 60 }?.let { LocalTime.of(it / 60, it % 60) },
     honorExceptions = honorExceptions,
     groupId = groupId,
     wakeCheck = WakeCheck(
@@ -75,6 +82,7 @@ fun AlarmEntity.toModel() = Alarm(
     gentleMinutes = gentleMinutes.coerceAtLeast(0),
     after = AfterAlarm(afterPresetId, afterReminder, afterReminderMinutes.coerceAtLeast(0), afterApp),
     calendarEventAt = calendarEventAt,
+    warnings = Warnings.decode(warnings),
 )
 
 fun Alarm.toEntity() = AlarmEntity(
@@ -109,6 +117,9 @@ fun Alarm.toEntity() = AlarmEntity(
     afterReminderMinutes = after.reminderMinutes,
     afterApp = after.app,
     calendarEventAt = calendarEventAt,
+    repeatRules = (repeat as? Repeat.Rules)?.let(RulesCode::encode),
+    skipTime = skipTime?.let { it.hour * 60 + it.minute },
+    warnings = Warnings.encode(warnings),
 )
 
 fun GroupEntity.toModel() = AlarmGroup(id, name, createdAt)
@@ -207,6 +218,11 @@ fun SettingsEntity?.toModel(): Settings = if (this == null) Settings() else Sett
         appBackground = enumOr(appBackground, ClockBackground.NONE).takeIf { it == ClockBackground.NONE || it.isWallpaper } ?: ClockBackground.NONE,
         wallpaper = enumOr(wallpaper, ClockBackground.CONSTELLATION).takeIf { it.isWallpaper } ?: ClockBackground.CONSTELLATION,
     ),
+    showAlarmDate = showAlarmDate,
+    defaultWarnings = Warnings.decode(defaultWarnings),
+    warningSound = warningSound,
+    chimes = Chimes.decode(chimes),
+    pomodoro = Pomodoro.decode(pomodoro),
 )
 
 fun Settings.toEntity() = SettingsEntity(
@@ -239,6 +255,11 @@ fun Settings.toEntity() = SettingsEntity(
     nightBackground = appearance.nightBackground.name,
     appBackground = appearance.appBackground.name,
     wallpaper = appearance.wallpaper.name,
+    showAlarmDate = showAlarmDate,
+    defaultWarnings = Warnings.encode(defaultWarnings),
+    warningSound = warningSound,
+    chimes = chimes.encode(),
+    pomodoro = pomodoro.encode(),
 )
 
 /** Неизвестное значение (например, из копии новой версии) — значение по умолчанию. */

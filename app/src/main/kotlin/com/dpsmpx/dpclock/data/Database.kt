@@ -65,6 +65,12 @@ data class AlarmEntity(
     val afterApp: String,
     /** Перед ранним событием календаря (D-023, п. 3): начало события, мс UTC; null — обычный. */
     val calendarEventAt: Long? = null,
+    /** Сложный повтор (D-025, п. 3): RulesCode.encode(); null — повтор в других столбцах. */
+    val repeatRules: String? = null,
+    /** Пропускаемое срабатывание сложного повтора — минута суток в дату skipDate; null — вся дата. */
+    val skipTime: Int? = null,
+    /** Предупреждения до сигнала, минуты через запятую (D-025, п. 5). */
+    val warnings: String = "",
 )
 
 /** Группа будильников (D-014, п. 5). */
@@ -196,6 +202,15 @@ data class SettingsEntity(
     val nightBackground: String = "NONE",
     val appBackground: String = "NONE",
     val wallpaper: String = "CONSTELLATION",
+    /** Полная дата срабатывания в строках будильников (D-025, п. 2). */
+    val showAlarmDate: Boolean = false,
+    /** Предупреждения новых будильников, минуты через запятую; со звуком или тихо (D-025, п. 5). */
+    val defaultWarnings: String = "",
+    val warningSound: Boolean = false,
+    /** Куранты: Chimes.encode(); пусто — выключены (D-025, п. 4). */
+    val chimes: String = "",
+    /** Помидор: Pomodoro.encode(); пусто — классика (D-025, п. 1). */
+    val pomodoro: String = "",
 )
 
 /** Город мировых часов (D-019): пояс tz и место в списке. */
@@ -448,10 +463,10 @@ abstract class ClockDatabase : RoomDatabase() {
         const val NAME = "dpclock.db"
 
         /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
-        const val VERSION = 13
+        const val VERSION = 14
 
         /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
-        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки

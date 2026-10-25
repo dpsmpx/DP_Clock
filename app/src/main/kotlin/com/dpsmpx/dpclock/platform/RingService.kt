@@ -79,6 +79,8 @@ sealed interface RingItem {
         override val sound: RingSound = RingSound(),
         /** Расчётный конец шага, мс UTC; для журнала. */
         val endedAt: Long? = null,
+        /** Таймер ждёт «Дальше» (D-025, п. 1): вместо «+1 мин» — «Дальше». */
+        val waiting: Boolean = false,
     ) : RingItem {
         override val key: String get() = "timer:$runId"
     }
@@ -178,6 +180,7 @@ class RingService : Service() {
                             System.currentTimeMillis(),
                             RingSound(fire.sound),
                             fire.endedAt,
+                            fire.run.isWaiting,
                         ),
                     )
                     StepSignal.SHORT -> Sounds.shortSignal(this, fire.sound)
@@ -193,6 +196,7 @@ class RingService : Service() {
                     System.currentTimeMillis(),
                     RingSound(AlarmSound.decode(intent.getStringExtra(EXTRA_SOUND).orEmpty(), intent.getStringExtra(EXTRA_SOUND_TITLE).orEmpty())),
                     intent.getLongExtra(EXTRA_SCHEDULED_AT, 0L).takeIf { it > 0 },
+                    intent.getBooleanExtra(EXTRA_WAITING, false),
                 ),
             )
             ACTION_SNOOZE -> {
@@ -215,6 +219,12 @@ class RingService : Service() {
             }
             ACTION_TIMER_ADD_MINUTE -> {
                 repository.addMinute(id)
+                silence("timer:$id")
+            }
+            ACTION_TIMER_NEXT -> {
+                val item = Ringing.items.value.firstOrNull { it.key == "timer:$id" } as? RingItem.TimerRing
+                repository.stopTimerSignal(id, SignalOutcome.DISMISSED, item?.endedAt, item?.since)
+                repository.resumeTimer(id)
                 silence("timer:$id")
             }
         }
@@ -351,6 +361,7 @@ class RingService : Service() {
         const val ACTION_DISMISS = "com.dpsmpx.dpclock.ring.DISMISS"
         const val ACTION_TIMER_STOP = "com.dpsmpx.dpclock.ring.TIMER_STOP"
         const val ACTION_TIMER_ADD_MINUTE = "com.dpsmpx.dpclock.ring.TIMER_ADD_MINUTE"
+        const val ACTION_TIMER_NEXT = "com.dpsmpx.dpclock.ring.TIMER_NEXT"
         const val ACTION_RECHECK_OK = "com.dpsmpx.dpclock.ring.RECHECK_OK"
         private const val ACTION_FIRE_GENTLE = "com.dpsmpx.dpclock.ring.FIRE_GENTLE"
         const val ACTION_GENTLE_CLOSE = "com.dpsmpx.dpclock.ring.GENTLE_CLOSE"
@@ -368,6 +379,7 @@ class RingService : Service() {
         private const val EXTRA_NAME = "name"
         private const val EXTRA_FINISHED = "finished"
         private const val EXTRA_SOUND = "sound"
+        private const val EXTRA_WAITING = "waiting"
         private const val EXTRA_SOUND_TITLE = "soundTitle"
 
         fun fireAlarm(context: Context, alarmId: String, scheduledAt: Long) = startForeground(
@@ -383,11 +395,12 @@ class RingService : Service() {
         fun fireTimer(context: Context, runId: String) =
             startForeground(context, intent(context, ACTION_FIRE_TIMER, runId))
 
-        fun ringTimer(context: Context, runId: String, name: String, finished: Boolean, sound: AlarmSound, endedAt: Long?) = startForeground(
+        fun ringTimer(context: Context, runId: String, name: String, finished: Boolean, sound: AlarmSound, endedAt: Long?, waiting: Boolean) = startForeground(
             context,
             intent(context, ACTION_RING_TIMER, runId)
                 .putExtra(EXTRA_NAME, name)
                 .putExtra(EXTRA_FINISHED, finished)
+                .putExtra(EXTRA_WAITING, waiting)
                 .putExtra(EXTRA_SOUND, sound.encode())
                 .putExtra(EXTRA_SOUND_TITLE, sound.title)
                 .putExtra(EXTRA_SCHEDULED_AT, endedAt ?: 0L),

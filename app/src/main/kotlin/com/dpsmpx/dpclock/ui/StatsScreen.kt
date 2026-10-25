@@ -264,7 +264,7 @@ private fun SleepCard(stats: SleepStats) {
 private fun TimersCard(stats: TimerStats) {
     val resources = LocalResources.current
     StatsCard(R.string.stats_timers) {
-        if (stats.count == 0 && stats.sleepTimers == 0 && stats.stopwatchSessions == 0) {
+        if (stats.count == 0 && stats.sleepTimers == 0 && stats.stopwatchSessions == 0 && stats.pomodoros == 0) {
             Empty(R.string.stats_timers_empty)
             return@StatsCard
         }
@@ -273,6 +273,17 @@ private fun TimersCard(stats: TimerStats) {
             for (use in stats.top) {
                 Line(stringResource(R.string.stats_timer_use, use.title.ifBlank { stringResource(R.string.timer_default_name) }, use.count))
             }
+        }
+        // Помидоры (D-025, п. 1): сколько, сколько работы, в скольких днях.
+        if (stats.pomodoros > 0) {
+            Line(
+                stringResource(
+                    R.string.stats_pomodoros,
+                    stats.pomodoros,
+                    durationText(resources, stats.focusMillis),
+                    resources.getQuantityString(R.plurals.stats_days, stats.pomodoroDays, stats.pomodoroDays),
+                ),
+            )
         }
         if (stats.sleepTimers > 0) Line(stringResource(R.string.stats_sleep_timers, stats.sleepTimers))
         if (stats.stopwatchSessions > 0) {

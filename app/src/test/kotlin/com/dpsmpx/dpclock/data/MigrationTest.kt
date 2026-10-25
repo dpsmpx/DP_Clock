@@ -329,6 +329,39 @@ class MigrationTest {
         assertEquals("CONSTELLATION", settings["wallpaper"])
     }
 
+    @Test
+    fun migration13To14KeepsAlarmsAndAddsEmptyRulesAndWarnings() = withDb { db ->
+        SchemaFile.read(13).create(db)
+        db.execSQL(
+            "INSERT INTO alarm (id, hour, minute, repeatDays, enabled, createdAt, label, sound, soundTitle, vibrate, rampSeconds, " +
+                "snoozeMinutes, skipDate, repeatDate, honorExceptions, groupId, cycleAnchor, cycleDays, workdays, wakeMethod, wakeLevel, " +
+                "wakeTasks, wakeReference, wakeSnooze, recheckMinutes, gentleMinutes, afterPresetId, afterReminder, afterReminderMinutes, " +
+                "afterApp, calendarEventAt) VALUES ('a', 7, 30, 31, 1, 5, 'Подъём', 'default', '', 1, 0, NULL, 20750, NULL, 1, NULL, " +
+                "NULL, NULL, 0, 'NONE', 'MEDIUM', 1, '', 1, 0, 0, NULL, '', 0, '', NULL)",
+        )
+        db.execSQL(
+            "INSERT INTO settings (id, snoozeMinutes, autoStopMinutes, alarmOrder, xiaomiHintsDone, signalStyle, volumeButtons, holidaysRu, " +
+                "bedtimeMode, sleepMinutes, bedtimeHour, bedtimeMinute, bedtimeDays, bedtimeLeadMinutes, weatherMode, weatherPlace, " +
+                "theme, seedColor, clockStyle, clockFont, clockSize, nightNoise, background, highContrast, showAlarmCountdown, " +
+                "nightBackground, appBackground, wallpaper) VALUES (0, 10, 10, 'TIME_OF_DAY', 0, 'FULL_SCREEN', 'SNOOZE', 0, 'OFF', 480, " +
+                "23, 0, 127, 15, 'NOT_SET', '', 'DARK', NULL, 'CIRCLE', 'REGULAR', 100, 'NONE', 'NONE', 0, 1, 'NONE', 'HYPERCUBE', 'MECHANISM')",
+        )
+        MIGRATION_13_14.migrate(db)
+
+        val alarm = row(db, "SELECT * FROM alarm")
+        assertEquals("Подъём", alarm["label"])
+        assertEquals("20750", alarm["skipDate"])
+        assertEquals(null, alarm["repeatRules"])
+        assertEquals(null, alarm["skipTime"])
+        assertEquals("", alarm["warnings"])
+        val settings = row(db, "SELECT * FROM settings")
+        assertEquals("HYPERCUBE", settings["appBackground"])
+        assertEquals("0", settings["showAlarmDate"])
+        assertEquals("", settings["defaultWarnings"])
+        assertEquals("", settings["chimes"])
+        assertEquals("", settings["pomodoro"])
+    }
+
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)
 
     private data class Table(val columns: Map<String, Column>, val indices: Set<String>, val foreignKeys: Set<String>)

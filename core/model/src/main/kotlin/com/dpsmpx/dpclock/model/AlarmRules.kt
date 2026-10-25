@@ -12,14 +12,17 @@ object AlarmRules {
     /** Опоздание больше этого — не звонить задним числом, показать пропуск. */
     const val MISSED_AFTER_MILLIS: Long = 10 * 60_000L
 
-    /** Дальше этого срабатывание не ищется: пропуски и исключения не закрывают годы. */
-    private const val SEARCH_DAYS = 800L
+    /**
+     * Дальше этого срабатывание не ищется: пропуски и исключения не закрывают годы.
+     * Четыре года — правило «каждый год 29 февраля» (D-025, п. 3).
+     */
+    private const val SEARCH_DAYS = 1500L
 
     /**
      * Следующее срабатывание: первая подходящая дата, у которой время строго
-     * позже [after], в поясе [zone]; дата [skipDate] и даты [exceptions]
-     * пропускаются. null — больше не сработает (дата будильника прошла,
-     * исключения закрыли все даты).
+     * позже [after], в поясе [zone]; дата [skipDate] (при [skipTime] — только это
+     * срабатывание в неё) и даты [exceptions] пропускаются. null — больше не
+     * сработает (дата будильника прошла, исключения закрыли все даты).
      *
      * - Время пропущено переходом на летнее — сигнал в первый существующий момент после пропуска.
      * - Время наступает дважды переходом на зимнее — один сигнал, в первое наступление.
@@ -32,6 +35,7 @@ object AlarmRules {
         zone: ZoneId,
         skipDate: LocalDate? = null,
         exceptions: Exceptions = Exceptions.NONE,
+        skipTime: LocalTime? = null,
     ): Instant? {
         val time = LocalTime.of(hour, minute)
         val start = after.atZone(zone).toLocalDate()
@@ -41,10 +45,13 @@ object AlarmRules {
         }
         for (offset in 0L..SEARCH_DAYS) {
             val date = start.plusDays(offset)
-            val at = repeat.timeOn(date, time) ?: continue
-            if (date == skipDate || exceptions.excludes(date)) continue
-            val candidate = resolve(LocalDateTime.of(date, at), zone)
-            if (candidate.isAfter(after)) return candidate
+            if (exceptions.excludes(date)) continue
+            val times = repeat.timesOn(date, time)
+            for (at in times) {
+                if (date == skipDate && (skipTime == null || at == skipTime)) continue
+                val candidate = resolve(LocalDateTime.of(date, at), zone)
+                if (candidate.isAfter(after)) return candidate
+            }
         }
         return null
     }
@@ -63,12 +70,28 @@ object AlarmRules {
             zone,
             skipDate = alarm.skipDate.takeIf { repeating },
             exceptions = if (repeating && alarm.honorExceptions) exceptions else Exceptions.NONE,
+            skipTime = alarm.skipTime.takeIf { repeating },
         )
     }
 
     /** Ближайшее срабатывание без учёта пропуска — его дата и становится пропущенной (D-013, п. 3). */
     fun nextIgnoringSkip(alarm: Alarm, after: Instant, zone: ZoneId, exceptions: Exceptions = Exceptions.NONE): Instant? =
-        nextTrigger(alarm.copy(skipDate = null), after, zone, exceptions)
+        nextTrigger(alarm.copy(skipDate = null, skipTime = null), after, zone, exceptions)
+
+    /**
+     * Будильник с пропуском срабатывания [at]: дата, а у сложного повтора, где в
+     * день бывает несколько срабатываний, — и время (D-025, п. 3).
+     */
+    fun skipping(alarm: Alarm, at: Instant, zone: ZoneId): Alarm {
+        val local = at.atZone(zone)
+        return alarm.copy(skipDate = local.toLocalDate(), skipTime = if (alarm.repeat is Repeat.Rules) local.toLocalTime().withSecond(0).withNano(0) else null)
+    }
+
+    /** Срабатывание [at] пропускается — для плитки «Ближайший будильник» (D-020). */
+    fun isSkipped(alarm: Alarm, at: Instant, zone: ZoneId): Boolean {
+        val local = at.atZone(zone)
+        return alarm.skipDate == local.toLocalDate() && (alarm.skipTime == null || alarm.skipTime == local.toLocalTime().withSecond(0).withNano(0))
+    }
 
     /** Несколько ближайших срабатываний — для предпросмотра графика. */
     fun upcoming(alarm: Alarm, after: Instant, zone: ZoneId, exceptions: Exceptions, count: Int): List<Instant> = buildList {
@@ -125,6 +148,16 @@ object AlarmRules {
     /** Пропуск устарел: его дата уже прошла, больше он ничего не пропустит. */
     fun isSkipStale(alarm: Alarm, now: Instant, zone: ZoneId): Boolean =
         alarm.skipDate != null && alarm.skipDate.isBefore(now.atZone(zone).toLocalDate())
+
+    /** У сложного повтора и сменного графика время будильника — самое раннее: по нему сортируется список. */
+    fun normalized(alarm: Alarm): Alarm {
+        val time = when (val repeat = alarm.repeat) {
+            is Repeat.Cycle -> repeat.firstTime
+            is Repeat.Rules -> repeat.firstTime
+            else -> return alarm
+        }
+        return alarm.copy(hour = time.hour, minute = time.minute)
+    }
 }
 
 /** Промежуток до момента — для строк «через 7 ч 20 мин». Минуты округляются вверх. */

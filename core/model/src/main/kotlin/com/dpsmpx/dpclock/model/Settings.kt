@@ -6,6 +6,8 @@ data class Settings(
     /** Через сколько минут сигнал стихает сам; null — никогда. */
     val autoStopMinutes: Int? = DEFAULT_AUTO_STOP,
     val alarmOrder: AlarmOrder = AlarmOrder.TIME_OF_DAY,
+    /** Показывать в строке включённых будильников время до следующего срабатывания. */
+    val showAlarmCountdown: Boolean = false,
     /** Человек отметил, что настроил автозапуск и батарею на Xiaomi (SCREEN_MAP.md, п. 10). */
     val xiaomiHintsDone: Boolean = false,
     val signalStyle: SignalStyle = SignalStyle.FULL_SCREEN,

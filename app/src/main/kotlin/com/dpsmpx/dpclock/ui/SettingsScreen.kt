@@ -144,6 +144,14 @@ fun SettingsScreen(onBack: () -> Unit) {
                     supportingContent = { Text(stringResource(orderTitle(settings.alarmOrder))) },
                     modifier = Modifier.clickable { dialog = "order" },
                 )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.alarm_countdown)) },
+                    supportingContent = { Text(stringResource(R.string.alarm_countdown_text)) },
+                    trailingContent = { Switch(checked = settings.showAlarmCountdown, onCheckedChange = null) },
+                    modifier = Modifier.toggleable(value = settings.showAlarmCountdown, role = Role.Switch) { show ->
+                        update { it.copy(showAlarmCountdown = show) }
+                    },
+                )
             },
             SettingsSection(R.string.settings_calendar) {
                 ListItem(

@@ -71,6 +71,18 @@ class Scheduler(private val context: Context) {
         ),
     )
 
+    /**
+     * Перечитать календарь телефона в [at] (D-023, п. 4): ближайшее событие началось
+     * или наступила полночь. Не будит телефон — виджет обновится, когда экран включат.
+     */
+    fun setCalendarRefresh(at: Long) = alarmManager.set(AlarmManager.RTC, at, calendarIntent())
+
+    fun cancelCalendarRefresh() = alarmManager.cancel(calendarIntent())
+
+    private fun calendarIntent(): PendingIntent = broadcast(
+        Intent(context, AlarmReceiver::class.java).setAction(AlarmReceiver.ACTION_CALENDAR).setData("dpclock://calendar".toUri()),
+    )
+
     private fun setExact(at: Long, operation: PendingIntent) {
         if (canScheduleExact()) {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, operation)

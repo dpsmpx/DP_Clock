@@ -135,3 +135,10 @@ val MIGRATION_8_9 = SqlMigration(
     9,
     listOf("ALTER TABLE `settings` ADD COLUMN `highContrast` INTEGER NOT NULL DEFAULT 0"),
 )
+
+/** 0.12.0 (D-023, п. 3): будильник перед ранним событием календаря. */
+val MIGRATION_9_10 = SqlMigration(
+    9,
+    10,
+    listOf("ALTER TABLE `alarm` ADD COLUMN `calendarEventAt` INTEGER"),
+)

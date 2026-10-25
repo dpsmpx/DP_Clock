@@ -63,6 +63,8 @@ data class AlarmEntity(
     val afterReminder: String,
     val afterReminderMinutes: Int,
     val afterApp: String,
+    /** Перед ранним событием календаря (D-023, п. 3): начало события, мс UTC; null — обычный. */
+    val calendarEventAt: Long? = null,
 )
 
 /** Группа будильников (D-014, п. 5). */
@@ -420,10 +422,10 @@ abstract class ClockDatabase : RoomDatabase() {
         const val NAME = "dpclock.db"
 
         /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
-        const val VERSION = 9
+        const val VERSION = 10
 
         /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
-        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки

@@ -21,6 +21,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Погода по геолокации (D-019): приблизительное место, спрашивается, только когда выбран такой способ. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Календарь телефона (D-023): только чтение, спрашивается, когда выбирают календари. События не покидают телефон. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!-- Без камеры приложение ставится: остаются другие способы проверки. -->
     <uses-feature
         android:name="android.hardware.camera"
@@ -115,6 +117,12 @@
             android:directBootAware="true"
             android:exported="false"
             android:foregroundServiceType="systemExempted" />
+
+        <!-- Календарь телефона изменился или прошло полдня — перечитать (D-023, п. 6). -->
+        <service
+            android:name=".platform.CalendarJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <!-- Виджеты (D-020). -->
         <receiver

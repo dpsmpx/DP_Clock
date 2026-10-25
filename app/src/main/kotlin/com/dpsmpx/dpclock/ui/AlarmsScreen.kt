@@ -647,6 +647,8 @@ private fun AlarmRow(
                     fontWeight = if (alarm.enabled) FontWeight.Medium else FontWeight.Normal,
                 )
                 Text(repeatText(context, alarm.repeat), style = MaterialTheme.typography.bodyMedium)
+                // Поставил календарь (D-023, п. 3): изменить — станет обычным, удалить — в этот день не вернётся.
+                if (alarm.calendarEventAt != null) Note(stringResource(R.string.calendar_alarm_note))
                 val skipDate = alarm.skipDate
                 if (alarm.enabled && skipDate != null && alarm.repeat.isRepeating) {
                     Note(stringResource(R.string.skipped_on, TimeText.date(context, skipDate)))

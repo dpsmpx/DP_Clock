@@ -18,6 +18,7 @@ import com.dpsmpx.dpclock.model.AlarmRules
 import com.dpsmpx.dpclock.model.TimerState
 import com.dpsmpx.dpclock.model.WeatherMode
 import com.dpsmpx.dpclock.model.WorldClockRules
+import com.dpsmpx.dpclock.ui.eventText
 import com.dpsmpx.dpclock.ui.offsetText
 import com.dpsmpx.dpclock.ui.repeatText
 import com.dpsmpx.dpclock.ui.temperatureText
@@ -118,6 +119,10 @@ object Widgets {
     private fun clock(context: Context, data: SurfaceData): RemoteViews =
         RemoteViews(context.packageName, R.layout.widget_clock).apply {
             setTextViewText(R.id.widget_alarm, nextAlarmText(context, data) ?: context.getString(R.string.widget_no_alarms))
+            // Ближайшее событие календаря (D-023, п. 4): начнётся — CalendarSync перерисует виджет.
+            val event = PhoneCalendar.nextEvent(context)
+            setViewVisibility(R.id.widget_event, if (event == null) View.GONE else View.VISIBLE)
+            if (event != null) setTextViewText(R.id.widget_event, eventText(context, event))
             setOnClickPendingIntent(android.R.id.background, open(context, Section.CLOCK))
             setOnClickPendingIntent(R.id.widget_alarm, open(context, Section.ALARMS))
         }

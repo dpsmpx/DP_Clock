@@ -71,6 +71,7 @@ fun AlarmEntity.toModel() = Alarm(
     ),
     gentleMinutes = gentleMinutes.coerceAtLeast(0),
     after = AfterAlarm(afterPresetId, afterReminder, afterReminderMinutes.coerceAtLeast(0), afterApp),
+    calendarEventAt = calendarEventAt,
 )
 
 fun Alarm.toEntity() = AlarmEntity(
@@ -104,6 +105,7 @@ fun Alarm.toEntity() = AlarmEntity(
     afterReminder = after.reminder,
     afterReminderMinutes = after.reminderMinutes,
     afterApp = after.app,
+    calendarEventAt = calendarEventAt,
 )
 
 fun GroupEntity.toModel() = AlarmGroup(id, name, createdAt)

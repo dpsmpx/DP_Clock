@@ -533,4 +533,33 @@
     <string name="high_contrast_text">Текст и границы темнее. Включается и настройкой контраста Android 14 и новее</string>
     <string name="appearance_color_number">Цвет %1$d</string>
     <string name="appearance_hue_value">%1$d°</string>
+
+    <!-- Календарь телефона (D-023) -->
+    <string name="settings_calendar">Календарь телефона</string>
+    <string name="calendar_exceptions">Исключения из календаря</string>
+    <string name="calendar_exceptions_none">Не выбраны. В дни событий этих календарей молчат будильники, которые не звонят в исключения: праздники, отпуск</string>
+    <string name="calendar_events">Календари событий</string>
+    <string name="calendar_events_none">Не выбраны. Работа, личное: для раннего будильника, ближайшего события и подсказки в редакторе</string>
+    <string name="calendar_early">Будить перед ранним событием</string>
+    <string name="calendar_early_off">Выключено</string>
+    <string name="calendar_early_value">За %1$s до событий, которые начинаются до %2$s</string>
+    <string name="calendar_show_next">Ближайшее событие в часах</string>
+    <string name="calendar_show_next_text">В «Часах», ночных часах и виджете часов</string>
+    <string name="calendar_no_access">Нет доступа к календарю</string>
+    <string name="calendar_no_access_text">Исключения и события не читаются. Разрешите календарь в настройках приложения</string>
+    <string name="calendar_none_found">На телефоне нет календарей</string>
+    <string name="calendar_selected_count">Выбрано: %1$d</string>
+    <string name="calendar_all_day">Весь день</string>
+    <string name="calendar_untitled">Без названия</string>
+    <string name="calendar_event_line">%1$s · %2$s</string>
+    <string name="calendar_event_hidden">Событие в %1$s</string>
+    <string name="calendar_that_day">В этот день в календаре: %1$s</string>
+    <plurals name="calendar_more">
+        <item quantity="one">и ещё %1$d событие</item>
+        <item quantity="few">и ещё %1$d события</item>
+        <item quantity="many">и ещё %1$d событий</item>
+        <item quantity="other">и ещё %1$d события</item>
+    </plurals>
+    <string name="calendar_alarm_label">Перед событием в %1$s</string>
+    <string name="calendar_alarm_note">Поставил календарь телефона</string>
 </resources>

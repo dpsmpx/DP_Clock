@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.model.AlarmOrder
 import com.dpsmpx.dpclock.model.Settings
 import com.dpsmpx.dpclock.platform.Appearances
+import com.dpsmpx.dpclock.platform.CalendarSync
 import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.ui.AlarmsDialog
 import com.dpsmpx.dpclock.ui.AlarmsMenu
@@ -83,6 +84,9 @@ class MainActivity : ComponentActivity() {
         // При запуске — пересчитать расписания: после принудительной остановки
         // Android 15 отменяет будильники (D-008, п. 6).
         persistLater { DpClockApp.graph(this).repository.rescheduleAll() }
+        // Календарь телефона мог измениться, пока приложение не работало (D-023, п. 6).
+        val appContext = applicationContext
+        persistLater { CalendarSync.refresh(appContext) }
         // Тема из базы — и после восстановления на новом телефоне, где ночной режим приложения ещё не задан (D-021, п. 2).
         if (savedInstanceState == null) {
             val app = applicationContext

@@ -63,11 +63,13 @@ import com.dpsmpx.dpclock.model.ClockStyle
 import com.dpsmpx.dpclock.model.NoiseKind
 import com.dpsmpx.dpclock.model.ThemeMode
 import com.dpsmpx.dpclock.model.Bedtime
+import com.dpsmpx.dpclock.model.CalendarSettings
 import com.dpsmpx.dpclock.model.BedtimeMode
 import com.dpsmpx.dpclock.model.Settings
 import com.dpsmpx.dpclock.model.SignalStyle
 import com.dpsmpx.dpclock.model.VolumeButtons
 import com.dpsmpx.dpclock.persistLater
+import com.dpsmpx.dpclock.platform.CalendarSync
 import com.dpsmpx.dpclock.platform.TimeText
 import kotlinx.coroutines.launch
 import java.time.format.TextStyle
@@ -86,6 +88,17 @@ fun SettingsScreen(onBack: () -> Unit) {
     val snackbar = remember { SnackbarHostState() }
     val backup = rememberBackupActions(snackbar)
     val weatherChoice = rememberWeatherChoice()
+    val calendarStore = DpClockApp.graph(context).calendar
+    val calendarSettings by calendarStore.settings.collectAsStateWithLifecycle()
+    val calendarAccess = rememberCalendarAccess()
+    val phoneCalendars = rememberPhoneCalendars(calendarAccess.granted)
+
+    /** Календарь телефона (D-023): настройки — в хранилище устройства, потом перечитать календарь. */
+    fun updateCalendar(change: (CalendarSettings) -> CalendarSettings) {
+        calendarStore.update(change)
+        val app = context.applicationContext
+        persistLater { CalendarSync.refresh(app) }
+    }
 
     fun update(change: (Settings) -> Settings) = persistLater { repository.updateSettings(change) }
 
@@ -131,6 +144,45 @@ fun SettingsScreen(onBack: () -> Unit) {
                     supportingContent = { Text(stringResource(orderTitle(settings.alarmOrder))) },
                     modifier = Modifier.clickable { dialog = "order" },
                 )
+            },
+            SettingsSection(R.string.settings_calendar) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.calendar_exceptions)) },
+                    supportingContent = {
+                        Text(calendarNames(calendarSettings.exceptionCalendars, phoneCalendars, stringResource(R.string.calendar_exceptions_none)))
+                    },
+                    modifier = Modifier.clickable { calendarAccess.request { dialog = "calendarExceptions" } },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.calendar_events)) },
+                    supportingContent = {
+                        Text(calendarNames(calendarSettings.eventCalendars, phoneCalendars, stringResource(R.string.calendar_events_none)))
+                    },
+                    modifier = Modifier.clickable { calendarAccess.request { dialog = "calendarEvents" } },
+                )
+                if (calendarSettings.eventCalendars.isNotEmpty()) {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.calendar_early)) },
+                        supportingContent = { Text(earlyLeadText(calendarSettings.earlyLeadMinutes)) },
+                        modifier = Modifier.clickable { dialog = "calendarLead" },
+                    )
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.calendar_show_next)) },
+                        supportingContent = { Text(stringResource(R.string.calendar_show_next_text)) },
+                        trailingContent = { Switch(checked = calendarSettings.showNext, onCheckedChange = null) },
+                        modifier = Modifier.toggleable(value = calendarSettings.showNext, role = Role.Switch) { on ->
+                            updateCalendar { it.copy(showNext = on) }
+                        },
+                    )
+                }
+                // Доступ отняли в настройках Android — исключения и события не читаются.
+                if (calendarSettings.isEnabled && !calendarAccess.granted) {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.calendar_no_access)) },
+                        supportingContent = { Text(stringResource(R.string.calendar_no_access_text)) },
+                        trailingContent = { TextButton(onClick = { context.openAppSettings() }) { Text(stringResource(R.string.fix)) } },
+                    )
+                }
             },
             SettingsSection(R.string.settings_signal) {
                 ListItem(
@@ -388,6 +440,34 @@ fun SettingsScreen(onBack: () -> Unit) {
             },
         )
         "journal" -> JournalDialog(onDismiss = { dialog = null })
+        "calendarExceptions" -> CalendarChooserDialog(
+            title = stringResource(R.string.calendar_exceptions),
+            calendars = phoneCalendars,
+            selected = calendarSettings.exceptionCalendars,
+            onDismiss = { dialog = null },
+            onSave = { ids ->
+                dialog = null
+                updateCalendar { it.copy(exceptionCalendars = ids) }
+            },
+        )
+        "calendarEvents" -> CalendarChooserDialog(
+            title = stringResource(R.string.calendar_events),
+            calendars = phoneCalendars,
+            selected = calendarSettings.eventCalendars,
+            onDismiss = { dialog = null },
+            onSave = { ids ->
+                dialog = null
+                updateCalendar { it.copy(eventCalendars = ids) }
+            },
+        )
+        "calendarLead" -> ChoiceDialog(
+            title = stringResource(R.string.calendar_early),
+            choices = CalendarSettings.LEAD_CHOICES,
+            selected = calendarSettings.earlyLeadMinutes,
+            label = { earlyLeadText(it) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> updateCalendar { it.copy(earlyLeadMinutes = value) } },
+        )
         "theme" -> ChoiceDialog(
             title = stringResource(R.string.appearance_theme),
             choices = ThemeMode.entries,
@@ -489,6 +569,19 @@ private fun PermissionRow(issue: Issue, granted: Boolean) {
         },
     )
 }
+
+/** «За 1 ч 30 мин до событий до 12:00» или «Выключено». */
+@Composable
+private fun earlyLeadText(minutes: Int): String =
+    if (minutes == 0) {
+        stringResource(R.string.calendar_early_off)
+    } else {
+        stringResource(
+            R.string.calendar_early_value,
+            durationText(LocalResources.current, minutes * 60_000L),
+            TimeText.time(LocalContext.current, CalendarSettings.EARLY_BEFORE.hour, CalendarSettings.EARLY_BEFORE.minute),
+        )
+    }
 
 @Composable
 private fun autoStopText(minutes: Int?): String =

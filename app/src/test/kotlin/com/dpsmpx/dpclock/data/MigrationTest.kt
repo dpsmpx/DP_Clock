@@ -253,6 +253,23 @@ class MigrationTest {
         assertEquals("0", settings["highContrast"])
     }
 
+    @Test
+    fun migration9To10KeepsAlarmsAsOrdinary() = withDb { db ->
+        SchemaFile.read(9).create(db)
+        db.execSQL(
+            "INSERT INTO alarm (id, hour, minute, repeatDays, enabled, createdAt, label, sound, soundTitle, vibrate, rampSeconds, " +
+                "honorExceptions, workdays, wakeMethod, wakeLevel, wakeTasks, wakeReference, wakeSnooze, recheckMinutes, " +
+                "gentleMinutes, afterReminder, afterReminderMinutes, afterApp) " +
+                "VALUES ('a', 6, 30, 31, 1, 1, 'Подъём', '', '', 1, 0, 1, 0, 'NONE', 'MEDIUM', 1, '', 1, 0, 0, '', 0, '')",
+        )
+        MIGRATION_9_10.migrate(db)
+
+        val alarm = row(db, "SELECT * FROM alarm")
+        assertEquals("Подъём", alarm["label"])
+        assertEquals("31", alarm["repeatDays"])
+        assertEquals(null, alarm["calendarEventAt"])
+    }
+
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)
 
     private data class Table(val columns: Map<String, Column>, val indices: Set<String>, val foreignKeys: Set<String>)

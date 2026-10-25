@@ -28,6 +28,10 @@ class AlarmReceiver : BroadcastReceiver() {
                 DpClockApp.graph(context).notifier.reminder(intent.getStringExtra(EXTRA_ID).orEmpty(), intent.getStringExtra(EXTRA_TEXT).orEmpty())
                 return
             }
+            ACTION_CALENDAR -> {
+                runAsync { CalendarSync.run(context) }
+                return
+            }
         }
         val id = intent.getStringExtra(EXTRA_ID) ?: return
         when (intent.action) {
@@ -59,6 +63,7 @@ class AlarmReceiver : BroadcastReceiver() {
         const val ACTION_GENTLE = "com.dpsmpx.dpclock.action.GENTLE"
         const val ACTION_BEDTIME = "com.dpsmpx.dpclock.action.BEDTIME"
         const val ACTION_REMINDER = "com.dpsmpx.dpclock.action.REMINDER"
+        const val ACTION_CALENDAR = "com.dpsmpx.dpclock.action.CALENDAR"
         const val EXTRA_ALARM_AT = "alarmAt"
         const val EXTRA_BED_AT = "bedAt"
         const val EXTRA_TEXT = "text"
@@ -71,18 +76,24 @@ class AlarmReceiver : BroadcastReceiver() {
 /**
  * События системы, после которых расписания пересчитываются (D-008, п. 5):
  * загрузка (и до разблокировки), смена времени и пояса, обновление
- * приложения, выдача разрешения на точные будильники.
+ * приложения, выдача разрешения на точные будильники. После разблокировки —
+ * и календарь телефона (D-023, п. 6): до неё он недоступен, будильники идут по
+ * сохранённым датам.
  */
 class SystemEventsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_LOCKED_BOOT_COMPLETED,
+            android.app.AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED,
+            -> runAsync { DpClockApp.graph(context).repository.rescheduleAll() }
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_TIME_CHANGED,
             Intent.ACTION_TIMEZONE_CHANGED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
-            android.app.AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED,
-            -> runAsync { DpClockApp.graph(context).repository.rescheduleAll() }
+            -> runAsync {
+                DpClockApp.graph(context).repository.rescheduleAll()
+                CalendarSync.refresh(context)
+            }
         }
     }
 }

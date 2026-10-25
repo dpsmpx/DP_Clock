@@ -83,6 +83,9 @@ import java.time.format.TextStyle
 
 private const val DAY_MILLIS = 86_400_000L
 
+/** Сколько событий дня показать в редакторе. */
+private const val DAY_EVENTS_SHOWN = 3
+
 /** Время подъёма перед ночной сменой по умолчанию — правится в редакторе. */
 private val NIGHT_DEFAULT: LocalTime = LocalTime.of(17, 0)
 
@@ -286,6 +289,17 @@ fun AlarmEditor(
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                // В день ближайшего срабатывания — события календаря (D-023, п. 5): видно, что вставать раньше.
+                val dayEvents = rememberDayEvents(next?.atZone(zone)?.toLocalDate())
+                if (dayEvents.isNotEmpty()) {
+                    val shown = dayEvents.take(DAY_EVENTS_SHOWN).joinToString(" · ") { eventText(context, it) }
+                    val more = dayEvents.size - DAY_EVENTS_SHOWN
+                    Text(
+                        stringResource(R.string.calendar_that_day, shown) + if (more > 0) " " + pluralStringResource(R.plurals.calendar_more, more, more) else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
                     )
                 }
 

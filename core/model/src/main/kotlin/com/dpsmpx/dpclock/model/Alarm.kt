@@ -37,6 +37,11 @@ data class Alarm(
     val gentleMinutes: Int = 0,
     /** Что сделать после выключения (D-017, п. 5). */
     val after: AfterAlarm = AfterAlarm(),
+    /**
+     * Поставлен перед ранним событием календаря (D-023, п. 3): начало события, мс UTC;
+     * null — обычный будильник. Такие будильники ставит и убирает календарь.
+     */
+    val calendarEventAt: Long? = null,
 ) {
     init {
         require(hour in 0..23) { "час $hour" }

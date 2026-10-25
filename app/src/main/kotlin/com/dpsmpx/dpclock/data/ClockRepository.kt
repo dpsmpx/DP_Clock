@@ -8,6 +8,9 @@ import com.dpsmpx.dpclock.model.AlarmSound
 import com.dpsmpx.dpclock.model.AlarmTemplate
 import com.dpsmpx.dpclock.model.Backup
 import com.dpsmpx.dpclock.model.BackupRules
+import com.dpsmpx.dpclock.model.CalendarInstance
+import com.dpsmpx.dpclock.model.CalendarRules
+import com.dpsmpx.dpclock.model.CalendarWake
 import com.dpsmpx.dpclock.model.ExceptionPeriod
 import com.dpsmpx.dpclock.model.Exceptions
 import com.dpsmpx.dpclock.model.Repeat
@@ -37,6 +40,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
 
@@ -82,6 +86,8 @@ class ClockRepository(
     db: ClockDatabase,
     private val scheduler: Scheduler,
     private val notifier: Notifier,
+    /** Календарь телефона (D-023): даты исключений и отменённые будильники перед событиями. */
+    private val calendar: CalendarStore,
     /** Данные изменились — виджеты и плитки обновляются (D-020). */
     private val onChanged: () -> Unit = {},
 ) {
@@ -107,9 +113,9 @@ class ClockRepository(
     /** Журнал срабатываний, новые сверху. */
     val events: Flow<List<SignalEvent>> = dao.events().map { list -> list.map { it.toModel() } }
 
-    /** Общий список исключений: свои периоды и праздники, если включены (D-014, п. 4). */
-    val exceptions: Flow<Exceptions> = combine(dao.exceptionsFlow(), settings) { periods, settings ->
-        Exceptions(periods.map { it.toModel() }, settings.holidaysRu)
+    /** Общий список исключений: свои периоды, праздники, если включены (D-014, п. 4), и дни календаря телефона (D-023). */
+    val exceptions: Flow<Exceptions> = combine(dao.exceptionsFlow(), settings, calendar.exceptionDates) { periods, settings, dates ->
+        Exceptions(periods.map { it.toModel() }, settings.holidaysRu, dates)
     }
 
     /** Отложенные будильники: id → конец «Отложить». */
@@ -147,7 +153,7 @@ class ClockRepository(
         val settings = dao.currentSettings().toModel()
         SurfaceData(
             alarms = dao.allAlarms().map { it.toModel() },
-            exceptions = Exceptions(dao.allExceptions().map { it.toModel() }, settings.holidaysRu),
+            exceptions = Exceptions(dao.allExceptions().map { it.toModel() }, settings.holidaysRu, calendar.exceptionDates.value),
             presets = dao.allPresets().map { it.toModel() },
             runs = dao.allTimerRuns().map { it.toModel() },
             stopwatch = dao.currentStopwatch().toModel(),
@@ -175,9 +181,13 @@ class ClockRepository(
         scheduleAlarm(alarm)
     }
 
-    /** Сохранить изменённый будильник; прежнее срабатывание и «Отложить» отменяются. */
+    /**
+     * Сохранить изменённый будильник; прежнее срабатывание и «Отложить» отменяются.
+     * Будильник перед событием после правки — обычный: календарь его больше не трогает (D-023, п. 3).
+     */
     suspend fun saveAlarm(alarm: Alarm): Long = locked {
-        val stored = normalized(alarm)
+        calendarDateOf(alarm)?.let { calendar.setCancelled(it, cancelled = true) }
+        val stored = normalized(alarm.copy(calendarEventAt = null))
         dao.upsertAlarm(stored.toEntity())
         resetOccurrence(stored.id)
         scheduleAlarm(stored)
@@ -290,15 +300,81 @@ class ClockRepository(
         dao.deleteOccurrence(id)
         scheduler.cancelAlarm(id)
         notifier.cancelSnoozed(id)
+        // Удалённый будильник перед событием календарь в эту дату не вернёт (D-023, п. 3).
+        calendarDateOf(alarm)?.let { calendar.setCancelled(it, cancelled = true) }
         alarmsChanged = true
         alarm
     }
 
     /** «Отменить» после удаления. */
     suspend fun restoreAlarm(alarm: Alarm) = locked {
+        calendarDateOf(alarm)?.let { calendar.setCancelled(it, cancelled = false) }
         dao.upsertAlarm(alarm.toEntity())
         scheduleAlarm(alarm)
     }
+
+    // Календарь телефона (D-023)
+
+    /**
+     * Прочитанный календарь: [dates] — дни исключений, [events] — события
+     * календарей событий на ближайшие дни. Будильники перед ранними событиями
+     * приводятся к нему: новые ставятся, сдвинутые переставляются (включён ли —
+     * решает человек), ненужные убираются. [label] — подпись будильника.
+     */
+    suspend fun syncCalendar(dates: Set<LocalDate>, events: List<CalendarInstance>, label: (CalendarWake) -> String) = locked {
+        val datesChanged = calendar.setExceptionDates(dates)
+        val zone = ZoneId.systemDefault()
+        val nowInstant = Instant.ofEpochMilli(now())
+        val today = nowInstant.atZone(zone).toLocalDate()
+        calendar.pruneCancelled(today)
+        val cancelled = calendar.cancelledDates()
+        val alarms = dao.allAlarms().map { it.toModel() }
+        val wakes = CalendarRules.earlyWakes(events, alarms, currentExceptions(), calendar.settings.value.earlyLeadMinutes, nowInstant, zone)
+            .filter { it.date !in cancelled }
+            .associateBy { it.date }
+        val existing = alarms.filter { it.calendarEventAt != null }
+        for (alarm in existing) {
+            val date = calendarDateOf(alarm)
+            val wake = date?.let { wakes[it] }
+            val state = dao.occurrence(alarm.id)?.state
+            // Звонит, отложен или ждёт «Не спите?» — до конца сигнала не трогать.
+            if (state == Occ.RINGING || state == Occ.SNOOZED || state == Occ.RECHECK) continue
+            if (wake == null) {
+                dao.deleteAlarm(alarm.id)
+                dao.deleteOccurrence(alarm.id)
+                scheduler.cancelAlarm(alarm.id)
+                alarmsChanged = true
+                continue
+            }
+            val updated = alarm.copy(hour = wake.wakeAt.hour, minute = wake.wakeAt.minute, calendarEventAt = wake.eventAt, label = label(wake))
+            if (updated != alarm) {
+                dao.upsertAlarm(updated.toEntity())
+                resetOccurrence(alarm.id)
+                scheduleAlarm(updated)
+            }
+        }
+        val covered = existing.mapNotNull { calendarDateOf(it) }.toSet()
+        for (wake in wakes.values.filter { it.date !in covered }) {
+            val alarm = Alarm(
+                UUID.randomUUID().toString(),
+                wake.wakeAt.hour,
+                wake.wakeAt.minute,
+                Repeat.OnDate(wake.date),
+                enabled = true,
+                createdAt = now(),
+                label = label(wake),
+                calendarEventAt = wake.eventAt,
+            )
+            dao.upsertAlarm(alarm.toEntity())
+            scheduleAlarm(alarm)
+        }
+        // Дни исключений изменились — у будильников другие даты.
+        if (datesChanged) rescheduleAllLocked()
+    }
+
+    /** Дата будильника перед событием; у обычного — null. */
+    private fun calendarDateOf(alarm: Alarm): LocalDate? =
+        if (alarm.calendarEventAt == null) null else (alarm.repeat as? Repeat.OnDate)?.date
 
     /** Будильник Android пришёл: звонить, пропустить или ничего (устаревший). */
     suspend fun onAlarmFired(id: String, scheduledAt: Long): AlarmFire = locked {
@@ -520,7 +596,7 @@ class ClockRepository(
     }
 
     private suspend fun currentExceptions(): Exceptions =
-        Exceptions(dao.allExceptions().map { it.toModel() }, dao.currentSettings().toModel().holidaysRu)
+        Exceptions(dao.allExceptions().map { it.toModel() }, dao.currentSettings().toModel().holidaysRu, calendar.exceptionDates.value)
 
     /** У сменного графика время будильника — время первого рабочего дня: по нему сортируется список. */
     private fun normalized(alarm: Alarm): Alarm {
@@ -600,7 +676,8 @@ class ClockRepository(
     /** Всё, что переносится файлом. */
     suspend fun exportBackup(): Backup = locked(quiet = true) {
         Backup(
-            alarms = dao.allAlarms().map { it.toModel() }.sortedBy { it.createdAt },
+            // Будильники перед событиями — от календаря этого телефона, в файл не идут (D-023, п. 6).
+            alarms = dao.allAlarms().map { it.toModel() }.filter { it.calendarEventAt == null }.sortedBy { it.createdAt },
             groups = dao.allGroups().map { it.toModel() },
             templates = dao.allTemplates().map { it.toModel() },
             exceptions = dao.allExceptions().map { it.toModel() },

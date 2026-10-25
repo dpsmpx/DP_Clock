@@ -154,3 +154,11 @@ val MIGRATION_10_11 = SqlMigration(
             "PRIMARY KEY(`id`))",
     ),
 )
+
+
+/** 0.12.2: необязательный обратный отсчёт в строках будильников; выключен после обновления. */
+val MIGRATION_11_12 = SqlMigration(
+    11,
+    12,
+    listOf("ALTER TABLE `settings` ADD COLUMN `showAlarmCountdown` INTEGER NOT NULL DEFAULT 0"),
+)

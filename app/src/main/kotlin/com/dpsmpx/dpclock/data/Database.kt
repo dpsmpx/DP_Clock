@@ -104,6 +104,11 @@ data class OccurrenceEntity(
     val ringingSince: Long?,
     /** Момент повторной проверки «Не спите?» (D-015, п. 4). */
     val recheckAt: Long?,
+    /**
+     * У звонящего: когда этот звонок ожидался — срок, конец «Отложить» или
+     * момент повторного сигнала после «Не спите?». Для журнала (0.7.1).
+     */
+    val expectedAt: Long? = null,
 )
 
 @Entity(tableName = "timer_preset")
@@ -168,6 +173,29 @@ data class SettingsEntity(
     /** Дни расписания битами, как у будильника. */
     val bedtimeDays: Int,
     val bedtimeLeadMinutes: Int,
+    /** Погода (D-019): WeatherMode, название места и точка; точки нет — место не выбрано. */
+    val weatherMode: String = "NOT_SET",
+    val weatherPlace: String = "",
+    val weatherLat: Double? = null,
+    val weatherLon: Double? = null,
+    /** Оформление (D-021): ThemeMode, цвет ARGB (null — из обоев), ClockStyle, ClockFont, размер, NoiseKind, ClockBackground. */
+    val theme: String = "SYSTEM",
+    val seedColor: Int? = null,
+    val clockStyle: String = "CIRCLE",
+    val clockFont: String = "REGULAR",
+    val clockSize: Int = 100,
+    val nightNoise: String = "NONE",
+    val background: String = "NONE",
+    /** «Высокий контраст» (D-022, п. 5). */
+    val highContrast: Boolean = false,
+)
+
+/** Город мировых часов (D-019): пояс tz и место в списке. */
+@Entity(tableName = "world_city")
+data class WorldCityEntity(
+    @PrimaryKey val zoneId: String,
+    val position: Int,
+    val createdAt: Long,
 )
 
 /** Журнал срабатываний (DATA_MODEL.md, п. 7), последние [ClockDao.LOG_LIMIT] событий. */
@@ -181,6 +209,8 @@ data class SignalEventEntity(
     val firedAt: Long,
     /** SignalOutcome. */
     val outcome: String,
+    /** Название будильника или таймера на момент записи (0.7.1). */
+    val title: String = "",
 )
 
 @Dao
@@ -314,6 +344,9 @@ interface ClockDao {
     @Upsert
     suspend fun insertEvent(event: SignalEventEntity)
 
+    @Query("SELECT * FROM signal_event ORDER BY firedAt DESC")
+    fun events(): Flow<List<SignalEventEntity>>
+
     @Query(
         "DELETE FROM signal_event WHERE id NOT IN " +
             "(SELECT id FROM signal_event ORDER BY firedAt DESC LIMIT $LOG_LIMIT)",
@@ -329,6 +362,21 @@ interface ClockDao {
 
     @Query("DELETE FROM alarm_occurrence")
     suspend fun clearOccurrences()
+
+    @Query("SELECT zoneId FROM world_city ORDER BY position, createdAt")
+    fun worldCities(): Flow<List<String>>
+
+    @Query("SELECT * FROM world_city ORDER BY position, createdAt")
+    suspend fun allWorldCities(): List<WorldCityEntity>
+
+    @Upsert
+    suspend fun upsertWorldCity(city: WorldCityEntity)
+
+    @Query("DELETE FROM world_city WHERE zoneId = :zoneId")
+    suspend fun deleteWorldCity(zoneId: String)
+
+    @Query("DELETE FROM world_city")
+    suspend fun clearWorldCities()
 
     /** «Заменить всё» при загрузке из файла (D-018, п. 4). */
     @Query("DELETE FROM alarm_group")
@@ -360,6 +408,7 @@ interface ClockDao {
         GroupEntity::class,
         TemplateEntity::class,
         ExceptionEntity::class,
+        WorldCityEntity::class,
     ],
     version = ClockDatabase.VERSION,
     exportSchema = true,
@@ -371,10 +420,10 @@ abstract class ClockDatabase : RoomDatabase() {
         const val NAME = "dpclock.db"
 
         /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
-        const val VERSION = 5
+        const val VERSION = 9
 
         /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
-        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки

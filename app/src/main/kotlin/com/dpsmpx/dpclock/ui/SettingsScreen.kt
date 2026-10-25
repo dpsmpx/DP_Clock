@@ -1,6 +1,9 @@
 package com.dpsmpx.dpclock.ui
 
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
@@ -11,6 +14,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -23,6 +29,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -30,19 +37,31 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.BuildConfig
 import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
 import com.dpsmpx.dpclock.model.AlarmOrder
+import com.dpsmpx.dpclock.model.Appearance
+import com.dpsmpx.dpclock.model.ClockBackground
+import com.dpsmpx.dpclock.model.ClockFont
+import com.dpsmpx.dpclock.model.ClockStyle
+import com.dpsmpx.dpclock.model.NoiseKind
+import com.dpsmpx.dpclock.model.ThemeMode
 import com.dpsmpx.dpclock.model.Bedtime
 import com.dpsmpx.dpclock.model.BedtimeMode
 import com.dpsmpx.dpclock.model.Settings
@@ -50,6 +69,7 @@ import com.dpsmpx.dpclock.model.SignalStyle
 import com.dpsmpx.dpclock.model.VolumeButtons
 import com.dpsmpx.dpclock.persistLater
 import com.dpsmpx.dpclock.platform.TimeText
+import kotlinx.coroutines.launch
 import java.time.format.TextStyle
 
 /** Настройки MVP (SCREEN_MAP.md, п. 9). */
@@ -65,13 +85,27 @@ fun SettingsScreen(onBack: () -> Unit) {
     val locale = LocalConfiguration.current.locales[0]
     val snackbar = remember { SnackbarHostState() }
     val backup = rememberBackupActions(snackbar)
+    val weatherChoice = rememberWeatherChoice()
 
     fun update(change: (Settings) -> Settings) = persistLater { repository.updateSettings(change) }
+
+    val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            if (saveBackground(context, uri)) {
+                update { it.copy(appearance = it.appearance.copy(background = ClockBackground.IMAGE)) }
+            } else {
+                snackbar.showSnackbar(resources.getString(R.string.background_failed))
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.settings)) },
+                title = { TitleText(stringResource(R.string.settings)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(AppIcons.Back, contentDescription = stringResource(R.string.back)) }
                 },
@@ -79,68 +113,54 @@ fun SettingsScreen(onBack: () -> Unit) {
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
-            item { Header(R.string.settings_alarms) }
-            item {
+        // Разделы настроек; на широком окне — в две колонки (D-022, п. 2).
+        val sections = listOf(
+            SettingsSection(R.string.settings_alarms) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.snooze_interval)) },
                     supportingContent = { Text(stringResource(R.string.minutes_value, settings.snoozeMinutes)) },
                     modifier = Modifier.clickable { dialog = "snooze" },
                 )
-            }
-            item {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.auto_stop)) },
                     supportingContent = { Text(autoStopText(settings.autoStopMinutes)) },
                     modifier = Modifier.clickable { dialog = "autoStop" },
                 )
-            }
-            item {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.alarm_order)) },
                     supportingContent = { Text(stringResource(orderTitle(settings.alarmOrder))) },
                     modifier = Modifier.clickable { dialog = "order" },
                 )
-            }
-            item { Header(R.string.settings_signal) }
-            item {
+            },
+            SettingsSection(R.string.settings_signal) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.signal_style)) },
                     supportingContent = { Text(stringResource(styleTitle(settings.signalStyle))) },
                     modifier = Modifier.clickable { dialog = "style" },
                 )
-            }
-            item {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.volume_buttons)) },
                     supportingContent = { Text(stringResource(volumeButtonsTitle(settings.volumeButtons))) },
                     modifier = Modifier.clickable { dialog = "volume" },
                 )
-            }
-            item { Header(R.string.settings_sleep) }
-            item {
+            },
+            SettingsSection(R.string.settings_sleep) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.bedtime_reminder)) },
                     supportingContent = { Text(stringResource(bedtimeModeTitle(settings.bedtime.mode))) },
                     modifier = Modifier.clickable { dialog = "bedtimeMode" },
                 )
-            }
-            item {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.sleep_goal)) },
                     supportingContent = { Text(sleepText(settings.bedtime.sleepMinutes)) },
                     modifier = Modifier.clickable { dialog = "sleep" },
                 )
-            }
-            if (settings.bedtime.mode == BedtimeMode.SCHEDULE) {
-                item {
+                if (settings.bedtime.mode == BedtimeMode.SCHEDULE) {
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.bedtime_at)) },
                         supportingContent = { Text(TimeText.time(context, settings.bedtime.hour, settings.bedtime.minute)) },
                         modifier = Modifier.clickable { dialog = "bedtimeTime" },
                     )
-                }
-                item {
                     FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         for (day in orderedDays(locale)) {
                             val days = settings.bedtime.days
@@ -148,21 +168,19 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 selected = day in days,
                                 onClick = { update { it.copy(bedtime = it.bedtime.copy(days = if (day in days) days - day else days + day)) } },
                                 label = { Text(day.getDisplayName(TextStyle.NARROW_STANDALONE, locale)) },
+                                // TalkBack читает день целиком, а не одну букву.
+                                modifier = Modifier.semantics { contentDescription = day.getDisplayName(TextStyle.FULL_STANDALONE, locale) },
                             )
                         }
                     }
                 }
-            }
-            if (settings.bedtime.mode != BedtimeMode.OFF) {
-                item {
+                if (settings.bedtime.mode != BedtimeMode.OFF) {
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.bedtime_lead)) },
                         supportingContent = { Text(leadText(settings.bedtime.leadMinutes)) },
                         modifier = Modifier.clickable { dialog = "lead" },
                     )
                 }
-            }
-            item {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.night_dream)) },
                     supportingContent = { Text(stringResource(if (noDream) R.string.night_dream_missing else R.string.night_dream_text)) },
@@ -170,12 +188,65 @@ fun SettingsScreen(onBack: () -> Unit) {
                         noDream = runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_DREAM_SETTINGS)) }.isFailure
                     },
                 )
-            }
-            item { Header(R.string.settings_reliability) }
-            item { PermissionRow(Issue.NOTIFICATIONS, reliability.notifications) }
-            item { PermissionRow(Issue.FULL_SCREEN, reliability.fullScreen) }
-            item { PermissionRow(Issue.EXACT_ALARMS, reliability.exactAlarms) }
-            item {
+            },
+            SettingsSection(R.string.settings_appearance) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.appearance_theme)) },
+                    supportingContent = { Text(stringResource(themeTitle(settings.appearance.theme))) },
+                    modifier = Modifier.clickable { dialog = "theme" },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.appearance_color)) },
+                    supportingContent = { ColorLabel(settings.appearance.seedColor) },
+                    modifier = Modifier.clickable { dialog = "color" },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.high_contrast)) },
+                    supportingContent = { Text(stringResource(R.string.high_contrast_text)) },
+                    trailingContent = { Switch(checked = settings.appearance.highContrast, onCheckedChange = null) },
+                    modifier = Modifier.toggleable(value = settings.appearance.highContrast, role = Role.Switch) { on ->
+                        update { it.copy(appearance = it.appearance.copy(highContrast = on)) }
+                    },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.clock_style)) },
+                    supportingContent = { Text(stringResource(clockStyleTitle(settings.appearance.clockStyle))) },
+                    modifier = Modifier.clickable { dialog = "clockStyle" },
+                )
+                if (settings.appearance.clockStyle == ClockStyle.DIGITS) {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.clock_font)) },
+                        supportingContent = { Text(stringResource(clockFontTitle(settings.appearance.clockFont))) },
+                        modifier = Modifier.clickable { dialog = "clockFont" },
+                    )
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.clock_size)) },
+                        supportingContent = { Text(stringResource(R.string.percent_value, settings.appearance.clockSize)) },
+                        modifier = Modifier.clickable { dialog = "clockSize" },
+                    )
+                }
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.clock_background)) },
+                    supportingContent = { Text(stringResource(backgroundTitle(settings.appearance.background))) },
+                    modifier = Modifier.clickable { dialog = "background" },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.night_noise)) },
+                    supportingContent = { Text(stringResource(noiseTitle(settings.appearance.nightNoise))) },
+                    modifier = Modifier.clickable { dialog = "noise" },
+                )
+            },
+            SettingsSection(R.string.settings_world) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.weather_title)) },
+                    supportingContent = { Text(weatherModeText(settings.weather.mode, settings.weather.place)) },
+                    modifier = Modifier.clickable { weatherChoice.openOptions() },
+                )
+            },
+            SettingsSection(R.string.settings_reliability) {
+                PermissionRow(Issue.NOTIFICATIONS, reliability.notifications)
+                PermissionRow(Issue.FULL_SCREEN, reliability.fullScreen)
+                PermissionRow(Issue.EXACT_ALARMS, reliability.exactAlarms)
                 val issue = if (reliability.volumeOff) Issue.VOLUME_OFF else Issue.VOLUME_LOW
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.alarm_volume)) },
@@ -191,10 +262,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                     },
                 )
-            }
-            if (reliability.dndBlocksAlarms) item { PermissionRow(Issue.DND, granted = false) }
-            if (reliability.isXiaomi) {
-                item {
+                if (reliability.dndBlocksAlarms) PermissionRow(Issue.DND, granted = false)
+                if (reliability.isXiaomi) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                         Text(stringResource(R.string.xiaomi_title), style = MaterialTheme.typography.titleMedium)
                         Text(stringResource(R.string.xiaomi_hints), style = MaterialTheme.typography.bodyMedium)
@@ -208,34 +277,46 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                     }
                 }
-            }
-            item { Header(R.string.settings_transfer) }
-            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.journal)) },
+                    supportingContent = { Text(stringResource(R.string.journal_text)) },
+                    modifier = Modifier.clickable { dialog = "journal" },
+                )
+            },
+            SettingsSection(R.string.settings_transfer) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.backup_save)) },
                     supportingContent = { Text(stringResource(R.string.backup_save_text)) },
                     modifier = Modifier.clickable { backup.save() },
                 )
-            }
-            item {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.backup_load)) },
                     supportingContent = { Text(stringResource(R.string.backup_load_text)) },
                     modifier = Modifier.clickable { backup.load() },
                 )
-            }
-            item { Header(R.string.about) }
-            item {
+            },
+            SettingsSection(R.string.about) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.app_name)) },
                     supportingContent = { Text(stringResource(R.string.version_value, BuildConfig.VERSION_NAME)) },
                 )
-            }
-            item {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.licenses)) },
                     supportingContent = { Text(stringResource(R.string.licenses_text)) },
                 )
+            },
+        )
+        if (rememberWindowLayout().twoPane) {
+            LazyVerticalStaggeredGrid(
+                columns = StaggeredGridCells.Fixed(2),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = padding,
+            ) {
+                items(sections.size) { index -> sections[index].Show() }
+            }
+        } else {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
+                items(sections.size) { index -> sections[index].Show() }
             }
         }
     }
@@ -306,6 +387,70 @@ fun SettingsScreen(onBack: () -> Unit) {
                 update { it.copy(bedtime = it.bedtime.copy(hour = h, minute = m)) }
             },
         )
+        "journal" -> JournalDialog(onDismiss = { dialog = null })
+        "theme" -> ChoiceDialog(
+            title = stringResource(R.string.appearance_theme),
+            choices = ThemeMode.entries,
+            selected = settings.appearance.theme,
+            label = { stringResource(themeTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(theme = value)) } },
+        )
+        "color" -> ColorDialog(
+            current = settings.appearance.seedColor,
+            onDismiss = { dialog = null },
+            onPick = { value ->
+                dialog = null
+                update { it.copy(appearance = it.appearance.copy(seedColor = value)) }
+            },
+        )
+        "clockStyle" -> ChoiceDialog(
+            title = stringResource(R.string.clock_style),
+            choices = ClockStyle.entries,
+            selected = settings.appearance.clockStyle,
+            label = { stringResource(clockStyleTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(clockStyle = value)) } },
+        )
+        "clockFont" -> ChoiceDialog(
+            title = stringResource(R.string.clock_font),
+            choices = ClockFont.entries,
+            selected = settings.appearance.clockFont,
+            label = { stringResource(clockFontTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(clockFont = value)) } },
+        )
+        "clockSize" -> ChoiceDialog(
+            title = stringResource(R.string.clock_size),
+            choices = Appearance.SIZE_CHOICES,
+            selected = settings.appearance.clockSize,
+            label = { stringResource(R.string.percent_value, it) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(clockSize = value)) } },
+        )
+        "background" -> ChoiceDialog(
+            title = stringResource(R.string.clock_background),
+            choices = ClockBackground.entries,
+            selected = settings.appearance.background,
+            label = { stringResource(backgroundTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value ->
+                // Своя картинка — сначала выбрать её; фон меняется, когда она сохранена.
+                if (value == ClockBackground.IMAGE) {
+                    pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                } else {
+                    update { it.copy(appearance = it.appearance.copy(background = value)) }
+                }
+            },
+        )
+        "noise" -> ChoiceDialog(
+            title = stringResource(R.string.night_noise),
+            choices = NoiseKind.entries,
+            selected = settings.appearance.nightNoise,
+            label = { stringResource(noiseTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(nightNoise = value)) } },
+        )
         "volume" -> ChoiceDialog(
             title = stringResource(R.string.volume_buttons),
             choices = VolumeButtons.entries,
@@ -317,14 +462,20 @@ fun SettingsScreen(onBack: () -> Unit) {
     }
 }
 
-@Composable
-private fun Header(text: Int) {
-    Text(
-        stringResource(text),
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp),
-    )
+/** Раздел настроек: заголовок — для TalkBack заголовок (D-022, п. 3), под ним строки. */
+private class SettingsSection(val title: Int, val content: @Composable () -> Unit) {
+    @Composable
+    fun Show() {
+        Column {
+            Text(
+                stringResource(title),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp).semantics { heading() },
+            )
+            content()
+        }
+    }
 }
 
 @Composable
@@ -387,7 +538,7 @@ fun <T> ChoiceDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = { TitleText(title) },
         text = {
             LazyColumn(contentPadding = PaddingValues(vertical = 4.dp)) {
                 items(choices.size) { index ->

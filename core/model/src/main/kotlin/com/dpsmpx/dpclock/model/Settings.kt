@@ -14,6 +14,10 @@ data class Settings(
     val holidaysRu: Boolean = false,
     /** Время сна и напоминание ложиться (D-017, п. 2). */
     val bedtime: Bedtime = Bedtime(),
+    /** Погода вашего города в «Мировых часах» (D-019). */
+    val weather: WeatherSettings = WeatherSettings(),
+    /** Тема, цвет, стиль часов, фон, шум (D-021). */
+    val appearance: Appearance = Appearance(),
 ) {
     companion object {
         const val DEFAULT_SNOOZE = 10
@@ -51,3 +55,22 @@ enum class VolumeButtons {
 enum class SignalOutcome { DISMISSED, SNOOZED, AUTO_STOPPED, MISSED }
 
 enum class SignalSource { ALARM, TIMER }
+
+/**
+ * Запись журнала срабатываний (DATA_MODEL.md, п. 7): когда сигнал ожидался
+ * ([scheduledAt]) и когда зазвучал ([firedAt]), мс UTC. [title] — название
+ * будильника или таймера на тот момент: запись переживает их удаление.
+ */
+data class SignalEvent(
+    val id: String,
+    val source: SignalSource,
+    val sourceId: String,
+    val title: String,
+    val scheduledAt: Long,
+    val firedAt: Long,
+    val outcome: SignalOutcome,
+) {
+    /** Опоздание сигнала, мс; null — сигнал не звучал (пропущен или выключен заранее). */
+    val lateMillis: Long?
+        get() = (firedAt - scheduledAt).takeIf { outcome != SignalOutcome.MISSED && it >= 0 }
+}

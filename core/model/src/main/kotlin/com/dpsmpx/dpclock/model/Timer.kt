@@ -108,9 +108,10 @@ data class TimerProgram(
             }
         }
 
-        private fun url(text: String) = URLEncoder.encode(text, Charsets.UTF_8)
+        // Перегрузки с Charset — только с Android 13; по имени кодировки — есть везде.
+        private fun url(text: String) = URLEncoder.encode(text, "UTF-8")
 
-        private fun unurl(text: String) = URLDecoder.decode(text, Charsets.UTF_8)
+        private fun unurl(text: String) = URLDecoder.decode(text, "UTF-8")
     }
 }
 
@@ -169,6 +170,8 @@ data class TimerAdvance(
     val endedSteps: Int,
     /** Звук сигнала: последнего закончившегося шага (D-016, п. 2). */
     val sound: AlarmSound = AlarmSound.Default,
+    /** Расчётный конец последнего закончившегося шага; null — ни один не закончился. Для журнала. */
+    val endedAt: Moment? = null,
 )
 
 /** Переходы таймера — чистые функции от «сейчас» (D-009, п. 5). */
@@ -223,12 +226,14 @@ object TimerRules {
         var signal = StepSignal.NONE
         var sound: AlarmSound = AlarmSound.Default
         var ended = 0
+        var endedAt: Moment? = null
         var lateness = 0L
         while (current.state == TimerState.RUNNING) {
             val endsAt = current.stepEndsAt!!
             val left = endsAt.millisAfter(now)
             if (left > 0) break
             ended++
+            endedAt = endsAt
             lateness = -left
             signal = signalAtStepEnd(current)
             sound = current.program.soundOf(current.stepIndex)
@@ -245,7 +250,7 @@ object TimerRules {
                 )
             }
         }
-        return TimerAdvance(current, signal, lateness > AlarmRules.MISSED_AFTER_MILLIS, ended, sound)
+        return TimerAdvance(current, signal, lateness > AlarmRules.MISSED_AFTER_MILLIS, ended, sound, endedAt)
     }
 
     /** Какой сигнал будет в конце текущего шага идущего таймера. */

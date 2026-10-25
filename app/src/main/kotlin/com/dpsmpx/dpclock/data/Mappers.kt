@@ -1,6 +1,12 @@
 package com.dpsmpx.dpclock.data
 
 import com.dpsmpx.dpclock.model.AfterAlarm
+import com.dpsmpx.dpclock.model.Appearance
+import com.dpsmpx.dpclock.model.ClockBackground
+import com.dpsmpx.dpclock.model.ClockFont
+import com.dpsmpx.dpclock.model.ClockStyle
+import com.dpsmpx.dpclock.model.NoiseKind
+import com.dpsmpx.dpclock.model.ThemeMode
 import com.dpsmpx.dpclock.model.Alarm
 import com.dpsmpx.dpclock.model.AlarmGroup
 import com.dpsmpx.dpclock.model.AlarmOrder
@@ -12,6 +18,9 @@ import com.dpsmpx.dpclock.model.ExceptionPeriod
 import com.dpsmpx.dpclock.model.Moment
 import com.dpsmpx.dpclock.model.Repeat
 import com.dpsmpx.dpclock.model.Settings
+import com.dpsmpx.dpclock.model.SignalEvent
+import com.dpsmpx.dpclock.model.SignalOutcome
+import com.dpsmpx.dpclock.model.SignalSource
 import com.dpsmpx.dpclock.model.SignalStyle
 import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
@@ -23,6 +32,9 @@ import com.dpsmpx.dpclock.model.VolumeButtons
 import com.dpsmpx.dpclock.model.WakeCheck
 import com.dpsmpx.dpclock.model.WakeLevel
 import com.dpsmpx.dpclock.model.WakeMethod
+import com.dpsmpx.dpclock.model.WeatherMode
+import com.dpsmpx.dpclock.model.WeatherPlace
+import com.dpsmpx.dpclock.model.WeatherSettings
 import com.dpsmpx.dpclock.model.bits
 import com.dpsmpx.dpclock.model.days
 import java.time.LocalDate
@@ -172,6 +184,20 @@ fun SettingsEntity?.toModel(): Settings = if (this == null) Settings() else Sett
             leadMinutes = bedtimeLeadMinutes,
         )
     }.getOrDefault(Bedtime()),
+    weather = WeatherSettings(
+        mode = enumOr(weatherMode, WeatherMode.NOT_SET),
+        place = weatherLat?.let { lat -> weatherLon?.let { lon -> runCatching { WeatherPlace(weatherPlace, lat, lon) }.getOrNull() } },
+    ),
+    appearance = Appearance(
+        theme = enumOr(theme, ThemeMode.SYSTEM),
+        seedColor = seedColor,
+        clockStyle = enumOr(clockStyle, ClockStyle.CIRCLE),
+        clockFont = enumOr(clockFont, ClockFont.REGULAR),
+        clockSize = clockSize.coerceIn(Appearance.MIN_SIZE, Appearance.MAX_SIZE),
+        nightNoise = enumOr(nightNoise, NoiseKind.NONE),
+        background = enumOr(background, ClockBackground.NONE),
+        highContrast = highContrast,
+    ),
 )
 
 fun Settings.toEntity() = SettingsEntity(
@@ -188,6 +214,18 @@ fun Settings.toEntity() = SettingsEntity(
     bedtimeMinute = bedtime.minute,
     bedtimeDays = Repeat.of(bedtime.days).bits,
     bedtimeLeadMinutes = bedtime.leadMinutes,
+    weatherMode = weather.mode.name,
+    weatherPlace = weather.place?.name.orEmpty(),
+    weatherLat = weather.place?.latitude,
+    weatherLon = weather.place?.longitude,
+    theme = appearance.theme.name,
+    seedColor = appearance.seedColor,
+    clockStyle = appearance.clockStyle.name,
+    clockFont = appearance.clockFont.name,
+    clockSize = appearance.clockSize,
+    nightNoise = appearance.nightNoise.name,
+    background = appearance.background.name,
+    highContrast = appearance.highContrast,
 )
 
 /** Неизвестное значение (например, из копии новой версии) — значение по умолчанию. */
@@ -196,3 +234,13 @@ private inline fun <reified E : Enum<E>> enumOr(name: String, default: E): E =
 
 private fun moment(elapsed: Long?, bootCount: Int?, utc: Long?): Moment? =
     if (elapsed == null || bootCount == null || utc == null) null else Moment(elapsed, bootCount, utc)
+
+fun SignalEventEntity.toModel() = SignalEvent(
+    id = id,
+    source = enumOr(source, SignalSource.ALARM),
+    sourceId = sourceId,
+    title = title,
+    scheduledAt = scheduledAt,
+    firedAt = firedAt,
+    outcome = enumOr(outcome, SignalOutcome.DISMISSED),
+)

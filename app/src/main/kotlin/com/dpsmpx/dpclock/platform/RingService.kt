@@ -77,6 +77,8 @@ sealed interface RingItem {
         override val since: Long,
         /** Звук закончившегося шага или пресета (D-016, п. 2). */
         override val sound: RingSound = RingSound(),
+        /** Расчётный конец шага, мс UTC; для журнала. */
+        val endedAt: Long? = null,
     ) : RingItem {
         override val key: String get() = "timer:$runId"
     }
@@ -161,7 +163,7 @@ class RingService : Service() {
                 silence("gentle:$id")
             }
             ACTION_RECHECK_OK -> {
-                repository.recheckPassed(id)
+                repository.recheckPassed(id, Ringing.items.value.firstOrNull { it.key == "recheck:$id" }?.since)
                 silence("recheck:$id")
             }
             ACTION_QUIET -> player.quiet(QUIET_MILLIS)
@@ -169,7 +171,14 @@ class RingService : Service() {
                 val fire = repository.onTimerStepEnded(id) ?: return
                 when (fire.signal) {
                     StepSignal.FULL -> ring(
-                        RingItem.TimerRing(id, fire.run.name, fire.run.state == TimerState.RINGING, System.currentTimeMillis(), RingSound(fire.sound)),
+                        RingItem.TimerRing(
+                            id,
+                            fire.run.name,
+                            fire.run.state == TimerState.RINGING,
+                            System.currentTimeMillis(),
+                            RingSound(fire.sound),
+                            fire.endedAt,
+                        ),
                     )
                     StepSignal.SHORT -> Sounds.shortSignal(this, fire.sound)
                     StepSignal.SLEEP -> MediaStop.fadeAndPause(this)
@@ -183,6 +192,7 @@ class RingService : Service() {
                     intent.getBooleanExtra(EXTRA_FINISHED, true),
                     System.currentTimeMillis(),
                     RingSound(AlarmSound.decode(intent.getStringExtra(EXTRA_SOUND).orEmpty(), intent.getStringExtra(EXTRA_SOUND_TITLE).orEmpty())),
+                    intent.getLongExtra(EXTRA_SCHEDULED_AT, 0L).takeIf { it > 0 },
                 ),
             )
             ACTION_SNOOZE -> {
@@ -199,7 +209,8 @@ class RingService : Service() {
                 }
             }
             ACTION_TIMER_STOP -> {
-                repository.stopTimerSignal(id, SignalOutcome.DISMISSED)
+                val item = Ringing.items.value.firstOrNull { it.key == "timer:$id" } as? RingItem.TimerRing
+                repository.stopTimerSignal(id, SignalOutcome.DISMISSED, item?.endedAt, item?.since)
                 silence("timer:$id")
             }
             ACTION_TIMER_ADD_MINUTE -> {
@@ -256,7 +267,7 @@ class RingService : Service() {
                 val repository = DpClockApp.graph(this@RingService).repository
                 when (item) {
                     is RingItem.AlarmRing -> repository.stopAlarm(item.alarmId, SignalOutcome.AUTO_STOPPED)
-                    is RingItem.TimerRing -> repository.stopTimerSignal(item.runId, SignalOutcome.AUTO_STOPPED)
+                    is RingItem.TimerRing -> repository.stopTimerSignal(item.runId, SignalOutcome.AUTO_STOPPED, item.endedAt, item.since)
                     is RingItem.RecheckRing, is RingItem.GentleRing -> Unit
                 }
                 silence(item.key)
@@ -372,13 +383,14 @@ class RingService : Service() {
         fun fireTimer(context: Context, runId: String) =
             startForeground(context, intent(context, ACTION_FIRE_TIMER, runId))
 
-        fun ringTimer(context: Context, runId: String, name: String, finished: Boolean, sound: AlarmSound) = startForeground(
+        fun ringTimer(context: Context, runId: String, name: String, finished: Boolean, sound: AlarmSound, endedAt: Long?) = startForeground(
             context,
             intent(context, ACTION_RING_TIMER, runId)
                 .putExtra(EXTRA_NAME, name)
                 .putExtra(EXTRA_FINISHED, finished)
                 .putExtra(EXTRA_SOUND, sound.encode())
-                .putExtra(EXTRA_SOUND_TITLE, sound.title),
+                .putExtra(EXTRA_SOUND_TITLE, sound.title)
+                .putExtra(EXTRA_SCHEDULED_AT, endedAt ?: 0L),
         )
 
         /** Интент кнопки сигнала: экран сигнала и уведомление. */

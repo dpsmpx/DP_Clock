@@ -1,6 +1,8 @@
 package com.dpsmpx.dpclock.ui
 
 import android.content.Context
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -40,7 +43,9 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -48,16 +53,26 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
+import com.dpsmpx.dpclock.QuickAction
+import com.dpsmpx.dpclock.QuickRequest
 import com.dpsmpx.dpclock.model.Alarm
 import com.dpsmpx.dpclock.model.AlarmGroup
 import com.dpsmpx.dpclock.model.AlarmRules
@@ -99,6 +114,10 @@ fun AlarmsScreen(
     openSettings: () -> Unit,
     dialog: AlarmsDialog?,
     onDialog: (AlarmsDialog?) -> Unit,
+    quick: QuickRequest? = null,
+    onQuickHandled: (Long) -> Unit = {},
+    /** Раздел на экране: соседний раздел пейджер держит готовым, но «Назад» — не его. */
+    visible: Boolean = true,
 ) {
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -121,6 +140,20 @@ fun AlarmsScreen(
     var groupAction by rememberSaveable { mutableStateOf<GroupAction?>(null) }
     var actionGroupId by rememberSaveable { mutableStateOf<String?>(null) }
 
+    // Ярлык «Новый будильник» и команда ассистента «открыть, чтобы поправить» (D-020).
+    LaunchedEffect(quick?.token) {
+        val request = quick ?: return@LaunchedEffect
+        when (request.action) {
+            QuickAction.NEW_ALARM -> {
+                creatingIn = null
+                creating = true
+            }
+            QuickAction.EDIT_ALARM -> editingId = request.alarmId
+            else -> Unit
+        }
+        onQuickHandled(request.token)
+    }
+
     fun announce(at: Long) {
         if (at > 0) scope.launch {
             snackbar.currentSnackbarData?.dismiss()
@@ -133,28 +166,34 @@ fun AlarmsScreen(
     val sorted = AlarmRules.sorted(list, settings.alarmOrder, nowInstant, zone, exceptions)
     val groupIds = groups.map { it.id }.toSet()
 
+    val layout = rememberWindowLayout()
+
+    /** Удалить с «Отменить» в подсказке внизу — свайпом или действием TalkBack. */
+    fun delete(alarm: Alarm) {
+        if (editingId == alarm.id) editingId = null
+        scope.launch {
+            val deleted = persist { repository.deleteAlarm(alarm.id) } ?: return@launch
+            snackbar.currentSnackbarData?.dismiss()
+            val result = snackbar.showSnackbar(
+                resources.getString(R.string.alarm_deleted),
+                actionLabel = resources.getString(R.string.undo),
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) persist { repository.restoreAlarm(deleted) }
+        }
+    }
+
     @Composable
     fun AlarmItem(alarm: Alarm) {
-        SwipeToDelete(
-            onDelete = {
-                scope.launch {
-                    val deleted = persist { repository.deleteAlarm(alarm.id) } ?: return@launch
-                    snackbar.currentSnackbarData?.dismiss()
-                    val result = snackbar.showSnackbar(
-                        resources.getString(R.string.alarm_deleted),
-                        actionLabel = resources.getString(R.string.undo),
-                        duration = SnackbarDuration.Short,
-                    )
-                    if (result == SnackbarResult.ActionPerformed) persist { repository.restoreAlarm(deleted) }
-                }
-            },
-        ) {
+        SwipeToDelete(onDelete = { delete(alarm) }) {
             AlarmRow(
                 alarm = alarm,
                 snoozedUntil = snoozed[alarm.id],
                 exceptions = exceptions,
                 now = nowInstant,
+                isSelected = layout.twoPane && alarm.id == editingId,
                 onClick = { editingId = alarm.id },
+                onDelete = { delete(alarm) },
                 onToggle = { enabled ->
                     val at = AlarmRules.nextTrigger(alarm, Instant.now(), zone, exceptions)
                     if (enabled && at == null && !alarm.repeat.isRepeating) {
@@ -171,93 +210,138 @@ fun AlarmsScreen(
         }
     }
 
-    Box(Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            val issues = reliability.issues(settings.xiaomiHintsDone)
-            if (issues.isNotEmpty()) {
-                item(key = "issues") { ReliabilityBanner(issues, openSettings) }
-            }
-            item(key = "next") {
-                val nearest = AlarmRules.nearest(list, nowInstant, zone, exceptions)
-                Text(
-                    text = if (nearest == null) {
-                        stringResource(R.string.no_enabled_alarms)
-                    } else {
-                        stringResource(R.string.next_alarm_in, untilText(resources, nearest.toEpochMilli() - now))
-                    },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 8.dp),
-                )
-                // Время сна включено и будильник скоро — сколько выйдет сна (D-017, п. 2).
-                if (nearest != null && settings.bedtime.mode != BedtimeMode.OFF && nearest.toEpochMilli() - now <= SLEEP_HINT_MILLIS) {
+    val editing = list.firstOrNull { it.id == editingId }
+
+    @Composable
+    fun Editor(alarm: Alarm, inline: Boolean) {
+        AlarmEditor(
+            alarm = alarm,
+            settings = settings,
+            groups = groups,
+            exceptions = exceptions,
+            onDismiss = { editingId = null },
+            onSave = { updated ->
+                editingId = null
+                scope.launch {
+                    val at = persist { repository.saveAlarm(updated.copy(enabled = true)) }
+                    announce(at)
+                }
+            },
+            onDelete = {
+                editingId = null
+                persistLater { repository.deleteAlarm(alarm.id) }
+            },
+            inline = inline,
+            handleBack = visible,
+        )
+    }
+
+    // На широком окне — список слева, редактор справа (D-022, п. 2).
+    Row(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f).fillMaxHeight()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val issues = reliability.issues(settings.xiaomiHintsDone)
+                if (issues.isNotEmpty()) {
+                    item(key = "issues") { ReliabilityBanner(issues, openSettings) }
+                }
+                item(key = "next") {
+                    val nearest = AlarmRules.nearest(list, nowInstant, zone, exceptions)
                     Text(
-                        stringResource(
-                            R.string.sleep_if_now,
-                            durationText(resources, SleepRules.sleepIfNow(nowInstant, nearest)),
-                            sleepText(settings.bedtime.sleepMinutes),
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = if (nearest == null) {
+                            stringResource(R.string.no_enabled_alarms)
+                        } else {
+                            stringResource(R.string.next_alarm_in, untilText(resources, nearest.toEpochMilli() - now))
+                        },
+                        style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 8.dp),
                     )
-                }
-            }
-            if (list.isEmpty() && groups.isEmpty()) {
-                item(key = "empty") {
-                    Column(
-                        Modifier.fillMaxWidth().padding(top = 48.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(stringResource(R.string.alarms_empty), style = MaterialTheme.typography.bodyLarge)
-                        Spacer(Modifier.size(16.dp))
-                        FilledTonalButton(onClick = { creating = true }) { Text(stringResource(R.string.new_alarm)) }
-                    }
-                }
-            }
-            items(sorted.filter { it.groupId == null || it.groupId !in groupIds }, key = { it.id }) { AlarmItem(it) }
-            for (group in groups) {
-                val members = sorted.filter { it.groupId == group.id }
-                item(key = "group:" + group.id) {
-                    GroupHeader(
-                        group = group,
-                        alarms = members,
-                        onAdd = {
-                            creatingIn = group.id
-                            creating = true
-                        },
-                        onToggle = { enabled -> scope.launch { announce(persist { repository.setGroupEnabled(group.id, enabled) }) } },
-                        onHonorExceptions = { honor -> persistLater { repository.setGroupHonorExceptions(group.id, honor) } },
-                        onAction = { action ->
-                            actionGroupId = group.id
-                            groupAction = action
-                        },
-                        onUngroup = { persistLater { repository.deleteGroup(group.id, withAlarms = false) } },
-                    )
-                }
-                if (members.isEmpty()) {
-                    item(key = "group-empty:" + group.id) {
+                    // Время сна включено и будильник скоро — сколько выйдет сна (D-017, п. 2).
+                    if (nearest != null && settings.bedtime.mode != BedtimeMode.OFF && nearest.toEpochMilli() - now <= SLEEP_HINT_MILLIS) {
                         Text(
-                            stringResource(R.string.group_empty),
+                            stringResource(
+                                R.string.sleep_if_now,
+                                durationText(resources, SleepRules.sleepIfNow(nowInstant, nearest)),
+                                sleepText(settings.bedtime.sleepMinutes),
+                            ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 4.dp),
                         )
                     }
                 }
-                items(members, key = { it.id }) { AlarmItem(it) }
+                if (list.isEmpty() && groups.isEmpty()) {
+                    item(key = "empty") {
+                        Column(
+                            Modifier.fillMaxWidth().padding(top = 48.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(stringResource(R.string.alarms_empty), style = MaterialTheme.typography.bodyLarge)
+                            Spacer(Modifier.size(16.dp))
+                            FilledTonalButton(onClick = { creating = true }) { Text(stringResource(R.string.new_alarm)) }
+                        }
+                    }
+                }
+                items(sorted.filter { it.groupId == null || it.groupId !in groupIds }, key = { it.id }) { AlarmItem(it) }
+                for (group in groups) {
+                    val members = sorted.filter { it.groupId == group.id }
+                    item(key = "group:" + group.id) {
+                        GroupHeader(
+                            group = group,
+                            alarms = members,
+                            onAdd = {
+                                creatingIn = group.id
+                                creating = true
+                            },
+                            onToggle = { enabled -> scope.launch { announce(persist { repository.setGroupEnabled(group.id, enabled) }) } },
+                            onHonorExceptions = { honor -> persistLater { repository.setGroupHonorExceptions(group.id, honor) } },
+                            onAction = { action ->
+                                actionGroupId = group.id
+                                groupAction = action
+                            },
+                            onUngroup = { persistLater { repository.deleteGroup(group.id, withAlarms = false) } },
+                        )
+                    }
+                    if (members.isEmpty()) {
+                        item(key = "group-empty:" + group.id) {
+                            Text(
+                                stringResource(R.string.group_empty),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 4.dp),
+                            )
+                        }
+                    }
+                    items(members, key = { it.id }) { AlarmItem(it) }
+                }
+            }
+            FloatingActionButton(
+                onClick = {
+                    creatingIn = null
+                    creating = true
+                },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            ) { Icon(AppIcons.Add, contentDescription = stringResource(R.string.new_alarm)) }
+        }
+        if (layout.twoPane) {
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .padding(end = 16.dp, top = 8.dp, bottom = 16.dp)
+                    .clip(MaterialTheme.shapes.extraLarge),
+            ) {
+                if (editing != null) {
+                    // Другой будильник — новый черновик, а не правки прежнего.
+                    key(editing.id) { Editor(editing, inline = true) }
+                } else {
+                    EmptyPane(stringResource(R.string.alarms_pick), Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow))
+                }
             }
         }
-        FloatingActionButton(
-            onClick = {
-                creatingIn = null
-                creating = true
-            },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-        ) { Icon(AppIcons.Add, contentDescription = stringResource(R.string.new_alarm)) }
     }
 
     if (creating) {
@@ -273,27 +357,7 @@ fun AlarmsScreen(
             },
         )
     }
-    val editing = list.firstOrNull { it.id == editingId }
-    if (editing != null) {
-        AlarmEditor(
-            alarm = editing,
-            settings = settings,
-            groups = groups,
-            exceptions = exceptions,
-            onDismiss = { editingId = null },
-            onSave = { updated ->
-                editingId = null
-                scope.launch {
-                    val at = persist { repository.saveAlarm(updated.copy(enabled = true)) }
-                    announce(at)
-                }
-            },
-            onDelete = {
-                editingId = null
-                persistLater { repository.deleteAlarm(editing.id) }
-            },
-        )
-    }
+    if (editing != null && !layout.twoPane) Editor(editing, inline = false)
 
     when (dialog) {
         AlarmsDialog.NEW_GROUP -> NameDialog(
@@ -394,7 +458,13 @@ private fun GroupHeader(
     var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f).padding(start = 4.dp)) {
-            Text(group.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                group.name,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.semantics { heading() },
+            )
             Text(
                 pluralStringResource(R.plurals.alarms_count, alarms.size, alarms.size),
                 style = MaterialTheme.typography.bodySmall,
@@ -402,7 +472,13 @@ private fun GroupHeader(
             )
         }
         IconButton(onClick = onAdd) { Icon(AppIcons.Add, contentDescription = stringResource(R.string.new_alarm_in_group, group.name)) }
-        Switch(checked = alarms.any { it.enabled }, enabled = alarms.isNotEmpty(), onCheckedChange = onToggle)
+        val switchDescription = stringResource(R.string.group_switch_description, group.name)
+        Switch(
+            checked = alarms.any { it.enabled },
+            enabled = alarms.isNotEmpty(),
+            onCheckedChange = onToggle,
+            modifier = Modifier.semantics { contentDescription = switchDescription },
+        )
         Box {
             IconButton(onClick = { menu = true }) { Icon(AppIcons.More, contentDescription = stringResource(R.string.more)) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -531,16 +607,31 @@ private fun AlarmRow(
     snoozedUntil: Long?,
     exceptions: Exceptions,
     now: Instant,
+    isSelected: Boolean,
     onClick: () -> Unit,
     onToggle: (Boolean) -> Unit,
+    onDelete: () -> Unit,
 ) {
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     val next = if (alarm.enabled) AlarmRules.nextTrigger(alarm, now, zone, exceptions) else null
+    // TalkBack (D-022, п. 3): строка читается целиком — «Подъём, 7:00, по будням, включён»;
+    // удалить — действием, свайп ему недоступен; переключатель назван временем будильника.
+    val state = stringResource(if (alarm.enabled) R.string.alarm_state_on else R.string.alarm_state_off)
+    val deleteLabel = stringResource(R.string.delete)
+    val switchDescription = stringResource(R.string.alarm_switch_description, TimeText.time(context, alarm.hour, alarm.minute))
     Surface(
         shape = MaterialTheme.shapes.large,
         color = if (alarm.enabled) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClickLabel = stringResource(R.string.edit), onClick = onClick)
+            .semantics {
+                stateDescription = state
+                if (isSelected) selected = true
+                customActions = listOf(CustomAccessibilityAction(deleteLabel) { onDelete(); true })
+            },
     ) {
         Row(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -577,7 +668,11 @@ private fun AlarmRow(
                     )
                 }
             }
-            Switch(checked = alarm.enabled, onCheckedChange = onToggle)
+            Switch(
+                checked = alarm.enabled,
+                onCheckedChange = onToggle,
+                modifier = Modifier.semantics { contentDescription = switchDescription },
+            )
         }
     }
 }

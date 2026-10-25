@@ -177,6 +177,82 @@ class MigrationTest {
         assertEquals("15", settings["bedtimeLeadMinutes"])
     }
 
+    @Test
+    fun migration5To6KeepsJournalAndAddsTitle() = withDb { db ->
+        SchemaFile.read(5).create(db)
+        db.execSQL("INSERT INTO alarm_occurrence (alarmId, scheduledAt, state, snoozedUntil) VALUES ('a', 100, 'SNOOZED', 700)")
+        db.execSQL(
+            "INSERT INTO signal_event (id, source, sourceId, scheduledAt, firedAt, outcome) VALUES ('e', 'ALARM', 'a', 100, 103, 'SNOOZED')",
+        )
+        MIGRATION_5_6.migrate(db)
+
+        val occurrence = row(db, "SELECT * FROM alarm_occurrence")
+        assertEquals("700", occurrence["snoozedUntil"])
+        assertEquals(null, occurrence["expectedAt"])
+        val event = row(db, "SELECT * FROM signal_event")
+        assertEquals("103", event["firedAt"])
+        assertEquals("", event["title"])
+    }
+
+    @Test
+    fun migration6To7AddsWorldCitiesAndWeatherNotSet() = withDb { db ->
+        SchemaFile.read(6).create(db)
+        db.execSQL(
+            "INSERT INTO settings (id, snoozeMinutes, autoStopMinutes, alarmOrder, xiaomiHintsDone, signalStyle, volumeButtons, holidaysRu, " +
+                "bedtimeMode, sleepMinutes, bedtimeHour, bedtimeMinute, bedtimeDays, bedtimeLeadMinutes) " +
+                "VALUES (0, 5, NULL, 'NEXT', 1, 'FULL_SCREEN', 'SNOOZE', 0, 'FROM_ALARM', 450, 23, 0, 127, 15)",
+        )
+        MIGRATION_6_7.migrate(db)
+
+        val settings = row(db, "SELECT * FROM settings")
+        assertEquals("5", settings["snoozeMinutes"])
+        assertEquals("FROM_ALARM", settings["bedtimeMode"])
+        assertEquals("NOT_SET", settings["weatherMode"])
+        assertEquals("", settings["weatherPlace"])
+        assertEquals(null, settings["weatherLat"])
+        assertEquals(emptyList<Map<String, String?>>(), rows(db, "SELECT * FROM world_city"))
+    }
+
+    @Test
+    fun migration7To8KeepsSettingsAndAddsAppearanceDefaults() = withDb { db ->
+        SchemaFile.read(7).create(db)
+        db.execSQL(
+            "INSERT INTO settings (id, snoozeMinutes, autoStopMinutes, alarmOrder, xiaomiHintsDone, signalStyle, volumeButtons, holidaysRu, " +
+                "bedtimeMode, sleepMinutes, bedtimeHour, bedtimeMinute, bedtimeDays, bedtimeLeadMinutes, weatherMode, weatherPlace) " +
+                "VALUES (0, 10, 10, 'TIME_OF_DAY', 0, 'FULL_SCREEN', 'SNOOZE', 0, 'OFF', 480, 23, 0, 127, 15, 'CITY', 'Тула')",
+        )
+        MIGRATION_7_8.migrate(db)
+
+        val settings = row(db, "SELECT * FROM settings")
+        assertEquals("CITY", settings["weatherMode"])
+        assertEquals("Тула", settings["weatherPlace"])
+        assertEquals("SYSTEM", settings["theme"])
+        assertEquals(null, settings["seedColor"])
+        assertEquals("CIRCLE", settings["clockStyle"])
+        assertEquals("100", settings["clockSize"])
+        assertEquals("NONE", settings["nightNoise"])
+        assertEquals("NONE", settings["background"])
+    }
+
+    @Test
+    fun migration8To9KeepsAppearanceAndTurnsHighContrastOff() = withDb { db ->
+        SchemaFile.read(8).create(db)
+        db.execSQL(
+            "INSERT INTO settings (id, snoozeMinutes, autoStopMinutes, alarmOrder, xiaomiHintsDone, signalStyle, volumeButtons, holidaysRu, " +
+                "bedtimeMode, sleepMinutes, bedtimeHour, bedtimeMinute, bedtimeDays, bedtimeLeadMinutes, weatherMode, weatherPlace, " +
+                "theme, seedColor, clockStyle, clockFont, clockSize, nightNoise, background) " +
+                "VALUES (0, 10, 10, 'TIME_OF_DAY', 0, 'FULL_SCREEN', 'SNOOZE', 0, 'OFF', 480, 23, 0, 127, 15, 'NOT_SET', '', " +
+                "'BLACK', -12345, 'DIGITS', 'SEGMENT', 80, 'PINK', 'STARS')",
+        )
+        MIGRATION_8_9.migrate(db)
+
+        val settings = row(db, "SELECT * FROM settings")
+        assertEquals("BLACK", settings["theme"])
+        assertEquals("-12345", settings["seedColor"])
+        assertEquals("STARS", settings["background"])
+        assertEquals("0", settings["highContrast"])
+    }
+
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)
 
     private data class Table(val columns: Map<String, Column>, val indices: Set<String>, val foreignKeys: Set<String>)

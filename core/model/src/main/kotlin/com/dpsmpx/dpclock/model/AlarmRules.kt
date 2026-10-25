@@ -93,7 +93,13 @@ object AlarmRules {
 
     /** Ближайшее срабатывание среди включённых будильников. */
     fun nearest(alarms: List<Alarm>, after: Instant, zone: ZoneId, exceptions: Exceptions = Exceptions.NONE): Instant? =
-        alarms.filter { it.enabled }.mapNotNull { nextTrigger(it, after, zone, exceptions) }.minOrNull()
+        nearestAlarm(alarms, after, zone, exceptions)?.second
+
+    /** Ближайший включённый будильник и его срабатывание — для виджета и плитки (D-020). */
+    fun nearestAlarm(alarms: List<Alarm>, after: Instant, zone: ZoneId, exceptions: Exceptions = Exceptions.NONE): Pair<Alarm, Instant>? =
+        alarms.filter { it.enabled }
+            .mapNotNull { alarm -> nextTrigger(alarm, after, zone, exceptions)?.let { alarm to it } }
+            .minWithOrNull(compareBy<Pair<Alarm, Instant>> { it.second }.thenBy { it.first.createdAt })
 
     /** Список в выбранном порядке (D-010, п. 6); при равенстве — по созданию. */
     fun sorted(
@@ -125,7 +131,7 @@ object AlarmRules {
 data class Countdown(val days: Long, val hours: Long, val minutes: Long) {
     companion object {
         fun of(millis: Long): Countdown {
-            val totalMinutes = Math.ceilDiv(millis.coerceAtLeast(0L), 60_000L)
+            val totalMinutes = ceilDiv(millis.coerceAtLeast(0L), 60_000L)
             return Countdown(totalMinutes / (24 * 60), totalMinutes / 60 % 24, totalMinutes % 60)
         }
     }

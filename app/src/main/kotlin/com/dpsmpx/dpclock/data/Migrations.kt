@@ -89,3 +89,49 @@ val MIGRATION_4_5 = SqlMigration(
         "ALTER TABLE `settings` ADD COLUMN `bedtimeLeadMinutes` INTEGER NOT NULL DEFAULT 15",
     ),
 )
+
+/** 0.7.1: журнал срабатываний — название и ожидаемое время звонка. */
+val MIGRATION_5_6 = SqlMigration(
+    5,
+    6,
+    listOf(
+        "ALTER TABLE `alarm_occurrence` ADD COLUMN `expectedAt` INTEGER",
+        "ALTER TABLE `signal_event` ADD COLUMN `title` TEXT NOT NULL DEFAULT ''",
+    ),
+)
+
+/** 0.8.0 (D-019): города мировых часов и погода вашего города. */
+val MIGRATION_6_7 = SqlMigration(
+    6,
+    7,
+    listOf(
+        "CREATE TABLE IF NOT EXISTS `world_city` (`zoneId` TEXT NOT NULL, `position` INTEGER NOT NULL, " +
+            "`createdAt` INTEGER NOT NULL, PRIMARY KEY(`zoneId`))",
+        "ALTER TABLE `settings` ADD COLUMN `weatherMode` TEXT NOT NULL DEFAULT 'NOT_SET'",
+        "ALTER TABLE `settings` ADD COLUMN `weatherPlace` TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE `settings` ADD COLUMN `weatherLat` REAL",
+        "ALTER TABLE `settings` ADD COLUMN `weatherLon` REAL",
+    ),
+)
+
+/** 0.10.0 (D-021): тема, цвет, стиль часов, шум ночных часов, фон. */
+val MIGRATION_7_8 = SqlMigration(
+    7,
+    8,
+    listOf(
+        "ALTER TABLE `settings` ADD COLUMN `theme` TEXT NOT NULL DEFAULT 'SYSTEM'",
+        "ALTER TABLE `settings` ADD COLUMN `seedColor` INTEGER",
+        "ALTER TABLE `settings` ADD COLUMN `clockStyle` TEXT NOT NULL DEFAULT 'CIRCLE'",
+        "ALTER TABLE `settings` ADD COLUMN `clockFont` TEXT NOT NULL DEFAULT 'REGULAR'",
+        "ALTER TABLE `settings` ADD COLUMN `clockSize` INTEGER NOT NULL DEFAULT 100",
+        "ALTER TABLE `settings` ADD COLUMN `nightNoise` TEXT NOT NULL DEFAULT 'NONE'",
+        "ALTER TABLE `settings` ADD COLUMN `background` TEXT NOT NULL DEFAULT 'NONE'",
+    ),
+)
+
+/** 0.11.0 (D-022, п. 5): «Высокий контраст» в оформлении. */
+val MIGRATION_8_9 = SqlMigration(
+    8,
+    9,
+    listOf("ALTER TABLE `settings` ADD COLUMN `highContrast` INTEGER NOT NULL DEFAULT 0"),
+)

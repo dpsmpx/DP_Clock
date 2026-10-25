@@ -1,5 +1,6 @@
 package com.dpsmpx.dpclock.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -11,8 +12,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DatePicker
@@ -32,6 +34,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,11 +46,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -85,6 +93,8 @@ private enum class RepeatMode { DAYS, WORKDAYS, CYCLE, DATE }
  * Редактор будильника (SCREEN_MAP.md, п. 2; D-013, D-014): время, название,
  * повтор — дни недели, рабочие дни, сменный график или дата; в «Дополнительно» —
  * мелодия, вибрация, нарастание, «Отложить», пропуск, группа, исключения.
+ * [inline] — в правой колонке рядом со списком (D-022, п. 2), иначе во весь экран;
+ * [handleBack] — «Назад» закрывает его в колонке, пока раздел на экране.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,6 +106,8 @@ fun AlarmEditor(
     onDismiss: () -> Unit,
     onSave: (Alarm) -> Unit,
     onDelete: () -> Unit,
+    inline: Boolean = false,
+    handleBack: Boolean = true,
 ) {
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -170,11 +182,13 @@ fun AlarmEditor(
     }
     val next = draft?.let { AlarmRules.nextTrigger(it, Instant.now(), zone, exceptions) }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    val body: @Composable () -> Unit = {
         Scaffold(
+            containerColor = if (inline) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.background,
             topBar = {
                 TopAppBar(
-                    title = { Text(stringResource(R.string.edit_alarm)) },
+                    colors = if (inline) TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent) else TopAppBarDefaults.topAppBarColors(),
+                    title = { TitleText(stringResource(R.string.edit_alarm)) },
                     navigationIcon = {
                         IconButton(onClick = onDismiss) { Icon(AppIcons.Close, contentDescription = stringResource(R.string.cancel)) }
                     },
@@ -197,7 +211,7 @@ fun AlarmEditor(
             ) {
                 if (mode != RepeatMode.CYCLE) {
                     TextButton(onClick = { dialog = "time" }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                        Text(TimeText.time(context, hour, minute), style = MaterialTheme.typography.displayLarge)
+                        FitText(TimeText.time(context, hour, minute), style = MaterialTheme.typography.displayLarge)
                     }
                 }
                 OutlinedTextField(
@@ -208,7 +222,7 @@ fun AlarmEditor(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                Text(stringResource(R.string.repeat), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.repeat), style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { heading() })
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (option in RepeatMode.entries) {
                         FilterChip(
@@ -229,6 +243,8 @@ fun AlarmEditor(
                                 selected = day in days,
                                 onClick = { days = if (day in days) days - day else days + day },
                                 label = { Text(day.getDisplayName(TextStyle.NARROW_STANDALONE, locale)) },
+                                // TalkBack читает день целиком, а не одну букву (D-022, п. 3).
+                                modifier = Modifier.semantics { contentDescription = day.getDisplayName(TextStyle.FULL_STANDALONE, locale) },
                             )
                         }
                     }
@@ -287,8 +303,8 @@ fun AlarmEditor(
                     )
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.vibration)) },
-                        trailingContent = { Switch(checked = vibrate, onCheckedChange = { vibrate = it }) },
-                        modifier = Modifier.clickable { vibrate = !vibrate },
+                        trailingContent = { Switch(checked = vibrate, onCheckedChange = null) },
+                        modifier = Modifier.toggleable(value = vibrate, role = Role.Switch) { vibrate = it },
                     )
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.volume_ramp)) },
@@ -305,14 +321,14 @@ fun AlarmEditor(
                         ListItem(
                             headlineContent = { Text(stringResource(R.string.skip_next)) },
                             supportingContent = skippable?.let { { Text(TimeText.date(context, it)) } },
-                            trailingContent = { Switch(checked = skipNext, onCheckedChange = { skipNext = it }) },
-                            modifier = Modifier.clickable { skipNext = !skipNext },
+                            trailingContent = { Switch(checked = skipNext, onCheckedChange = null) },
+                            modifier = Modifier.toggleable(value = skipNext, role = Role.Switch) { skipNext = it },
                         )
                         ListItem(
                             headlineContent = { Text(stringResource(R.string.honor_exceptions)) },
                             supportingContent = { Text(exceptionsSummary(exceptions)) },
-                            trailingContent = { Switch(checked = honorExceptions, onCheckedChange = { honorExceptions = it }) },
-                            modifier = Modifier.clickable { honorExceptions = !honorExceptions },
+                            trailingContent = { Switch(checked = honorExceptions, onCheckedChange = null) },
+                            modifier = Modifier.toggleable(value = honorExceptions, role = Role.Switch) { honorExceptions = it },
                         )
                     }
                     ListItem(
@@ -354,6 +370,12 @@ fun AlarmEditor(
                 Spacer(Modifier.size(24.dp))
             }
         }
+    }
+    if (inline) {
+        BackHandler(enabled = handleBack, onBack = onDismiss)
+        body()
+    } else {
+        Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) { body() }
     }
 
     val current = dialog
@@ -490,7 +512,8 @@ private fun CycleEditor(
         }
         days.forEachIndexed { index, time ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.cycle_day, index + 1), modifier = Modifier.width(72.dp))
+                val dayLabel = stringResource(R.string.cycle_day, index + 1)
+                Text(dayLabel, modifier = Modifier.widthIn(min = 72.dp))
                 if (time != null) {
                     TextButton(onClick = { onTime(index) }) {
                         Text(TimeText.time(context, time.hour, time.minute), style = MaterialTheme.typography.titleLarge)
@@ -503,6 +526,7 @@ private fun CycleEditor(
                     checked = time != null,
                     // Хотя бы один рабочий день в цикле.
                     enabled = time == null || workdays > 1,
+                    modifier = Modifier.semantics { contentDescription = dayLabel },
                     onCheckedChange = { on ->
                         val previous = days.filterNotNull().firstOrNull() ?: LocalTime.of(7, 0)
                         onChange(days.toMutableList().also { it[index] = if (on) previous else null })

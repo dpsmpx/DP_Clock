@@ -79,7 +79,7 @@ fun SoundPicker(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(stringResource(R.string.alarm_sound)) },
+                    title = { TitleText(stringResource(R.string.alarm_sound)) },
                     navigationIcon = {
                         IconButton(onClick = onDismiss) { Icon(AppIcons.Close, contentDescription = stringResource(R.string.cancel)) }
                     },

@@ -3,10 +3,13 @@ package com.dpsmpx.dpclock.ui
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -28,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -41,7 +45,10 @@ import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.platform.TimeText
 import java.util.Locale
 
-/** Раздел «Секундомер» (SCREEN_MAP.md, п. 7). Идёт и при свёрнутом приложении: время считается от момента старта. */
+/**
+ * Раздел «Секундомер» (SCREEN_MAP.md, п. 7). Идёт и при свёрнутом приложении: время считается от момента старта.
+ * Кнопки — внизу, под большим пальцем; боком — время с кнопками слева, круги справа (D-022, п. 6).
+ */
 @Composable
 fun StopwatchScreen() {
     val repository = DpClockApp.graph(LocalContext.current).repository
@@ -49,16 +56,24 @@ fun StopwatchScreen() {
     val now = rememberMoment(33L, active = stopwatch.state == StopwatchState.RUNNING)
     val locale = LocalConfiguration.current.locales[0]
     val elapsed = stopwatch.elapsedAt(now)
+    val rows = stopwatch.lapRows()
 
     fun update(change: (Stopwatch) -> Stopwatch) = persistLater { repository.updateStopwatch(change) }
 
-    Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            TimeText.stopwatch(elapsed, locale),
-            style = MaterialTheme.typography.displayMedium.copy(fontFeatureSettings = "tnum"),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
-        )
+    @Composable
+    fun Time(modifier: Modifier) {
+        Box(modifier, contentAlignment = Alignment.Center) {
+            FitText(
+                TimeText.stopwatch(elapsed, locale),
+                style = MaterialTheme.typography.displayMedium.copy(fontFeatureSettings = "tnum"),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+            )
+        }
+    }
+
+    @Composable
+    fun Controls() {
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
             val big = Modifier.size(72.dp)
             when (stopwatch.state) {
@@ -85,11 +100,13 @@ fun StopwatchScreen() {
                 }
             }
         }
-        Spacer(Modifier.size(24.dp))
-        val rows = stopwatch.lapRows()
-        if (rows.isNotEmpty()) {
+    }
+
+    @Composable
+    fun Laps(modifier: Modifier) {
+        Column(modifier) {
             val context = LocalContext.current
-            TextButton(onClick = { context.shareLaps(rows, elapsed, locale) }) {
+            TextButton(onClick = { context.shareLaps(rows, elapsed, locale) }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                 Icon(AppIcons.Share, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.size(8.dp))
                 Text(stringResource(R.string.share_laps))
@@ -100,24 +117,46 @@ fun StopwatchScreen() {
                 Text(stringResource(R.string.lap_total), Modifier.weight(2f), style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.End)
             }
             HorizontalDivider(Modifier.padding(vertical = 4.dp))
+            LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 8.dp)) {
+                items(rows, key = { it.number }) { row ->
+                    val color = when {
+                        row.isBest -> MaterialTheme.colorScheme.primary
+                        row.isWorst -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurface
+                    }
+                    val mark = when {
+                        row.isBest -> " · " + stringResource(R.string.lap_best)
+                        row.isWorst -> " · " + stringResource(R.string.lap_worst)
+                        else -> ""
+                    }
+                    // TalkBack читает круг одной фразой: номер, время круга, итог.
+                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp).semantics(mergeDescendants = true) {}) {
+                        Text("${row.number}$mark", Modifier.weight(1f), color = color)
+                        Text(TimeText.stopwatch(row.lapMillis, locale), Modifier.weight(2f), color = color, textAlign = TextAlign.End)
+                        Text(TimeText.stopwatch(row.totalMillis, locale), Modifier.weight(2f), textAlign = TextAlign.End)
+                    }
+                }
+            }
         }
-        LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 8.dp)) {
-            items(rows, key = { it.number }) { row ->
-                val color = when {
-                    row.isBest -> MaterialTheme.colorScheme.primary
-                    row.isWorst -> MaterialTheme.colorScheme.error
-                    else -> MaterialTheme.colorScheme.onSurface
+    }
+
+    BoxWithConstraints(Modifier.fillMaxSize().padding(16.dp)) {
+        if (maxWidth > maxHeight) {
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Time(Modifier.fillMaxWidth())
+                    Controls()
                 }
-                val mark = when {
-                    row.isBest -> " · " + stringResource(R.string.lap_best)
-                    row.isWorst -> " · " + stringResource(R.string.lap_worst)
-                    else -> ""
-                }
-                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                    Text("${row.number}$mark", Modifier.weight(1f), color = color)
-                    Text(TimeText.stopwatch(row.lapMillis, locale), Modifier.weight(2f), color = color, textAlign = TextAlign.End)
-                    Text(TimeText.stopwatch(row.totalMillis, locale), Modifier.weight(2f), textAlign = TextAlign.End)
-                }
+                if (rows.isNotEmpty()) Laps(Modifier.weight(1f).fillMaxHeight())
+            }
+        } else {
+            Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                // Без кругов время — посередине; с кругами — сверху, круги под ним.
+                Time(if (rows.isEmpty()) Modifier.fillMaxWidth().weight(1f) else Modifier.fillMaxWidth())
+                if (rows.isNotEmpty()) Laps(Modifier.fillMaxWidth().weight(1f))
+                Spacer(Modifier.size(16.dp))
+                Controls()
+                Spacer(Modifier.size(8.dp))
             }
         }
     }

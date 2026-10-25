@@ -7,6 +7,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,9 +15,12 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -40,6 +44,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.dpsmpx.dpclock.R
@@ -79,7 +87,12 @@ fun WakeChallenge(check: WakeCheck, onInteract: () -> Unit, onPassed: () -> Unit
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(stringResource(R.string.wake_title), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+        Text(
+            stringResource(R.string.wake_title),
+            style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.semantics { heading() },
+        )
         if (active !== check) {
             Text(stringResource(R.string.wake_fallback_note), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
         }
@@ -109,25 +122,36 @@ private fun KeypadChallenge(check: WakeCheck, onInteract: () -> Unit, onPassed: 
     var input by remember(check) { mutableStateOf("") }
     var wrong by remember(check) { mutableStateOf(false) }
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val question = @Composable {
         if (check.tasks > 1) Text(stringResource(R.string.wake_task_of, done + 1, check.tasks))
         Text(
             if (check.method == WakeMethod.CODE) stringResource(R.string.wake_type_code) else stringResource(R.string.wake_solve),
             style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
         )
-        Text(task.question, style = MaterialTheme.typography.displaySmall)
+        FitText(task.question, style = MaterialTheme.typography.displaySmall, textAlign = TextAlign.Center)
         Text(
             input.ifEmpty { " " },
             style = MaterialTheme.typography.headlineMedium,
             color = if (wrong) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
         )
-        if (wrong) Text(stringResource(R.string.wake_wrong), color = MaterialTheme.colorScheme.error)
+        // TalkBack сразу скажет «Неверно» (D-022, п. 3).
+        if (wrong) {
+            Text(
+                stringResource(R.string.wake_wrong),
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        }
+    }
+    val keypad = @Composable {
         val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "OK")
         Column(Modifier.widthIn(max = 320.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             for (row in keys.chunked(3)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (key in row) {
-                        val modifier = Modifier.weight(1f).aspectRatio(1.6f)
+                        // Не ниже 56 dp, растут с крупным шрифтом (D-022, п. 4).
+                        val modifier = Modifier.weight(1f).heightIn(min = 56.dp)
                         val press = {
                             onInteract()
                             wrong = false
@@ -160,6 +184,24 @@ private fun KeypadChallenge(check: WakeCheck, onInteract: () -> Unit, onPassed: 
             }
         }
     }
+    BoxWithConstraints(contentAlignment = Alignment.Center) {
+        if (maxWidth > maxHeight) {
+            // Телефон боком (D-022, п. 6): задача слева, клавиатура справа.
+            Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) { question() }
+                Box(Modifier.weight(1f).verticalScroll(rememberScrollState()), contentAlignment = Alignment.Center) { keypad() }
+            }
+        } else {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                question()
+                keypad()
+            }
+        }
+    }
 }
 
 @Composable
@@ -187,7 +229,11 @@ private fun ShakeChallenge(check: WakeCheck, onInteract: () -> Unit, onPassed: (
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(stringResource(R.string.wake_shake), style = MaterialTheme.typography.bodyLarge)
-        Text("${count.coerceAtMost(check.shakes)} / ${check.shakes}", style = MaterialTheme.typography.displayMedium)
+        Text(
+            "${count.coerceAtMost(check.shakes)} / ${check.shakes}",
+            style = MaterialTheme.typography.displayMedium,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        )
         LinearProgressIndicator(progress = { count.toFloat() / check.shakes }, modifier = Modifier.fillMaxWidth().height(12.dp))
     }
 }

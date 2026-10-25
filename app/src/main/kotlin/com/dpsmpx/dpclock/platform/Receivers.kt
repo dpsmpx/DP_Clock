@@ -3,6 +3,7 @@ package com.dpsmpx.dpclock.platform
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.widget.RemoteViews
 import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.model.SignalOutcome
 import com.dpsmpx.dpclock.model.StepSignal
@@ -43,7 +44,7 @@ class AlarmReceiver : BroadcastReceiver() {
                         when (fire?.signal) {
                             StepSignal.SHORT -> Sounds.shortSignal(context, fire.sound)
                             // Шаг стал последним после «+1 мин» на паузе — сигнал полный.
-                            StepSignal.FULL -> RingService.ringTimer(context, id, fire.run.name, fire.run.state == TimerState.RINGING, fire.sound)
+                            StepSignal.FULL -> RingService.ringTimer(context, id, fire.run.name, fire.run.state == TimerState.RINGING, fire.sound, fire.endedAt)
                             StepSignal.SLEEP -> MediaStop.fadeAndPause(context)
                             StepSignal.NONE, null -> Unit
                         }
@@ -86,7 +87,7 @@ class SystemEventsReceiver : BroadcastReceiver() {
     }
 }
 
-/** Кнопки уведомлений без экрана: отложенный будильник, таймеры, секундомер. */
+/** Кнопки уведомлений и виджетов без экрана: отложенный будильник, будильники, таймеры, пресеты, секундомер. */
 class ActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val repository = DpClockApp.graph(context).repository
@@ -101,6 +102,9 @@ class ActionReceiver : BroadcastReceiver() {
                 ACTION_STOPWATCH_RESUME -> repository.updateStopwatch { it.start(Clocks.moment()) }
                 ACTION_STOPWATCH_LAP -> repository.updateStopwatch { it.lap(Clocks.moment()) }
                 ACTION_STOPWATCH_RESET -> repository.updateStopwatch { it.reset() }
+                // Виджеты (D-020): переключатель будильника, пресет одним нажатием.
+                ACTION_ALARM_TOGGLE -> repository.setAlarmEnabled(id, intent.getBooleanExtra(RemoteViews.EXTRA_CHECKED, false))
+                ACTION_PRESET_START -> repository.startPreset(id)
             }
         }
     }
@@ -114,6 +118,8 @@ class ActionReceiver : BroadcastReceiver() {
         const val ACTION_STOPWATCH_RESUME = "com.dpsmpx.dpclock.action.STOPWATCH_RESUME"
         const val ACTION_STOPWATCH_LAP = "com.dpsmpx.dpclock.action.STOPWATCH_LAP"
         const val ACTION_STOPWATCH_RESET = "com.dpsmpx.dpclock.action.STOPWATCH_RESET"
+        const val ACTION_ALARM_TOGGLE = "com.dpsmpx.dpclock.action.ALARM_TOGGLE"
+        const val ACTION_PRESET_START = "com.dpsmpx.dpclock.action.PRESET_START"
         const val EXTRA_ID = "id"
     }
 }

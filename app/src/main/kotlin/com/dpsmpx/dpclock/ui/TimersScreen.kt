@@ -10,13 +10,15 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -36,6 +38,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +56,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.DpClockApp
+import com.dpsmpx.dpclock.QuickRequest
 import com.dpsmpx.dpclock.R
 import com.dpsmpx.dpclock.model.AlarmSound
 import com.dpsmpx.dpclock.model.DurationInput
@@ -69,7 +73,7 @@ import java.util.UUID
 
 /** Раздел «Таймеры» (SCREEN_MAP.md, п. 4). */
 @Composable
-fun TimersScreen(requestNotifications: () -> Unit) {
+fun TimersScreen(requestNotifications: () -> Unit, quick: QuickRequest? = null, onQuickHandled: (Long) -> Unit = {}) {
     val repository = DpClockApp.graph(LocalContext.current).repository
     val runs by repository.timerRuns.collectAsStateWithLifecycle(null)
     val presets by repository.presets.collectAsStateWithLifecycle(emptyList())
@@ -81,6 +85,13 @@ fun TimersScreen(requestNotifications: () -> Unit) {
     val resources = LocalResources.current
     val now = rememberMoment(200L, active = runs.orEmpty().any { it.state == TimerState.RUNNING })
 
+    // Ярлык «Таймер засыпания» (D-020).
+    LaunchedEffect(quick?.token) {
+        val request = quick ?: return@LaunchedEffect
+        sleepOpen = true
+        onQuickHandled(request.token)
+    }
+
     val list = runs ?: return
     val inputVisible = list.isEmpty() || showInput
 
@@ -90,18 +101,19 @@ fun TimersScreen(requestNotifications: () -> Unit) {
         persistLater { repository.startTimer(program, name, presetId) }
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    // Запущенные таймеры и ввод; на широком окне заготовки — во второй колонке (D-022, п. 2).
+    val timersPart: LazyListScope.() -> Unit = {
         items(list, key = { it.id }) { run -> TimerCard(run, run.remainingAt(now)) }
         if (inputVisible) {
             item(key = "input") {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                     DurationEntry(input, onChange = { input = it })
                     Spacer(Modifier.size(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Крупным шрифтом кнопки переносятся на вторую строку, а не обрезаются.
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         if (list.isNotEmpty()) {
                             OutlinedButton(onClick = { showInput = false }) { Text(stringResource(R.string.cancel)) }
                         }
@@ -135,6 +147,8 @@ fun TimersScreen(requestNotifications: () -> Unit) {
                 Text(stringResource(R.string.sleep_timer))
             }
         }
+    }
+    val presetsPart: LazyListScope.() -> Unit = {
         item(key = "presets-title") {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.presets), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
@@ -157,6 +171,31 @@ fun TimersScreen(requestNotifications: () -> Unit) {
                 onEdit = { editingPreset = preset },
                 onDelete = { persistLater { repository.deletePreset(preset.id) } },
             )
+        }
+    }
+    if (rememberWindowLayout().twoPane) {
+        Row(Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                content = timersPart,
+            )
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                content = presetsPart,
+            )
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            timersPart()
+            presetsPart()
         }
     }
 
@@ -226,7 +265,7 @@ private fun TimerCard(run: TimerRun, remaining: Long) {
                 val cycle = if (run.program.cycles > 1) " · " + stringResource(R.string.cycle_of, run.cycleIndex + 1, run.program.cycles) else ""
                 Text(step + cycle, style = MaterialTheme.typography.bodyMedium)
             }
-            Text(
+            FitText(
                 if (run.state == TimerState.RINGING) stringResource(R.string.ring_timer_finished) else TimeText.countdown(remaining),
                 style = MaterialTheme.typography.displayLarge,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -265,7 +304,13 @@ private fun PresetRow(preset: TimerPreset, onStart: () -> Unit, onEdit: () -> Un
         Surface(
             shape = MaterialTheme.shapes.large,
             color = MaterialTheme.colorScheme.surfaceContainer,
-            modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onStart, onLongClick = { menu = true }),
+            // TalkBack: двойное касание — запустить, двойное с удержанием — меню (D-022, п. 3).
+            modifier = Modifier.fillMaxWidth().combinedClickable(
+                onClickLabel = stringResource(R.string.start),
+                onLongClickLabel = stringResource(R.string.more),
+                onClick = onStart,
+                onLongClick = { menu = true },
+            ),
         ) {
             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -301,13 +346,16 @@ private fun programSummary(program: TimerProgram): String {
 @Composable
 fun DurationEntry(input: DurationInput, onChange: (DurationInput) -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.widthIn(max = 360.dp)) {
-        Text(
+        FitText(
             String.format(Locale.ROOT, "%02d:%02d:%02d", input.hours, input.minutes, input.seconds),
             style = MaterialTheme.typography.displayMedium,
             color = if (input.isEmpty) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.size(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             for (minutes in listOf(1, 5, 10)) {
                 OutlinedButton(onClick = { onChange(input.plusMinutes(minutes)) }) {
                     Text(stringResource(R.string.plus_minutes, minutes))
@@ -319,16 +367,17 @@ fun DurationEntry(input: DurationInput, onChange: (DurationInput) -> Unit) {
         for (row in keys) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 4.dp)) {
                 for (key in row) {
-                    Box(Modifier.weight(1f).aspectRatio(1.8f)) {
+                    // Высота — не меньше 56 dp и растёт с крупным шрифтом (D-022, п. 4).
+                    Box(Modifier.weight(1f).heightIn(min = 56.dp)) {
                         when (key) {
                             -1 -> Unit
                             -2 -> FilledTonalIconButton(
                                 onClick = { onChange(input.backspace()) },
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                             ) { Icon(AppIcons.Backspace, contentDescription = stringResource(R.string.backspace)) }
                             else -> FilledTonalButton(
                                 onClick = { onChange(input.press(key)) },
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                             ) { Text(key.toString(), style = MaterialTheme.typography.headlineSmall) }
                         }
                     }

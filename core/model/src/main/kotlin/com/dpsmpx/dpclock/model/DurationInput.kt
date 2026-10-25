@@ -56,6 +56,9 @@ data class Hms(val hours: Long, val minutes: Long, val seconds: Long, val centis
         }
 
         /** Для обратного отсчёта: секунды вверх — «0:01» до самого конца, «0:00» — только в конце. */
-        fun ofCountdown(millis: Long): Hms = of(Math.ceilDiv(millis.coerceAtLeast(0L), 1000L) * 1000L)
+        fun ofCountdown(millis: Long): Hms = of(ceilDiv(millis.coerceAtLeast(0L), 1000L) * 1000L)
     }
 }
+
+/** Деление с округлением вверх. `Math.ceilDiv` в Android есть только с API 35, а приложение — с 31. */
+internal fun ceilDiv(x: Long, y: Long): Long = -Math.floorDiv(-x, y)

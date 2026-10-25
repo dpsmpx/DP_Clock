@@ -10,15 +10,21 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.OutlinedButton
@@ -35,6 +41,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -45,6 +56,7 @@ import com.dpsmpx.dpclock.platform.RingItem
 import com.dpsmpx.dpclock.platform.RingService
 import com.dpsmpx.dpclock.platform.Ringing
 import com.dpsmpx.dpclock.platform.TimeText
+import com.dpsmpx.dpclock.ui.FitText
 import com.dpsmpx.dpclock.ui.WakeChallenge
 import com.dpsmpx.dpclock.ui.rememberNowMillis
 import kotlinx.coroutines.flow.first
@@ -52,7 +64,7 @@ import kotlinx.coroutines.flow.first
 /**
  * Экран сигнала поверх блокировки (SCREEN_MAP.md, п. 3, 6). Работает и до
  * первой разблокировки после перезагрузки. Кнопки крупные: нажимаются с
- * первого раза спросонья. С подтверждением пробуждения «Выключить» открывает
+ * первого раза спросонья; телефоном боком — справа (D-022, п. 6). С подтверждением пробуждения «Выключить» открывает
  * проверку (D-015); «Не спите?» — свой экран.
  */
 class RingActivity : ComponentActivity() {
@@ -197,69 +209,94 @@ class RingActivity : ComponentActivity() {
 private fun RingContent(item: RingItem, onAction: (String, RingItem) -> Unit) {
     val context = LocalContext.current
     val now = rememberNowMillis(1_000L)
-    Column(
-        Modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(Modifier.height(48.dp))
-            Text(TimeText.time(context, now), style = MaterialTheme.typography.displayLarge)
-            Spacer(Modifier.height(16.dp))
-            Text(
-                when (item) {
-                    is RingItem.AlarmRing ->
-                        item.label.ifBlank { stringResource(R.string.ring_alarm_title) } + " · " + TimeText.time(context, item.hour, item.minute)
-                    is RingItem.TimerRing -> stringResource(
-                        if (item.finished) R.string.ring_timer_named_finished else R.string.ring_step_named_finished,
-                        item.name.ifBlank { stringResource(R.string.timer_default_name) },
-                    )
-                    is RingItem.RecheckRing -> stringResource(R.string.recheck_title)
-                    is RingItem.GentleRing -> stringResource(R.string.gentle_title)
-                },
-                style = MaterialTheme.typography.headlineSmall,
-                textAlign = TextAlign.Center,
-            )
-            if (item is RingItem.RecheckRing) {
-                Spacer(Modifier.height(8.dp))
-                Text(stringResource(R.string.recheck_hint), textAlign = TextAlign.Center)
-            }
+    val title = when (item) {
+        is RingItem.AlarmRing ->
+            item.label.ifBlank { stringResource(R.string.ring_alarm_title) } + " · " + TimeText.time(context, item.hour, item.minute)
+        is RingItem.TimerRing -> stringResource(
+            if (item.finished) R.string.ring_timer_named_finished else R.string.ring_step_named_finished,
+            item.name.ifBlank { stringResource(R.string.timer_default_name) },
+        )
+        is RingItem.RecheckRing -> stringResource(R.string.recheck_title)
+        is RingItem.GentleRing -> stringResource(R.string.gentle_title)
+    }
+    val info = @Composable {
+        FitText(TimeText.time(context, now), style = MaterialTheme.typography.displayLarge, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.height(16.dp))
+        // TalkBack (D-022, п. 3): экран объявляет, что звонит; сменился сигнал — объявит новый.
+        Text(
+            title,
+            style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.semantics {
+                heading()
+                liveRegion = LiveRegionMode.Polite
+            },
+        )
+        if (item is RingItem.RecheckRing) {
+            Spacer(Modifier.height(8.dp))
+            Text(stringResource(R.string.recheck_hint), textAlign = TextAlign.Center)
         }
-        val buttonModifier = Modifier.fillMaxWidth().height(88.dp)
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            when (item) {
-                is RingItem.AlarmRing -> {
-                    if (item.wakeCheck.snoozeAllowed) {
-                        FilledTonalButton(onClick = { onAction(RingService.ACTION_SNOOZE, item) }, modifier = buttonModifier) {
-                            Text(stringResource(R.string.snooze_for, item.snoozeMinutes), style = MaterialTheme.typography.titleLarge)
-                        }
-                    }
-                    Button(onClick = { onAction(RingService.ACTION_DISMISS, item) }, modifier = buttonModifier) {
-                        Text(
-                            stringResource(if (item.wakeCheck.required) R.string.wake_dismiss_with_check else R.string.dismiss),
-                            style = MaterialTheme.typography.titleLarge,
-                        )
+    }
+    // Кнопки не ниже 88 dp и растут с крупным шрифтом (D-022, п. 4).
+    val buttonModifier = Modifier.fillMaxWidth().heightIn(min = 88.dp)
+    val buttons = @Composable {
+        when (item) {
+            is RingItem.AlarmRing -> {
+                if (item.wakeCheck.snoozeAllowed) {
+                    FilledTonalButton(onClick = { onAction(RingService.ACTION_SNOOZE, item) }, modifier = buttonModifier) {
+                        Text(stringResource(R.string.snooze_for, item.snoozeMinutes), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
                     }
                 }
-                is RingItem.TimerRing -> {
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        FilledTonalButton(
-                            onClick = { onAction(RingService.ACTION_TIMER_ADD_MINUTE, item) },
-                            modifier = Modifier.weight(1f).height(88.dp),
-                        ) { Text(stringResource(R.string.add_minute), style = MaterialTheme.typography.titleLarge) }
-                        Button(
-                            onClick = { onAction(RingService.ACTION_TIMER_STOP, item) },
-                            modifier = Modifier.weight(1f).height(88.dp),
-                        ) { Text(stringResource(R.string.stop), style = MaterialTheme.typography.titleLarge) }
-                    }
+                Button(onClick = { onAction(RingService.ACTION_DISMISS, item) }, modifier = buttonModifier) {
+                    Text(
+                        stringResource(if (item.wakeCheck.required) R.string.wake_dismiss_with_check else R.string.dismiss),
+                        style = MaterialTheme.typography.titleLarge,
+                        textAlign = TextAlign.Center,
+                    )
                 }
-                is RingItem.RecheckRing -> Button(onClick = { onAction(RingService.ACTION_RECHECK_OK, item) }, modifier = buttonModifier) {
-                    Text(stringResource(R.string.recheck_awake), style = MaterialTheme.typography.titleLarge)
-                }
-                // Рассвет рисует SunriseContent; сюда он не попадает.
-                is RingItem.GentleRing -> Unit
             }
-            Spacer(Modifier.size(24.dp))
+            is RingItem.TimerRing -> {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.height(IntrinsicSize.Min)) {
+                    FilledTonalButton(
+                        onClick = { onAction(RingService.ACTION_TIMER_ADD_MINUTE, item) },
+                        modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = 88.dp),
+                    ) { Text(stringResource(R.string.add_minute), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center) }
+                    Button(
+                        onClick = { onAction(RingService.ACTION_TIMER_STOP, item) },
+                        modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = 88.dp),
+                    ) { Text(stringResource(R.string.stop), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center) }
+                }
+            }
+            is RingItem.RecheckRing -> Button(onClick = { onAction(RingService.ACTION_RECHECK_OK, item) }, modifier = buttonModifier) {
+                Text(stringResource(R.string.recheck_awake), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+            }
+            // Рассвет рисует SunriseContent; сюда он не попадает.
+            is RingItem.GentleRing -> Unit
+        }
+    }
+    BoxWithConstraints(Modifier.fillMaxSize().padding(24.dp).semantics { paneTitle = title }) {
+        if (maxWidth > maxHeight) {
+            // Телефон боком (D-022, п. 6): время слева, кнопки справа — под большим пальцем.
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) { info() }
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) { buttons() }
+            }
+        } else {
+            // Крупным шрифтом всё не влезает — экран прокручивается; кнопки остаются внизу.
+            Column(
+                Modifier.verticalScroll(rememberScrollState()).heightIn(min = maxHeight),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Spacer(Modifier.height(48.dp))
+                    info()
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(top = 24.dp)) {
+                    buttons()
+                    Spacer(Modifier.size(24.dp))
+                }
+            }
         }
     }
 }
@@ -275,32 +312,36 @@ private fun SunriseContent(item: RingItem.GentleRing, color: Color, onAction: (S
     val now = rememberNowMillis(1_000L)
     // На светлом рассвете — тёмный текст, на тёмном — светлый.
     val text = if (color.red + color.green > 1.1f) Color(0xFF3A1A0A) else Color(0xFFFFD9B0)
-    Column(
-        Modifier.fillMaxSize().background(color).safeDrawingPadding().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(Modifier.height(48.dp))
-            Text(TimeText.time(context, now), style = MaterialTheme.typography.displayLarge, color = text)
-            Spacer(Modifier.height(16.dp))
-            Text(
-                stringResource(R.string.gentle_text, item.label.ifBlank { stringResource(R.string.ring_alarm_title) }, TimeText.time(context, item.alarmAt)),
-                style = MaterialTheme.typography.titleMedium,
-                color = text,
-                textAlign = TextAlign.Center,
-            )
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            if (item.canDismiss) {
-                OutlinedButton(onClick = { onAction(RingService.ACTION_GENTLE_AWAKE, item) }, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.gentle_awake), color = text)
+    val title = stringResource(R.string.gentle_title)
+    BoxWithConstraints(Modifier.fillMaxSize().background(color).safeDrawingPadding().padding(24.dp).semantics { paneTitle = title }) {
+        val side = maxWidth > maxHeight
+        Column(
+            Modifier.verticalScroll(rememberScrollState()).heightIn(min = maxHeight),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Spacer(Modifier.height(if (side) 8.dp else 48.dp))
+                FitText(TimeText.time(context, now), style = MaterialTheme.typography.displayLarge, color = text, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    stringResource(R.string.gentle_text, item.label.ifBlank { stringResource(R.string.ring_alarm_title) }, TimeText.time(context, item.alarmAt)),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = text,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth().padding(top = 24.dp)) {
+                if (item.canDismiss) {
+                    OutlinedButton(onClick = { onAction(RingService.ACTION_GENTLE_AWAKE, item) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                        Text(stringResource(R.string.gentle_awake), color = text, textAlign = TextAlign.Center)
+                    }
                 }
+                OutlinedButton(onClick = { onAction(RingService.ACTION_GENTLE_CLOSE, item) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                    Text(stringResource(R.string.gentle_close), color = text, textAlign = TextAlign.Center)
+                }
+                Spacer(Modifier.size(if (side) 0.dp else 24.dp))
             }
-            OutlinedButton(onClick = { onAction(RingService.ACTION_GENTLE_CLOSE, item) }, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.gentle_close), color = text)
-            }
-            Spacer(Modifier.size(24.dp))
         }
     }
 }

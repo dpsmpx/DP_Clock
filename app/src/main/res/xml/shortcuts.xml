@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ярлыки при долгом нажатии на иконку (D-020; выбор автора — все четыре). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/shortcut_new_alarm"
+        android:shortcutId="new_alarm"
+        android:shortcutLongLabel="@string/shortcut_new_alarm_long"
+        android:shortcutShortLabel="@string/shortcut_new_alarm">
+        <intent
+            android:action="com.dpsmpx.dpclock.action.NEW_ALARM"
+            android:targetClass="com.dpsmpx.dpclock.MainActivity"
+            android:targetPackage="com.dpsmpx.dpclock" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/shortcut_sleep_timer"
+        android:shortcutId="sleep_timer"
+        android:shortcutLongLabel="@string/sleep_timer"
+        android:shortcutShortLabel="@string/shortcut_sleep_timer">
+        <intent
+            android:action="com.dpsmpx.dpclock.action.SLEEP_TIMER"
+            android:targetClass="com.dpsmpx.dpclock.MainActivity"
+            android:targetPackage="com.dpsmpx.dpclock" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/shortcut_stopwatch"
+        android:shortcutId="stopwatch"
+        android:shortcutLongLabel="@string/shortcut_stopwatch_long"
+        android:shortcutShortLabel="@string/section_stopwatch">
+        <intent
+            android:action="com.dpsmpx.dpclock.action.START_STOPWATCH"
+            android:targetClass="com.dpsmpx.dpclock.MainActivity"
+            android:targetPackage="com.dpsmpx.dpclock" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/shortcut_night_clock"
+        android:shortcutId="night_clock"
+        android:shortcutLongLabel="@string/night_clock"
+        android:shortcutShortLabel="@string/night_clock">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.dpsmpx.dpclock.NightClockActivity"
+            android:targetPackage="com.dpsmpx.dpclock" />
+    </shortcut>
+</shortcuts>

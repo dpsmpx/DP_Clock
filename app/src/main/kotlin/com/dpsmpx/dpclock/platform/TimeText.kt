@@ -36,6 +36,10 @@ object TimeText {
     /** Момент — местным временем. */
     fun time(context: Context, epochMillis: Long): String = format(context).format(Date(epochMillis))
 
+    /** Момент — временем пояса [zoneId] (мировые часы, D-019). */
+    fun time(context: Context, epochMillis: Long, zoneId: String): String =
+        format(context).apply { timeZone = TimeZone.getTimeZone(zoneId) }.format(Date(epochMillis))
+
     /** Дата по языку системы: «пн, 27 окт.»; год — если не текущий или [withYear]. */
     fun date(context: Context, date: LocalDate, withYear: Boolean = date.year != LocalDate.now().year): String {
         val locale = context.resources.configuration.locales[0]

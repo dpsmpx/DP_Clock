@@ -605,4 +605,32 @@
     <string name="stats_late_limit">1 minute; longer is in red</string>
     <string name="duration_seconds">%1$d s</string>
     <string name="duration_minutes_seconds">%1$d min %2$d s</string>
+
+    <string name="alarm_countdown">Show time until each alarm</string>
+    <string name="alarm_countdown_text">Small italic countdown below each enabled alarm</string>
+    <string name="countdown_in">In %1$s</string>
+    <plurals name="countdown_seconds">
+        <item quantity="one">%1$d s</item>
+        <item quantity="other">%1$d s</item>
+    </plurals>
+    <plurals name="countdown_minutes">
+        <item quantity="one">%1$d min</item>
+        <item quantity="other">%1$d min</item>
+    </plurals>
+    <plurals name="countdown_hours">
+        <item quantity="one">%1$d h</item>
+        <item quantity="other">%1$d h</item>
+    </plurals>
+    <plurals name="countdown_days">
+        <item quantity="one">%1$d d</item>
+        <item quantity="other">%1$d d</item>
+    </plurals>
+    <plurals name="countdown_months">
+        <item quantity="one">%1$d mo</item>
+        <item quantity="other">%1$d mo</item>
+    </plurals>
+    <plurals name="countdown_years">
+        <item quantity="one">%1$d yr</item>
+        <item quantity="other">%1$d yr</item>
+    </plurals>
 </resources>

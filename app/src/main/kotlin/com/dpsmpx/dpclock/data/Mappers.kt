@@ -196,6 +196,7 @@ fun SettingsEntity?.toModel(): Settings = if (this == null) Settings() else Sett
         clockSize = clockSize.coerceIn(Appearance.MIN_SIZE, Appearance.MAX_SIZE),
         nightNoise = enumOr(nightNoise, NoiseKind.NONE),
         background = enumOr(background, ClockBackground.NONE),
+        highContrast = highContrast,
     ),
 )
 
@@ -224,6 +225,7 @@ fun Settings.toEntity() = SettingsEntity(
     clockSize = appearance.clockSize,
     nightNoise = appearance.nightNoise.name,
     background = appearance.background.name,
+    highContrast = appearance.highContrast,
 )
 
 /** Неизвестное значение (например, из копии новой версии) — значение по умолчанию. */

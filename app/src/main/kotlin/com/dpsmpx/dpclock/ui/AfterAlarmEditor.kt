@@ -77,7 +77,7 @@ fun AfterAlarmEditor(initial: AfterAlarm, onDismiss: () -> Unit, onDone: (AfterA
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(stringResource(R.string.after_alarm)) },
+                    title = { TitleText(stringResource(R.string.after_alarm)) },
                     navigationIcon = {
                         IconButton(onClick = onDismiss) { Icon(AppIcons.Close, contentDescription = stringResource(R.string.cancel)) }
                     },
@@ -166,7 +166,7 @@ private fun AppPicker(onDismiss: () -> Unit, onPick: (String) -> Unit) {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(stringResource(R.string.after_app)) },
+                    title = { TitleText(stringResource(R.string.after_app)) },
                     navigationIcon = {
                         IconButton(onClick = onDismiss) { Icon(AppIcons.Close, contentDescription = stringResource(R.string.cancel)) }
                     },

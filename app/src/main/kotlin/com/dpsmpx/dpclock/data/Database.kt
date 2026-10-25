@@ -186,6 +186,8 @@ data class SettingsEntity(
     val clockSize: Int = 100,
     val nightNoise: String = "NONE",
     val background: String = "NONE",
+    /** «Высокий контраст» (D-022, п. 5). */
+    val highContrast: Boolean = false,
 )
 
 /** Город мировых часов (D-019): пояс tz и место в списке. */
@@ -418,10 +420,10 @@ abstract class ClockDatabase : RoomDatabase() {
         const val NAME = "dpclock.db"
 
         /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
-        const val VERSION = 8
+        const val VERSION = 9
 
         /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
-        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки

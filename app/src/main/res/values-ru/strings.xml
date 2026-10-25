@@ -522,4 +522,15 @@
     <string name="background_particles">Частицы — касание и наклон</string>
     <string name="background_live_sky">Живое небо — касание и наклон</string>
     <string name="background_failed">Не получилось открыть картинку</string>
+
+    <!-- Большие экраны и доступность (D-022) -->
+    <string name="alarms_pick">Выберите будильник — он откроется здесь</string>
+    <string name="alarm_state_on">включён</string>
+    <string name="alarm_state_off">выключен</string>
+    <string name="alarm_switch_description">Будильник %1$s</string>
+    <string name="group_switch_description">Все будильники группы «%1$s»</string>
+    <string name="high_contrast">Высокий контраст</string>
+    <string name="high_contrast_text">Текст и границы темнее. Включается и настройкой контраста Android 14 и новее</string>
+    <string name="appearance_color_number">Цвет %1$d</string>
+    <string name="appearance_hue_value">%1$d°</string>
 </resources>

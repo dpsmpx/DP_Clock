@@ -60,6 +60,8 @@ data class Appearance(
     val clockSize: Int = MAX_SIZE,
     val nightNoise: NoiseKind = NoiseKind.NONE,
     val background: ClockBackground = ClockBackground.NONE,
+    /** «Высокий контраст» (D-022, п. 5): текст и границы темнее; включается и системной настройкой Android 14+. */
+    val highContrast: Boolean = false,
 ) {
     init {
         require(clockSize in MIN_SIZE..MAX_SIZE) { "размер $clockSize" }

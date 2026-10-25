@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,6 +41,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -91,7 +95,7 @@ fun WakeCheckEditor(initial: WakeCheck, onDismiss: () -> Unit, onDone: (WakeChec
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(stringResource(R.string.wake_check)) },
+                    title = { TitleText(stringResource(R.string.wake_check)) },
                     navigationIcon = {
                         IconButton(onClick = onDismiss) { Icon(AppIcons.Close, contentDescription = stringResource(R.string.cancel)) }
                     },
@@ -168,12 +172,16 @@ fun WakeCheckEditor(initial: WakeCheck, onDismiss: () -> Unit, onDone: (WakeChec
                     }
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.wake_snooze_free)) },
-                        trailingContent = { Switch(checked = check.snoozeAllowed, onCheckedChange = { check = check.copy(snoozeAllowed = it) }) },
-                        modifier = Modifier.clickable { check = check.copy(snoozeAllowed = !check.snoozeAllowed) },
+                        trailingContent = { Switch(checked = check.snoozeAllowed, onCheckedChange = null) },
+                        modifier = Modifier.toggleable(value = check.snoozeAllowed, role = Role.Switch) { check = check.copy(snoozeAllowed = it) },
                     )
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Text(stringResource(R.string.recheck), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(horizontal = 16.dp))
+                Text(
+                    stringResource(R.string.recheck),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(horizontal = 16.dp).semantics { heading() },
+                )
                 Text(
                     stringResource(R.string.recheck_text),
                     style = MaterialTheme.typography.bodySmall,
@@ -226,7 +234,7 @@ private fun ReferenceCapture(method: WakeMethod, onDismiss: () -> Unit, onCaptur
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(stringResource(if (method == WakeMethod.QR) R.string.wake_reference_code else R.string.wake_reference_photo)) },
+                    title = { TitleText(stringResource(if (method == WakeMethod.QR) R.string.wake_reference_code else R.string.wake_reference_photo)) },
                     navigationIcon = {
                         IconButton(onClick = onDismiss) { Icon(AppIcons.Close, contentDescription = stringResource(R.string.cancel)) }
                     },

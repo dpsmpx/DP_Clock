@@ -523,4 +523,15 @@
     <string name="background_particles">Particles — touch and tilt</string>
     <string name="background_live_sky">Live sky — touch and tilt</string>
     <string name="background_failed">Could not open the picture</string>
+
+    <!-- Large screens and accessibility (D-022) -->
+    <string name="alarms_pick">Choose an alarm to edit it here</string>
+    <string name="alarm_state_on">on</string>
+    <string name="alarm_state_off">off</string>
+    <string name="alarm_switch_description">Alarm %1$s</string>
+    <string name="group_switch_description">All alarms in “%1$s”</string>
+    <string name="high_contrast">High contrast</string>
+    <string name="high_contrast_text">Darker text and borders. Also follows the contrast setting of Android 14 and later</string>
+    <string name="appearance_color_number">Color %1$d</string>
+    <string name="appearance_hue_value">%1$d°</string>
 </resources>

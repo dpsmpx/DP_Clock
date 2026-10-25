@@ -55,7 +55,7 @@ fun JournalDialog(onDismiss: () -> Unit) {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(stringResource(R.string.journal)) },
+                    title = { TitleText(stringResource(R.string.journal)) },
                     navigationIcon = {
                         IconButton(onClick = onDismiss) { Icon(AppIcons.Close, contentDescription = stringResource(R.string.back)) }
                     },

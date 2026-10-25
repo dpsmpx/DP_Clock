@@ -64,7 +64,7 @@ fun ExceptionsScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.exceptions_title)) },
+                title = { TitleText(stringResource(R.string.exceptions_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(AppIcons.Back, contentDescription = stringResource(R.string.back)) }
                 },
@@ -174,7 +174,7 @@ private fun PeriodDialog(initial: ExceptionPeriod?, onDismiss: () -> Unit, onSav
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(stringResource(R.string.period)) },
+                    title = { TitleText(stringResource(R.string.period)) },
                     navigationIcon = {
                         IconButton(onClick = onDismiss) { Icon(AppIcons.Close, contentDescription = stringResource(R.string.cancel)) }
                     },

@@ -8,8 +8,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.DropdownMenu
@@ -19,6 +26,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -35,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,12 +60,17 @@ import com.dpsmpx.dpclock.ui.ExceptionsScreen
 import com.dpsmpx.dpclock.ui.SettingsScreen
 import com.dpsmpx.dpclock.ui.StopwatchScreen
 import com.dpsmpx.dpclock.ui.TimersScreen
+import com.dpsmpx.dpclock.ui.TitleText
 import com.dpsmpx.dpclock.ui.WorldClockScreen
 import com.dpsmpx.dpclock.ui.orderTitle
 import com.dpsmpx.dpclock.ui.rememberNotificationPermissionRequest
+import com.dpsmpx.dpclock.ui.rememberWindowLayout
 import kotlinx.coroutines.launch
 
-/** Главный экран: разделы в нижней панели со свайпом между ними (D-006, D-010); «Мировые часы» — с 0.8.0 (D-019). */
+/**
+ * Главный экран: разделы в нижней панели со свайпом между ними (D-006, D-010);
+ * «Мировые часы» — с 0.8.0 (D-019). На широком окне разделы — в боковой панели (D-022, п. 2).
+ */
 class MainActivity : ComponentActivity() {
     /** Раздел, который просит открыть уведомление; растёт номер — новая просьба, -1 — просьбы нет. */
     private var request by mutableStateOf(SectionRequest(Section.ALARMS, 0))
@@ -162,6 +177,14 @@ private val SECTION_TITLES = mapOf(
 /** В нижней панели пять подписей — у мировых часов короткая. */
 private val NAV_LABELS = SECTION_TITLES + (Section.WORLD to R.string.nav_world)
 
+private fun Section.icon(): ImageVector = when (this) {
+    Section.ALARMS -> AppIcons.Alarm
+    Section.TIMERS -> AppIcons.Timer
+    Section.STOPWATCH -> AppIcons.Stopwatch
+    Section.CLOCK -> AppIcons.Clock
+    Section.WORLD -> AppIcons.Globe
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AppRoot(request: SectionRequest) {
@@ -195,69 +218,86 @@ private fun AppRoot(request: SectionRequest) {
     }
 
     val section = Section.entries[pager.currentPage]
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(SECTION_TITLES.getValue(section))) },
-                actions = {
-                    if (section == Section.ALARMS) {
-                        AlarmOrderMenu()
-                        AlarmsMenu(openExceptions = { exceptionsOpen = true }, onDialog = { alarmsDialog = it })
-                    }
-                    IconButton(onClick = { settingsOpen = true }) {
-                        Icon(AppIcons.Settings, contentDescription = stringResource(R.string.settings))
-                    }
-                },
-            )
-        },
-        bottomBar = {
-            NavigationBar {
+    val layout = rememberWindowLayout()
+    fun open(item: Section) {
+        scope.launch { pager.animateScrollToPage(item.ordinal) }
+    }
+    Row(Modifier.fillMaxSize()) {
+        if (layout.rail) {
+            // Разделы — по центру по высоте: телефон боком держат двумя руками, большим пальцем достать проще.
+            NavigationRail(windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start)) {
+                Spacer(Modifier.weight(1f))
                 for (item in Section.entries) {
-                    NavigationBarItem(
+                    NavigationRailItem(
                         selected = pager.currentPage == item.ordinal,
-                        onClick = { scope.launch { pager.animateScrollToPage(item.ordinal) } },
-                        icon = {
-                            Icon(
-                                when (item) {
-                                    Section.ALARMS -> AppIcons.Alarm
-                                    Section.TIMERS -> AppIcons.Timer
-                                    Section.STOPWATCH -> AppIcons.Stopwatch
-                                    Section.CLOCK -> AppIcons.Clock
-                                    Section.WORLD -> AppIcons.Globe
-                                },
-                                contentDescription = null,
-                            )
-                        },
+                        onClick = { open(item) },
+                        icon = { Icon(item.icon(), contentDescription = null) },
                         label = { Text(stringResource(NAV_LABELS.getValue(item)), maxLines = 1) },
                     )
                 }
+                Spacer(Modifier.weight(1f))
             }
-        },
-        snackbarHost = { SnackbarHost(snackbar) },
-    ) { padding ->
-        HorizontalPager(
-            state = pager,
-            modifier = Modifier.padding(padding).consumeWindowInsets(padding),
-            beyondViewportPageCount = 1,
-        ) { page ->
-            when (Section.entries[page]) {
-                Section.ALARMS -> AlarmsScreen(
-                    snackbar,
-                    requestNotifications,
-                    openSettings = { settingsOpen = true },
-                    dialog = alarmsDialog,
-                    onDialog = { alarmsDialog = it },
-                    quick = quick?.takeIf { it.action == QuickAction.NEW_ALARM || it.action == QuickAction.EDIT_ALARM },
-                    onQuickHandled = { handledQuick = it },
+        }
+        Scaffold(
+            // Отступ от края уже у боковой панели.
+            modifier = if (layout.rail) Modifier.weight(1f).consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Start)) else Modifier.weight(1f),
+            topBar = {
+                TopAppBar(
+                    title = { TitleText(stringResource(SECTION_TITLES.getValue(section))) },
+                    actions = {
+                        if (section == Section.ALARMS) {
+                            AlarmOrderMenu()
+                            AlarmsMenu(openExceptions = { exceptionsOpen = true }, onDialog = { alarmsDialog = it })
+                        }
+                        IconButton(onClick = { settingsOpen = true }) {
+                            Icon(AppIcons.Settings, contentDescription = stringResource(R.string.settings))
+                        }
+                    },
                 )
-                Section.TIMERS -> TimersScreen(
-                    requestNotifications,
-                    quick = quick?.takeIf { it.action == QuickAction.SLEEP_TIMER },
-                    onQuickHandled = { handledQuick = it },
-                )
-                Section.STOPWATCH -> StopwatchScreen()
-                Section.CLOCK -> ClockScreen(visible = pager.currentPage == Section.CLOCK.ordinal)
-                Section.WORLD -> WorldClockScreen(visible = pager.currentPage == Section.WORLD.ordinal && !pager.isScrollInProgress)
+            },
+            bottomBar = {
+                if (!layout.rail) {
+                    NavigationBar {
+                        for (item in Section.entries) {
+                            NavigationBarItem(
+                                selected = pager.currentPage == item.ordinal,
+                                onClick = { open(item) },
+                                icon = { Icon(item.icon(), contentDescription = null) },
+                                label = { Text(stringResource(NAV_LABELS.getValue(item)), maxLines = 1) },
+                            )
+                        }
+                    }
+                }
+            },
+            snackbarHost = { SnackbarHost(snackbar) },
+        ) { padding ->
+            HorizontalPager(
+                state = pager,
+                modifier = Modifier.padding(padding).consumeWindowInsets(padding),
+                beyondViewportPageCount = 1,
+                // С боковой панелью свайп не листает разделы: в двух колонках он мешал бы редактору.
+                userScrollEnabled = !layout.rail,
+            ) { page ->
+                when (Section.entries[page]) {
+                    Section.ALARMS -> AlarmsScreen(
+                        snackbar,
+                        requestNotifications,
+                        openSettings = { settingsOpen = true },
+                        dialog = alarmsDialog,
+                        onDialog = { alarmsDialog = it },
+                        quick = quick?.takeIf { it.action == QuickAction.NEW_ALARM || it.action == QuickAction.EDIT_ALARM },
+                        onQuickHandled = { handledQuick = it },
+                        visible = pager.currentPage == Section.ALARMS.ordinal,
+                    )
+                    Section.TIMERS -> TimersScreen(
+                        requestNotifications,
+                        quick = quick?.takeIf { it.action == QuickAction.SLEEP_TIMER },
+                        onQuickHandled = { handledQuick = it },
+                    )
+                    Section.STOPWATCH -> StopwatchScreen()
+                    Section.CLOCK -> ClockScreen(visible = pager.currentPage == Section.CLOCK.ordinal)
+                    Section.WORLD -> WorldClockScreen(visible = pager.currentPage == Section.WORLD.ordinal && !pager.isScrollInProgress)
+                }
             }
         }
     }

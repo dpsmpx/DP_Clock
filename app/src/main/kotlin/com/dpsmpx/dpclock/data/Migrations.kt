@@ -128,3 +128,10 @@ val MIGRATION_7_8 = SqlMigration(
         "ALTER TABLE `settings` ADD COLUMN `background` TEXT NOT NULL DEFAULT 'NONE'",
     ),
 )
+
+/** 0.11.0 (D-022, п. 5): «Высокий контраст» в оформлении. */
+val MIGRATION_8_9 = SqlMigration(
+    8,
+    9,
+    listOf("ALTER TABLE `settings` ADD COLUMN `highContrast` INTEGER NOT NULL DEFAULT 0"),
+)

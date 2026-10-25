@@ -3,7 +3,7 @@ package com.dpsmpx.dpclock.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -39,8 +39,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.dpsmpx.dpclock.R
 import com.dpsmpx.dpclock.model.ClockBackground
@@ -51,6 +56,7 @@ import com.dpsmpx.dpclock.model.ThemeMode
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
@@ -74,8 +80,13 @@ fun ColorDialog(current: Int?, onDismiss: () -> Unit, onPick: (Int?) -> Unit) {
                     label = { Text(stringResource(R.string.appearance_color_wallpaper)) },
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    for (color in Palette.PRESETS) {
-                        Swatch(Color(color), selected = color == current && !custom, onClick = { onPick(color) })
+                    Palette.PRESETS.forEachIndexed { index, color ->
+                        Swatch(
+                            Color(color),
+                            description = stringResource(R.string.appearance_color_number, index + 1),
+                            selected = color == current && !custom,
+                            onClick = { onPick(color) },
+                        )
                     }
                 }
                 FilterChip(selected = custom, onClick = { custom = true }, label = { Text(stringResource(R.string.appearance_color_custom)) })
@@ -93,15 +104,17 @@ fun ColorDialog(current: Int?, onDismiss: () -> Unit, onPick: (Int?) -> Unit) {
     )
 }
 
+/** Готовый цвет: 48 dp — палец попадает с первого раза; TalkBack читает «Цвет 3, выбран». */
 @Composable
-private fun Swatch(color: Color, selected: Boolean, onClick: () -> Unit) {
+private fun Swatch(color: Color, description: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(40.dp)
+            .size(48.dp)
             .clip(CircleShape)
             .background(color)
             .border(if (selected) 3.dp else 0.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
-            .clickable(onClick = onClick),
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .semantics { contentDescription = description },
     )
 }
 
@@ -111,14 +124,24 @@ private fun HueWheel(hue: Float, saturation: Float, onHue: (Float) -> Unit, modi
     val ring = (0..12).map { Color(Palette.fromWheel(it * 30f, 1f)) }
     val chosen = Color(Palette.fromWheel(hue, saturation))
     val description = stringResource(R.string.appearance_hue)
+    val degrees = stringResource(R.string.appearance_hue_value, hue.roundToInt())
     fun hueAt(offset: Offset, center: Offset): Float {
-        val degrees = Math.toDegrees(atan2((offset.y - center.y).toDouble(), (offset.x - center.x).toDouble())).toFloat() + 90f
-        return (degrees + 360f) % 360f
+        val angle = Math.toDegrees(atan2((offset.y - center.y).toDouble(), (offset.x - center.x).toDouble())).toFloat() + 90f
+        return (angle + 360f) % 360f
     }
     Canvas(
         modifier
             .aspectRatio(1f)
-            .semantics { contentDescription = description }
+            // TalkBack: круг — регулятор, оттенок меняется жестом вверх-вниз (D-022, п. 3).
+            .semantics {
+                contentDescription = description
+                stateDescription = degrees
+                progressBarRangeInfo = ProgressBarRangeInfo(hue, 0f..360f, steps = 23)
+                setProgress { value ->
+                    onHue(value.coerceIn(0f, 360f) % 360f)
+                    true
+                }
+            }
             .pointerInput(Unit) { detectTapGestures { onHue(hueAt(it, Offset(size.width / 2f, size.height / 2f))) } }
             .pointerInput(Unit) { detectDragGestures { change, _ -> onHue(hueAt(change.position, Offset(size.width / 2f, size.height / 2f))) } },
     ) {

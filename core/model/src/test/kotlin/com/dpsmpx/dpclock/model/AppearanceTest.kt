@@ -32,6 +32,43 @@ class AppearanceTest {
     }
 
     @Test
+    fun highContrastReachesSevenForTextAndDarkensBorders() {
+        for (seed in seeds) {
+            for ((dark, black) in listOf(false to false, true to false, true to true)) {
+                val normal = Palette.scheme(seed, dark, black)
+                val medium = Palette.scheme(seed, dark, black, contrast = 0.5)
+                val high = Palette.scheme(seed, dark, black, contrast = 1.0)
+                val where = "цвет #${Integer.toHexString(seed)}, тёмная $dark, чёрная $black"
+                for ((name, fg, bg) in textPairs(high)) {
+                    // WCAG AAA: 7 и больше.
+                    assertTrue("$name: ${Palette.contrast(fg, bg)} — $where", Palette.contrast(fg, bg) >= 7.0)
+                }
+                for ((name, fg, bg) in textPairs(medium)) {
+                    assertTrue("средний $name: ${Palette.contrast(fg, bg)} — $where", Palette.contrast(fg, bg) >= 4.5)
+                }
+                // Границы полей и кнопок видны лучше, чем в обычной теме.
+                assertTrue(where, Palette.contrast(high.outline, high.surface) >= 4.5)
+                assertTrue(where, Palette.contrast(high.outline, high.surface) > Palette.contrast(normal.outline, normal.surface))
+                // Фон — тот же: меняются текст и границы.
+                assertEquals(normal.surface, high.surface)
+            }
+        }
+    }
+
+    private fun textPairs(s: Palette.Scheme) = listOf(
+        Triple("onPrimary", s.onPrimary, s.primary),
+        Triple("onPrimaryContainer", s.onPrimaryContainer, s.primaryContainer),
+        Triple("onSecondaryContainer", s.onSecondaryContainer, s.secondaryContainer),
+        Triple("onTertiaryContainer", s.onTertiaryContainer, s.tertiaryContainer),
+        Triple("onErrorContainer", s.onErrorContainer, s.errorContainer),
+        Triple("onSurface", s.onSurface, s.surface),
+        Triple("onSurfaceVariant", s.onSurfaceVariant, s.surfaceContainerHighest),
+        Triple("primary на фоне", s.primary, s.surface),
+        Triple("inverseOnSurface", s.inverseOnSurface, s.inverseSurface),
+        Triple("onError", s.onError, s.error),
+    )
+
+    @Test
     fun blackThemeIsPureBlack() {
         val s = Palette.scheme(Palette.PRESETS[0], dark = true, black = true)
         assertEquals(0xFF000000.toInt(), s.background)

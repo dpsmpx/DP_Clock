@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -296,18 +296,20 @@ private fun WeatherHeader(
         Modifier
             .padding(16.dp)
             .fillMaxWidth()
-            .height(196.dp)
+            // Не ниже 196 dp; крупным шрифтом растёт под текст (D-022, п. 4).
+            .heightIn(min = 196.dp)
             .clip(RoundedCornerShape(28.dp))
             .clickable(onClick = onOptions)
             .semantics(mergeDescendants = true) {},
     ) {
-        WeatherSky(symbol, animate, Modifier.fillMaxSize())
+        WeatherSky(symbol, animate, Modifier.matchParentSize())
         Text(
             stringResource(R.string.weather_credit),
             style = MaterialTheme.typography.labelSmall.onSky(0.7f),
             modifier = Modifier.align(Alignment.TopEnd).padding(horizontal = 16.dp, vertical = 12.dp),
         )
-        Column(Modifier.align(Alignment.BottomStart).padding(20.dp)) {
+        // Сверху отступ под подпись MET Norway: крупным шрифтом текст не наезжает на неё.
+        Column(Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 20.dp, top = 44.dp)) {
             if (state.mode == WeatherMode.NOT_SET) {
                 Text(stringResource(R.string.weather_prompt_title), style = MaterialTheme.typography.titleLarge.onSky())
                 Text(stringResource(R.string.weather_prompt_text), style = MaterialTheme.typography.bodyMedium.onSky(0.9f))
@@ -424,7 +426,7 @@ fun rememberWeatherChoice(): WeatherChoice {
     when (dialog) {
         "options" -> AlertDialog(
             onDismissRequest = { dialog = null },
-            title = { Text(stringResource(R.string.weather_title)) },
+            title = { TitleText(stringResource(R.string.weather_title)) },
             text = {
                 Column {
                     WeatherOption(
@@ -583,7 +585,7 @@ private fun SearchDialog(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(title) },
+                    title = { TitleText(title) },
                     navigationIcon = {
                         IconButton(onClick = onDismiss) { Icon(AppIcons.Close, contentDescription = stringResource(R.string.cancel)) }
                     },

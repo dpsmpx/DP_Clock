@@ -234,6 +234,25 @@ class MigrationTest {
         assertEquals("NONE", settings["background"])
     }
 
+    @Test
+    fun migration8To9KeepsAppearanceAndTurnsHighContrastOff() = withDb { db ->
+        SchemaFile.read(8).create(db)
+        db.execSQL(
+            "INSERT INTO settings (id, snoozeMinutes, autoStopMinutes, alarmOrder, xiaomiHintsDone, signalStyle, volumeButtons, holidaysRu, " +
+                "bedtimeMode, sleepMinutes, bedtimeHour, bedtimeMinute, bedtimeDays, bedtimeLeadMinutes, weatherMode, weatherPlace, " +
+                "theme, seedColor, clockStyle, clockFont, clockSize, nightNoise, background) " +
+                "VALUES (0, 10, 10, 'TIME_OF_DAY', 0, 'FULL_SCREEN', 'SNOOZE', 0, 'OFF', 480, 23, 0, 127, 15, 'NOT_SET', '', " +
+                "'BLACK', -12345, 'DIGITS', 'SEGMENT', 80, 'PINK', 'STARS')",
+        )
+        MIGRATION_8_9.migrate(db)
+
+        val settings = row(db, "SELECT * FROM settings")
+        assertEquals("BLACK", settings["theme"])
+        assertEquals("-12345", settings["seedColor"])
+        assertEquals("STARS", settings["background"])
+        assertEquals("0", settings["highContrast"])
+    }
+
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)
 
     private data class Table(val columns: Map<String, Column>, val indices: Set<String>, val foreignKeys: Set<String>)

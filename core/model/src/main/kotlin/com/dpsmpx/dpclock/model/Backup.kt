@@ -224,6 +224,7 @@ object BackupFormat {
                 "clockSize" to it.clockSize,
                 "nightNoise" to it.nightNoise.name,
                 "background" to it.background.name,
+                "highContrast" to it.highContrast,
             )
         },
         "weather" to settings.weather.let { weather ->
@@ -363,6 +364,7 @@ object BackupFormat {
                     nightNoise = it.enum("nightNoise", base.nightNoise),
                     // Своя картинка — файл на телефоне, в перенос не входит: на новом телефоне фон «нет».
                     background = it.enum("background", base.background).takeIf { bg -> bg != ClockBackground.IMAGE } ?: ClockBackground.NONE,
+                    highContrast = it.bool("highContrast", base.highContrast),
                 )
             } ?: defaults.appearance,
         )

@@ -24,7 +24,9 @@ object Palette {
 
     /** Тональная палитра: оттенок и насыщенность Lab; тон 0–100 — светлота L*. */
     class Tonal(private val hue: Double, private val chroma: Double) {
-        fun tone(tone: Int): Int = fromLch(tone.toDouble(), chroma, hue)
+        fun tone(tone: Int): Int = tone(tone.toDouble())
+
+        fun tone(tone: Double): Int = fromLch(tone, chroma, hue)
     }
 
     /** Роли схемы Material 3, ARGB. */
@@ -45,8 +47,12 @@ object Palette {
         val tertiaryFixed: Int, val tertiaryFixedDim: Int, val onTertiaryFixed: Int, val onTertiaryFixedVariant: Int,
     )
 
-    /** Схема из [seed]: светлая, тёмная или [black] — тёмная на чистом чёрном для AMOLED. */
-    fun scheme(seed: Int, dark: Boolean, black: Boolean = false): Scheme {
+    /**
+     * Схема из [seed]: светлая, тёмная или [black] — тёмная на чистом чёрном для AMOLED.
+     * [contrast] — от 0 (обычный) до 1 (высокий, D-022, п. 5): текст и границы
+     * темнее на светлой теме и светлее на тёмной; 0,5 — средний контраст Android 14+.
+     */
+    fun scheme(seed: Int, dark: Boolean, black: Boolean = false, contrast: Double = 0.0): Scheme {
         val (_, a, b) = toLab(seed)
         val hue = Math.toDegrees(atan2(b, a)).let { if (it < 0) it + 360 else it }
         // Серый цвет даёт серую тему, яркий — не ярче, чем читается текст.
@@ -57,6 +63,9 @@ object Palette {
         val n = Tonal(hue, min(5.0, chroma / 8))
         val nv = Tonal(hue, min(10.0, chroma / 5))
         val e = Tonal(30.0, 70.0)
+        val c = contrast.coerceIn(0.0, 1.0)
+        /** Тон между обычным [normal] и высоким [high] контрастом. */
+        fun Tonal.at(normal: Int, high: Int): Int = tone(normal + (high - normal) * c)
         val fixed = listOf(
             p.tone(90), p.tone(80), p.tone(10), p.tone(30),
             s.tone(90), s.tone(80), s.tone(10), s.tone(30),
@@ -64,26 +73,26 @@ object Palette {
         )
         return if (!dark) {
             Scheme(
-                p.tone(40), p.tone(100), p.tone(90), p.tone(10), p.tone(80),
-                s.tone(40), s.tone(100), s.tone(90), s.tone(10),
-                t.tone(40), t.tone(100), t.tone(90), t.tone(10),
-                e.tone(40), e.tone(100), e.tone(90), e.tone(10),
-                n.tone(98), n.tone(10),
-                n.tone(98), n.tone(10), nv.tone(90), nv.tone(30),
-                n.tone(20), n.tone(95), nv.tone(50), nv.tone(80), BLACK,
+                p.at(40, 25), p.tone(100), p.tone(90), p.at(10, 5), p.at(80, 85),
+                s.at(40, 25), s.tone(100), s.tone(90), s.at(10, 5),
+                t.at(40, 25), t.tone(100), t.tone(90), t.at(10, 5),
+                e.at(40, 25), e.tone(100), e.tone(90), e.at(10, 5),
+                n.tone(98), n.at(10, 2),
+                n.tone(98), n.at(10, 2), nv.tone(90), nv.at(30, 12),
+                n.at(20, 10), n.at(95, 99), nv.at(50, 25), nv.at(80, 45), BLACK,
                 n.tone(87), n.tone(98),
                 n.tone(100), n.tone(96), n.tone(94), n.tone(92), n.tone(90),
                 fixed[0], fixed[1], fixed[2], fixed[3], fixed[4], fixed[5], fixed[6], fixed[7], fixed[8], fixed[9], fixed[10], fixed[11],
             )
         } else {
             val base = Scheme(
-                p.tone(80), p.tone(20), p.tone(30), p.tone(90), p.tone(40),
-                s.tone(80), s.tone(20), s.tone(30), s.tone(90),
-                t.tone(80), t.tone(20), t.tone(30), t.tone(90),
-                e.tone(80), e.tone(20), e.tone(30), e.tone(90),
-                n.tone(6), n.tone(90),
-                n.tone(6), n.tone(90), nv.tone(30), nv.tone(80),
-                n.tone(90), n.tone(20), nv.tone(60), nv.tone(30), BLACK,
+                p.at(80, 92), p.at(20, 5), p.tone(30), p.at(90, 100), p.at(40, 30),
+                s.at(80, 92), s.at(20, 5), s.tone(30), s.at(90, 100),
+                t.at(80, 92), t.at(20, 5), t.tone(30), t.at(90, 100),
+                e.at(80, 92), e.at(20, 5), e.tone(30), e.at(90, 100),
+                n.tone(6), n.at(90, 100),
+                n.tone(6), n.at(90, 100), nv.tone(30), nv.at(80, 94),
+                n.at(90, 98), n.at(20, 4), nv.at(60, 88), nv.at(30, 60), BLACK,
                 n.tone(6), n.tone(24),
                 n.tone(4), n.tone(10), n.tone(12), n.tone(17), n.tone(22),
                 fixed[0], fixed[1], fixed[2], fixed[3], fixed[4], fixed[5], fixed[6], fixed[7], fixed[8], fixed[9], fixed[10], fixed[11],

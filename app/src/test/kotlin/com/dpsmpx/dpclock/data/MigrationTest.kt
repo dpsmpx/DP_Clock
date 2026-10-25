@@ -55,6 +55,28 @@ class MigrationTest {
     }
 
     @Test
+    fun migration11To12KeepsSettingsAndDefaultsCountdownOff() = withDb { db ->
+        SchemaFile.read(11).create(db)
+        db.execSQL(
+            "INSERT INTO settings (id, snoozeMinutes, autoStopMinutes, alarmOrder, xiaomiHintsDone, signalStyle, volumeButtons, " +
+                "holidaysRu, bedtimeMode, sleepMinutes, bedtimeHour, bedtimeMinute, bedtimeDays, bedtimeLeadMinutes, " +
+                "weatherMode, weatherPlace, weatherLat, weatherLon, theme, seedColor, clockStyle, clockFont, clockSize, " +
+                "nightNoise, background, highContrast) VALUES " +
+                "(0, 15, NULL, 'NEXT', 1, 'NOTIFICATION', 'NOTHING', 1, 'SCHEDULE', 450, 22, 30, 3, 30, " +
+                "'CITY', 'Tula', 54.1931, 37.6177, 'DARK', NULL, 'DIGITS', 'BOLD', 90, 'PINK', 'STARS', 1)",
+        )
+
+        MIGRATION_11_12.migrate(db)
+
+        val settings = row(db, "SELECT * FROM settings")
+        assertEquals("15", settings["snoozeMinutes"])
+        assertEquals("NEXT", settings["alarmOrder"])
+        assertEquals("NOTIFICATION", settings["signalStyle"])
+        assertEquals("1", settings["highContrast"])
+        assertEquals("0", settings["showAlarmCountdown"])
+    }
+
+    @Test
     fun migration1To2KeepsAlarmsAndSettings() = withDb { db ->
         SchemaFile.read(1).create(db)
         db.execSQL("INSERT INTO alarm (id, hour, minute, repeatDays, enabled, createdAt) VALUES ('a', 7, 30, 31, 1, 1000)")
@@ -287,20 +309,21 @@ class MigrationTest {
     }
 
     @Test
-    fun migration11To12KeepsAppearanceAndAddsSceneDefaults() = withDb { db ->
-        SchemaFile.read(11).create(db)
+    fun migration12To13KeepsAppearanceAndAddsSceneDefaults() = withDb { db ->
+        SchemaFile.read(12).create(db)
         db.execSQL(
             "INSERT INTO settings (id, snoozeMinutes, autoStopMinutes, alarmOrder, xiaomiHintsDone, signalStyle, volumeButtons, holidaysRu, " +
                 "bedtimeMode, sleepMinutes, bedtimeHour, bedtimeMinute, bedtimeDays, bedtimeLeadMinutes, weatherMode, weatherPlace, " +
-                "theme, seedColor, clockStyle, clockFont, clockSize, nightNoise, background, highContrast) " +
+                "theme, seedColor, clockStyle, clockFont, clockSize, nightNoise, background, highContrast, showAlarmCountdown) " +
                 "VALUES (0, 10, 10, 'TIME_OF_DAY', 0, 'FULL_SCREEN', 'SNOOZE', 0, 'OFF', 480, 23, 0, 127, 15, 'NOT_SET', '', " +
-                "'DARK', NULL, 'CIRCLE', 'REGULAR', 100, 'NONE', 'WAVES', 1)",
+                "'DARK', NULL, 'CIRCLE', 'REGULAR', 100, 'NONE', 'WAVES', 1, 1)",
         )
-        MIGRATION_11_12.migrate(db)
+        MIGRATION_12_13.migrate(db)
 
         val settings = row(db, "SELECT * FROM settings")
         assertEquals("WAVES", settings["background"])
         assertEquals("1", settings["highContrast"])
+        assertEquals("1", settings["showAlarmCountdown"])
         assertEquals("NONE", settings["nightBackground"])
         assertEquals("NONE", settings["appBackground"])
         assertEquals("CONSTELLATION", settings["wallpaper"])

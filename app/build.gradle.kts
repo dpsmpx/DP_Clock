@@ -17,7 +17,7 @@ android {
         applicationId = "com.dpsmpx.dpclock"
         minSdk = 31
         targetSdk = 37
-        versionCode = 17
+        versionCode = 18
         versionName = "0.13.0"
     }
 

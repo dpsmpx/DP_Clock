@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 12,
-    "identityHash": "cedd58655520995ae20b50087e8a10ef",
+    "identityHash": "79db64d1344113915b0e628098e1583b",
     "entities": [
       {
         "tableName": "alarm",
@@ -413,7 +413,7 @@
       },
       {
         "tableName": "settings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `snoozeMinutes` INTEGER NOT NULL, `autoStopMinutes` INTEGER, `alarmOrder` TEXT NOT NULL, `xiaomiHintsDone` INTEGER NOT NULL, `signalStyle` TEXT NOT NULL, `volumeButtons` TEXT NOT NULL, `holidaysRu` INTEGER NOT NULL, `bedtimeMode` TEXT NOT NULL, `sleepMinutes` INTEGER NOT NULL, `bedtimeHour` INTEGER NOT NULL, `bedtimeMinute` INTEGER NOT NULL, `bedtimeDays` INTEGER NOT NULL, `bedtimeLeadMinutes` INTEGER NOT NULL, `weatherMode` TEXT NOT NULL, `weatherPlace` TEXT NOT NULL, `weatherLat` REAL, `weatherLon` REAL, `theme` TEXT NOT NULL, `seedColor` INTEGER, `clockStyle` TEXT NOT NULL, `clockFont` TEXT NOT NULL, `clockSize` INTEGER NOT NULL, `nightNoise` TEXT NOT NULL, `background` TEXT NOT NULL, `highContrast` INTEGER NOT NULL, `nightBackground` TEXT NOT NULL, `appBackground` TEXT NOT NULL, `wallpaper` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `snoozeMinutes` INTEGER NOT NULL, `autoStopMinutes` INTEGER, `alarmOrder` TEXT NOT NULL, `showAlarmCountdown` INTEGER NOT NULL, `xiaomiHintsDone` INTEGER NOT NULL, `signalStyle` TEXT NOT NULL, `volumeButtons` TEXT NOT NULL, `holidaysRu` INTEGER NOT NULL, `bedtimeMode` TEXT NOT NULL, `sleepMinutes` INTEGER NOT NULL, `bedtimeHour` INTEGER NOT NULL, `bedtimeMinute` INTEGER NOT NULL, `bedtimeDays` INTEGER NOT NULL, `bedtimeLeadMinutes` INTEGER NOT NULL, `weatherMode` TEXT NOT NULL, `weatherPlace` TEXT NOT NULL, `weatherLat` REAL, `weatherLon` REAL, `theme` TEXT NOT NULL, `seedColor` INTEGER, `clockStyle` TEXT NOT NULL, `clockFont` TEXT NOT NULL, `clockSize` INTEGER NOT NULL, `nightNoise` TEXT NOT NULL, `background` TEXT NOT NULL, `highContrast` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -436,6 +436,12 @@
             "fieldPath": "alarmOrder",
             "columnName": "alarmOrder",
             "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "showAlarmCountdown",
+            "columnName": "showAlarmCountdown",
+            "affinity": "INTEGER",
             "notNull": true
           },
           {
@@ -565,24 +571,6 @@
             "fieldPath": "highContrast",
             "columnName": "highContrast",
             "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "nightBackground",
-            "columnName": "nightBackground",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "appBackground",
-            "columnName": "appBackground",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "wallpaper",
-            "columnName": "wallpaper",
-            "affinity": "TEXT",
             "notNull": true
           }
         ],
@@ -846,7 +834,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'cedd58655520995ae20b50087e8a10ef')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '79db64d1344113915b0e628098e1583b')"
     ]
   }
 }

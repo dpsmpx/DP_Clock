@@ -155,10 +155,17 @@ val MIGRATION_10_11 = SqlMigration(
     ),
 )
 
-/** 0.13.0 (D-024): фон ночных часов, фон приложения, эффект обоев Android. */
+/** 0.12.2: необязательный обратный отсчёт в строках будильников; выключен после обновления. */
 val MIGRATION_11_12 = SqlMigration(
     11,
     12,
+    listOf("ALTER TABLE `settings` ADD COLUMN `showAlarmCountdown` INTEGER NOT NULL DEFAULT 0"),
+)
+
+/** 0.13.0 (D-024): фон ночных часов, фон приложения, эффект обоев Android. */
+val MIGRATION_12_13 = SqlMigration(
+    12,
+    13,
     listOf(
         "ALTER TABLE `settings` ADD COLUMN `nightBackground` TEXT NOT NULL DEFAULT 'NONE'",
         "ALTER TABLE `settings` ADD COLUMN `appBackground` TEXT NOT NULL DEFAULT 'NONE'",

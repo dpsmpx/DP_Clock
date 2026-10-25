@@ -66,6 +66,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -76,6 +77,9 @@ import com.dpsmpx.dpclock.QuickRequest
 import com.dpsmpx.dpclock.model.Alarm
 import com.dpsmpx.dpclock.model.AlarmGroup
 import com.dpsmpx.dpclock.model.AlarmRules
+import com.dpsmpx.dpclock.model.AlarmCountdown
+import com.dpsmpx.dpclock.model.CountdownPart
+import com.dpsmpx.dpclock.model.CountdownUnit
 import com.dpsmpx.dpclock.model.AlarmTemplate
 import com.dpsmpx.dpclock.model.BedtimeMode
 import com.dpsmpx.dpclock.model.Exceptions
@@ -129,7 +133,8 @@ fun AlarmsScreen(
     val settings by repository.settings.collectAsStateWithLifecycle(Settings())
     val snoozed by repository.snoozed.collectAsStateWithLifecycle(emptyMap())
     val reliability = rememberReliability()
-    val now = rememberNowMillis(15_000L)
+    // Секунды в строках обратного отсчёта требуют секундного тика; без него экран обновляется реже.
+    val now = rememberNowMillis(if (settings.showAlarmCountdown) 1_000L else 15_000L)
     val zone = ZoneId.systemDefault()
     val scope = rememberCoroutineScope()
 
@@ -190,6 +195,7 @@ fun AlarmsScreen(
                 alarm = alarm,
                 snoozedUntil = snoozed[alarm.id],
                 exceptions = exceptions,
+                showCountdown = settings.showAlarmCountdown,
                 now = nowInstant,
                 isSelected = layout.twoPane && alarm.id == editingId,
                 onClick = { editingId = alarm.id },
@@ -606,6 +612,7 @@ private fun AlarmRow(
     alarm: Alarm,
     snoozedUntil: Long?,
     exceptions: Exceptions,
+    showCountdown: Boolean,
     now: Instant,
     isSelected: Boolean,
     onClick: () -> Unit,
@@ -647,6 +654,16 @@ private fun AlarmRow(
                     fontWeight = if (alarm.enabled) FontWeight.Medium else FontWeight.Normal,
                 )
                 Text(repeatText(context, alarm.repeat), style = MaterialTheme.typography.bodyMedium)
+                if (showCountdown && next != null) {
+                    val parts = AlarmCountdown.parts(now, next, zone)
+                    if (parts.isNotEmpty()) {
+                        Text(
+                            alarmCountdownText(context, parts),
+                            style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
                 // Поставил календарь (D-023, п. 3): изменить — станет обычным, удалить — в этот день не вернётся.
                 if (alarm.calendarEventAt != null) Note(stringResource(R.string.calendar_alarm_note))
                 val skipDate = alarm.skipDate
@@ -677,6 +694,23 @@ private fun AlarmRow(
             )
         }
     }
+}
+
+/** Локализует части обратного отсчёта без потери календарной точности модели. */
+private fun alarmCountdownText(context: Context, parts: List<CountdownPart>): String {
+    val body = parts.joinToString(" ") { part ->
+        val plural = when (part.unit) {
+            CountdownUnit.YEARS -> R.plurals.countdown_years
+            CountdownUnit.MONTHS -> R.plurals.countdown_months
+            CountdownUnit.DAYS -> R.plurals.countdown_days
+            CountdownUnit.HOURS -> R.plurals.countdown_hours
+            CountdownUnit.MINUTES -> R.plurals.countdown_minutes
+            CountdownUnit.SECONDS -> R.plurals.countdown_seconds
+        }
+        val value = part.value.toInt()
+        context.resources.getQuantityString(plural, value, value)
+    }
+    return context.getString(R.string.countdown_in, body)
 }
 
 @Composable

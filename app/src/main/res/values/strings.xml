@@ -605,4 +605,18 @@
     <string name="stats_late_limit">1 minute; longer is in red</string>
     <string name="duration_seconds">%1$d s</string>
     <string name="duration_minutes_seconds">%1$d min %2$d s</string>
+
+    <!-- Animated wallpapers (D-024) -->
+    <string name="background_constellation">Constellation — touch, tilt, second hand</string>
+    <string name="background_hypercube">Hypercube — turns in 4D, swipe and tilt</string>
+    <string name="background_polar_clock">Polar clock — rings of time</string>
+    <string name="background_hourglass">Hourglass — sand pours over an hour</string>
+    <string name="background_mechanism">Clock mechanism — gears and balance</string>
+    <string name="background_digit_rain">Digit rain — digits gather into the time</string>
+    <string name="night_background">Night clock background</string>
+    <string name="app_background">App background</string>
+    <string name="wallpaper">Live wallpaper</string>
+    <string name="wallpaper_set">Set</string>
+    <string name="wallpaper_name">DP Clock</string>
+    <string name="wallpaper_description">Animated effects of DP Clock. The effect is chosen in the app settings: Appearance → Live wallpaper.</string>
 </resources>

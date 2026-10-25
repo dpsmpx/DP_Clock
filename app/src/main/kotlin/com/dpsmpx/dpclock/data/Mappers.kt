@@ -39,6 +39,7 @@ import com.dpsmpx.dpclock.model.WeatherPlace
 import com.dpsmpx.dpclock.model.WeatherSettings
 import com.dpsmpx.dpclock.model.bits
 import com.dpsmpx.dpclock.model.days
+import com.dpsmpx.dpclock.model.isWallpaper
 import java.time.LocalDate
 
 // Строки базы ↔ модель :core:model.
@@ -201,6 +202,9 @@ fun SettingsEntity?.toModel(): Settings = if (this == null) Settings() else Sett
         nightNoise = enumOr(nightNoise, NoiseKind.NONE),
         background = enumOr(background, ClockBackground.NONE),
         highContrast = highContrast,
+        nightBackground = enumOr(nightBackground, ClockBackground.NONE).takeIf { it == ClockBackground.NONE || it.isWallpaper } ?: ClockBackground.NONE,
+        appBackground = enumOr(appBackground, ClockBackground.NONE).takeIf { it == ClockBackground.NONE || it.isWallpaper } ?: ClockBackground.NONE,
+        wallpaper = enumOr(wallpaper, ClockBackground.CONSTELLATION).takeIf { it.isWallpaper } ?: ClockBackground.CONSTELLATION,
     ),
 )
 
@@ -230,6 +234,9 @@ fun Settings.toEntity() = SettingsEntity(
     nightNoise = appearance.nightNoise.name,
     background = appearance.background.name,
     highContrast = appearance.highContrast,
+    nightBackground = appearance.nightBackground.name,
+    appBackground = appearance.appBackground.name,
+    wallpaper = appearance.wallpaper.name,
 )
 
 /** Неизвестное значение (например, из копии новой версии) — значение по умолчанию. */

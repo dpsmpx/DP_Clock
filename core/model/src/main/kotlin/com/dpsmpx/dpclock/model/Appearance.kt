@@ -45,6 +45,18 @@ enum class ClockBackground {
     /** Живые — отвечают на касание и наклон: частицы, небо. */
     PARTICLES,
     LIVE_SKY,
+
+    /**
+     * Эффекты-обои (D-024): «Созвездие» из AIM_Trainer_pas, гиперкуб, полярные
+     * часы, песочные часы, механизм, дождь цифр. Они же — обои Android,
+     * фон ночных часов и фон приложения.
+     */
+    CONSTELLATION,
+    HYPERCUBE,
+    POLAR_CLOCK,
+    HOURGLASS,
+    MECHANISM,
+    DIGIT_RAIN,
 }
 
 /** Шум в ночных часах (D-021, п. 5; дополнение автора). */
@@ -62,6 +74,12 @@ data class Appearance(
     val background: ClockBackground = ClockBackground.NONE,
     /** «Высокий контраст» (D-022, п. 5): текст и границы темнее; включается и системной настройкой Android 14+. */
     val highContrast: Boolean = false,
+    /** Фон ночных часов (D-024, п. 1): нет или эффект-обои, тёмно-красным. */
+    val nightBackground: ClockBackground = ClockBackground.NONE,
+    /** Фон всего приложения за списками (D-024, п. 1): нет или эффект-обои, приглушённо. */
+    val appBackground: ClockBackground = ClockBackground.NONE,
+    /** Что показывают обои Android DP Clock (D-024, п. 2). */
+    val wallpaper: ClockBackground = ClockBackground.CONSTELLATION,
 ) {
     init {
         require(clockSize in MIN_SIZE..MAX_SIZE) { "размер $clockSize" }

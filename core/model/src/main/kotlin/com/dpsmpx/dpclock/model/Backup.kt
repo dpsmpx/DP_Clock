@@ -225,6 +225,9 @@ object BackupFormat {
                 "nightNoise" to it.nightNoise.name,
                 "background" to it.background.name,
                 "highContrast" to it.highContrast,
+                "nightBackground" to it.nightBackground.name,
+                "appBackground" to it.appBackground.name,
+                "wallpaper" to it.wallpaper.name,
             )
         },
         "weather" to settings.weather.let { weather ->
@@ -365,6 +368,10 @@ object BackupFormat {
                     // Своя картинка — файл на телефоне, в перенос не входит: на новом телефоне фон «нет».
                     background = it.enum("background", base.background).takeIf { bg -> bg != ClockBackground.IMAGE } ?: ClockBackground.NONE,
                     highContrast = it.bool("highContrast", base.highContrast),
+                    // Ночные часы, фон приложения и обои — только эффекты-обои: чужое значение — по умолчанию.
+                    nightBackground = it.enum("nightBackground", base.nightBackground).takeIf { bg -> bg == ClockBackground.NONE || bg.isWallpaper } ?: base.nightBackground,
+                    appBackground = it.enum("appBackground", base.appBackground).takeIf { bg -> bg == ClockBackground.NONE || bg.isWallpaper } ?: base.appBackground,
+                    wallpaper = it.enum("wallpaper", base.wallpaper).takeIf { bg -> bg.isWallpaper } ?: base.wallpaper,
                 )
             } ?: defaults.appearance,
         )

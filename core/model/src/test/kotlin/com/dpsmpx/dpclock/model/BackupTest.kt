@@ -52,7 +52,7 @@ class BackupTest {
             volumeButtons = VolumeButtons.NOTHING, holidaysRu = true,
             bedtime = Bedtime(BedtimeMode.SCHEDULE, 450, 22, 30, setOf(DayOfWeek.SUNDAY, DayOfWeek.MONDAY), 30),
             weather = WeatherSettings(WeatherMode.CITY, WeatherPlace("Тула", 54.1931, 37.6177)),
-            appearance = Appearance(ThemeMode.BLACK, 0xFF3F5AA9.toInt(), ClockStyle.DIGITS, ClockFont.SEGMENT, 80, NoiseKind.PINK, ClockBackground.STARS, highContrast = true),
+            appearance = Appearance(ThemeMode.BLACK, 0xFF3F5AA9.toInt(), ClockStyle.DIGITS, ClockFont.SEGMENT, 80, NoiseKind.PINK, ClockBackground.STARS, highContrast = true, nightBackground = ClockBackground.POLAR_CLOCK, appBackground = ClockBackground.CONSTELLATION, wallpaper = ClockBackground.HYPERCUBE),
         ),
         worldCities = listOf("Asia/Tokyo", "Europe/London"),
     )

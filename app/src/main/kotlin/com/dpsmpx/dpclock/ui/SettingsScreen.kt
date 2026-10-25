@@ -1,5 +1,8 @@
 package com.dpsmpx.dpclock.ui
 
+import android.app.WallpaperManager
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -63,6 +66,7 @@ import com.dpsmpx.dpclock.model.ClockStyle
 import com.dpsmpx.dpclock.model.NoiseKind
 import com.dpsmpx.dpclock.model.ThemeMode
 import com.dpsmpx.dpclock.model.Bedtime
+import com.dpsmpx.dpclock.model.Scenes
 import com.dpsmpx.dpclock.model.CalendarSettings
 import com.dpsmpx.dpclock.model.BedtimeMode
 import com.dpsmpx.dpclock.model.Settings
@@ -70,6 +74,7 @@ import com.dpsmpx.dpclock.model.SignalStyle
 import com.dpsmpx.dpclock.model.VolumeButtons
 import com.dpsmpx.dpclock.persistLater
 import com.dpsmpx.dpclock.platform.CalendarSync
+import com.dpsmpx.dpclock.platform.ClockWallpaper
 import com.dpsmpx.dpclock.platform.TimeText
 import kotlinx.coroutines.launch
 import java.time.format.TextStyle
@@ -281,6 +286,24 @@ fun SettingsScreen(onBack: () -> Unit) {
                     headlineContent = { Text(stringResource(R.string.clock_background)) },
                     supportingContent = { Text(stringResource(backgroundTitle(settings.appearance.background))) },
                     modifier = Modifier.clickable { dialog = "background" },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.night_background)) },
+                    supportingContent = { Text(stringResource(backgroundTitle(settings.appearance.nightBackground))) },
+                    modifier = Modifier.clickable { dialog = "nightBackground" },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.app_background)) },
+                    supportingContent = { Text(stringResource(backgroundTitle(settings.appearance.appBackground))) },
+                    modifier = Modifier.clickable { dialog = "appBackground" },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.wallpaper)) },
+                    supportingContent = { Text(stringResource(backgroundTitle(settings.appearance.wallpaper))) },
+                    trailingContent = {
+                        TextButton(onClick = { context.setLiveWallpaper() }) { Text(stringResource(R.string.wallpaper_set)) }
+                    },
+                    modifier = Modifier.clickable { dialog = "wallpaper" },
                 )
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.night_noise)) },
@@ -523,6 +546,30 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             },
         )
+        "nightBackground" -> ChoiceDialog(
+            title = stringResource(R.string.night_background),
+            choices = listOf(ClockBackground.NONE) + Scenes.WALLPAPERS,
+            selected = settings.appearance.nightBackground,
+            label = { stringResource(backgroundTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(nightBackground = value)) } },
+        )
+        "appBackground" -> ChoiceDialog(
+            title = stringResource(R.string.app_background),
+            choices = listOf(ClockBackground.NONE) + Scenes.WALLPAPERS,
+            selected = settings.appearance.appBackground,
+            label = { stringResource(backgroundTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(appBackground = value)) } },
+        )
+        "wallpaper" -> ChoiceDialog(
+            title = stringResource(R.string.wallpaper),
+            choices = Scenes.WALLPAPERS,
+            selected = settings.appearance.wallpaper,
+            label = { stringResource(backgroundTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(wallpaper = value)) } },
+        )
         "noise" -> ChoiceDialog(
             title = stringResource(R.string.night_noise),
             choices = NoiseKind.entries,
@@ -651,4 +698,17 @@ fun <T> ChoiceDialog(
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
+}
+
+/**
+ * Поставить живые обои DP Clock (D-024, п. 2): системное окно сразу с ними;
+ * у оболочек без него — общий выбор живых обоев.
+ */
+private fun Context.setLiveWallpaper() {
+    val component = ComponentName(this, ClockWallpaper::class.java)
+    runCatching {
+        startActivity(Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, component))
+    }.recoverCatching {
+        startActivity(Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER))
+    }
 }

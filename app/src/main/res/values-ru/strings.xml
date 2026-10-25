@@ -606,4 +606,18 @@
     <string name="stats_late_limit">1 минута; больше — красным</string>
     <string name="duration_seconds">%1$d с</string>
     <string name="duration_minutes_seconds">%1$d мин %2$d с</string>
+
+    <!-- Анимированные обои (D-024) -->
+    <string name="background_constellation">Созвездие — касание, наклон, секундная стрелка</string>
+    <string name="background_hypercube">Гиперкуб — вращение в 4D, палец и наклон</string>
+    <string name="background_polar_clock">Полярные часы — кольца времени</string>
+    <string name="background_hourglass">Песочные часы — песок за час</string>
+    <string name="background_mechanism">Механизм часов — колёса и баланс</string>
+    <string name="background_digit_rain">Дождь цифр — цифры складываются во время</string>
+    <string name="night_background">Фон ночных часов</string>
+    <string name="app_background">Фон приложения</string>
+    <string name="wallpaper">Живые обои</string>
+    <string name="wallpaper_set">Поставить</string>
+    <string name="wallpaper_name">DP Clock</string>
+    <string name="wallpaper_description">Анимированные эффекты DP Clock. Эффект выбирается в настройках приложения: «Оформление» → «Живые обои».</string>
 </resources>

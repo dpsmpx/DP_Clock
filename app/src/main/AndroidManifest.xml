@@ -23,6 +23,10 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Календарь телефона (D-023): только чтение, спрашивается, когда выбирают календари. События не покидают телефон. -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- Живые обои (D-024) — по желанию: без них приложение ставится. -->
+    <uses-feature
+        android:name="android.software.live_wallpaper"
+        android:required="false" />
     <!-- Без камеры приложение ставится: остаются другие способы проверки. -->
     <uses-feature
         android:name="android.hardware.camera"
@@ -117,6 +121,24 @@
             android:directBootAware="true"
             android:exported="false"
             android:foregroundServiceType="systemExempted" />
+
+        <!--
+          Живые обои DP Clock (D-024): эффект из настроек на рабочем столе и экране
+          блокировки. Настройки — в базе хранилища устройства: рисуются и до разблокировки.
+        -->
+        <service
+            android:name=".platform.ClockWallpaper"
+            android:directBootAware="true"
+            android:exported="true"
+            android:label="@string/wallpaper_name"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/wallpaper" />
+        </service>
 
         <!-- Календарь телефона изменился или прошло полдня — перечитать (D-023, п. 6). -->
         <service

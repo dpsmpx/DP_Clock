@@ -286,6 +286,26 @@ class MigrationTest {
         assertEquals(emptyList<Map<String, String?>>(), rows(db, "SELECT * FROM activity_event"))
     }
 
+    @Test
+    fun migration11To12KeepsAppearanceAndAddsSceneDefaults() = withDb { db ->
+        SchemaFile.read(11).create(db)
+        db.execSQL(
+            "INSERT INTO settings (id, snoozeMinutes, autoStopMinutes, alarmOrder, xiaomiHintsDone, signalStyle, volumeButtons, holidaysRu, " +
+                "bedtimeMode, sleepMinutes, bedtimeHour, bedtimeMinute, bedtimeDays, bedtimeLeadMinutes, weatherMode, weatherPlace, " +
+                "theme, seedColor, clockStyle, clockFont, clockSize, nightNoise, background, highContrast) " +
+                "VALUES (0, 10, 10, 'TIME_OF_DAY', 0, 'FULL_SCREEN', 'SNOOZE', 0, 'OFF', 480, 23, 0, 127, 15, 'NOT_SET', '', " +
+                "'DARK', NULL, 'CIRCLE', 'REGULAR', 100, 'NONE', 'WAVES', 1)",
+        )
+        MIGRATION_11_12.migrate(db)
+
+        val settings = row(db, "SELECT * FROM settings")
+        assertEquals("WAVES", settings["background"])
+        assertEquals("1", settings["highContrast"])
+        assertEquals("NONE", settings["nightBackground"])
+        assertEquals("NONE", settings["appBackground"])
+        assertEquals("CONSTELLATION", settings["wallpaper"])
+    }
+
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)
 
     private data class Table(val columns: Map<String, Column>, val indices: Set<String>, val foreignKeys: Set<String>)

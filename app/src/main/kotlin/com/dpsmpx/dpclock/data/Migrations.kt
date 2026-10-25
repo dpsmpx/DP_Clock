@@ -154,3 +154,14 @@ val MIGRATION_10_11 = SqlMigration(
             "PRIMARY KEY(`id`))",
     ),
 )
+
+/** 0.13.0 (D-024): фон ночных часов, фон приложения, эффект обоев Android. */
+val MIGRATION_11_12 = SqlMigration(
+    11,
+    12,
+    listOf(
+        "ALTER TABLE `settings` ADD COLUMN `nightBackground` TEXT NOT NULL DEFAULT 'NONE'",
+        "ALTER TABLE `settings` ADD COLUMN `appBackground` TEXT NOT NULL DEFAULT 'NONE'",
+        "ALTER TABLE `settings` ADD COLUMN `wallpaper` TEXT NOT NULL DEFAULT 'CONSTELLATION'",
+    ),
+)

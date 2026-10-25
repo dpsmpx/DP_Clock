@@ -179,6 +179,12 @@ fun backgroundTitle(background: ClockBackground): Int = when (background) {
     ClockBackground.WEATHER -> R.string.background_weather
     ClockBackground.PARTICLES -> R.string.background_particles
     ClockBackground.LIVE_SKY -> R.string.background_live_sky
+    ClockBackground.CONSTELLATION -> R.string.background_constellation
+    ClockBackground.HYPERCUBE -> R.string.background_hypercube
+    ClockBackground.POLAR_CLOCK -> R.string.background_polar_clock
+    ClockBackground.HOURGLASS -> R.string.background_hourglass
+    ClockBackground.MECHANISM -> R.string.background_mechanism
+    ClockBackground.DIGIT_RAIN -> R.string.background_digit_rain
 }
 
 fun clockFontTitle(font: ClockFont): Int = when (font) {

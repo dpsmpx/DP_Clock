@@ -48,7 +48,7 @@ class BackupTest {
             TimerPreset("p2", "Сон", TimerProgram.sleep(30 * 60_000L), 13L),
         ),
         settings = Settings(
-            snoozeMinutes = 5, autoStopMinutes = null, alarmOrder = AlarmOrder.NEXT, signalStyle = SignalStyle.NOTIFICATION,
+            snoozeMinutes = 5, autoStopMinutes = null, alarmOrder = AlarmOrder.NEXT, showAlarmCountdown = true, signalStyle = SignalStyle.NOTIFICATION,
             volumeButtons = VolumeButtons.NOTHING, holidaysRu = true,
             bedtime = Bedtime(BedtimeMode.SCHEDULE, 450, 22, 30, setOf(DayOfWeek.SUNDAY, DayOfWeek.MONDAY), 30),
             weather = WeatherSettings(WeatherMode.CITY, WeatherPlace("Тула", 54.1931, 37.6177)),

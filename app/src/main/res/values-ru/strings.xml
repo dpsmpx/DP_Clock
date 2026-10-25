@@ -606,4 +606,44 @@
     <string name="stats_late_limit">1 минута; больше — красным</string>
     <string name="duration_seconds">%1$d с</string>
     <string name="duration_minutes_seconds">%1$d мин %2$d с</string>
+
+    <string name="alarm_countdown">Обратный отсчёт до будильника</string>
+    <string name="alarm_countdown_text">Мелким курсивом в строке каждого включённого будильника</string>
+    <string name="countdown_in">Через %1$s</string>
+    <plurals name="countdown_seconds">
+        <item quantity="one">%1$d с</item>
+        <item quantity="few">%1$d с</item>
+        <item quantity="many">%1$d с</item>
+        <item quantity="other">%1$d с</item>
+    </plurals>
+    <plurals name="countdown_minutes">
+        <item quantity="one">%1$d мин</item>
+        <item quantity="few">%1$d мин</item>
+        <item quantity="many">%1$d мин</item>
+        <item quantity="other">%1$d мин</item>
+    </plurals>
+    <plurals name="countdown_hours">
+        <item quantity="one">%1$d ч</item>
+        <item quantity="few">%1$d ч</item>
+        <item quantity="many">%1$d ч</item>
+        <item quantity="other">%1$d ч</item>
+    </plurals>
+    <plurals name="countdown_days">
+        <item quantity="one">%1$d дн.</item>
+        <item quantity="few">%1$d дн.</item>
+        <item quantity="many">%1$d дн.</item>
+        <item quantity="other">%1$d дн.</item>
+    </plurals>
+    <plurals name="countdown_months">
+        <item quantity="one">%1$d мес.</item>
+        <item quantity="few">%1$d мес.</item>
+        <item quantity="many">%1$d мес.</item>
+        <item quantity="other">%1$d мес.</item>
+    </plurals>
+    <plurals name="countdown_years">
+        <item quantity="one">%1$d г.</item>
+        <item quantity="few">%1$d г.</item>
+        <item quantity="many">%1$d г.</item>
+        <item quantity="other">%1$d г.</item>
+    </plurals>
 </resources>

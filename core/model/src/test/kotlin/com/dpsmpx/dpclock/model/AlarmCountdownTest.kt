@@ -25,7 +25,7 @@ class AlarmCountdownTest {
         )
         assertEquals(
             listOf(CountdownPart(59, CountdownUnit.SECONDS)),
-            parts("2026-10-19T06:59:00", "2026-10-19T06:59:59.001"),
+            parts("2026-10-19T06:59:00", "2026-10-19T06:59:58.001"),
         )
     }
 

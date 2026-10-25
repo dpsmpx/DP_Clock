@@ -43,12 +43,17 @@ class NightDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
         setContentView(view)
     }
 
+    /** Заставка на экране с этого момента — для статистики сна (D-023, п. 7). */
+    private var dreamingSince = 0L
+
     override fun onDreamingStarted() {
         super.onDreamingStarted()
+        dreamingSince = System.currentTimeMillis()
         registry.currentState = Lifecycle.State.RESUMED
     }
 
     override fun onDreamingStopped() {
+        recordNightClock(this, dreamingSince)
         registry.currentState = Lifecycle.State.CREATED
         super.onDreamingStopped()
     }

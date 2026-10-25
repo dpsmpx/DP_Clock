@@ -59,6 +59,7 @@ import com.dpsmpx.dpclock.ui.AlarmsScreen
 import com.dpsmpx.dpclock.ui.AppIcons
 import com.dpsmpx.dpclock.ui.ExceptionsScreen
 import com.dpsmpx.dpclock.ui.SettingsScreen
+import com.dpsmpx.dpclock.ui.StatsScreen
 import com.dpsmpx.dpclock.ui.StopwatchScreen
 import com.dpsmpx.dpclock.ui.TimersScreen
 import com.dpsmpx.dpclock.ui.TitleText
@@ -194,6 +195,7 @@ private fun Section.icon(): ImageVector = when (this) {
 private fun AppRoot(request: SectionRequest) {
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var exceptionsOpen by rememberSaveable { mutableStateOf(false) }
+    var statsOpen by rememberSaveable { mutableStateOf(false) }
     var alarmsDialog by rememberSaveable { mutableStateOf<AlarmsDialog?>(null) }
     val pager = rememberPagerState(initialPage = request.section.ordinal) { Section.entries.size }
     val scope = rememberCoroutineScope()
@@ -207,6 +209,7 @@ private fun AppRoot(request: SectionRequest) {
         if (request.serial < 0) return@LaunchedEffect
         settingsOpen = false
         exceptionsOpen = false
+        statsOpen = false
         pager.scrollToPage(request.section.ordinal)
     }
 
@@ -218,6 +221,11 @@ private fun AppRoot(request: SectionRequest) {
     if (exceptionsOpen) {
         BackHandler { exceptionsOpen = false }
         ExceptionsScreen(onBack = { exceptionsOpen = false })
+        return
+    }
+    if (statsOpen) {
+        BackHandler { statsOpen = false }
+        StatsScreen(onBack = { statsOpen = false })
         return
     }
 
@@ -250,6 +258,10 @@ private fun AppRoot(request: SectionRequest) {
                     title = { TitleText(stringResource(SECTION_TITLES.getValue(section))) },
                     actions = {
                         if (section == Section.ALARMS) {
+                            // Статистика (D-023, п. 7; выбор автора — кнопка в «Будильниках»).
+                            IconButton(onClick = { statsOpen = true }) {
+                                Icon(AppIcons.Chart, contentDescription = stringResource(R.string.stats))
+                            }
                             AlarmOrderMenu()
                             AlarmsMenu(openExceptions = { exceptionsOpen = true }, onDialog = { alarmsDialog = it })
                         }

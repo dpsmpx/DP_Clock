@@ -1,21 +1,22 @@
 package com.dpsmpx.dpclock.data
 
+import com.dpsmpx.dpclock.model.ActivityEvent
+import com.dpsmpx.dpclock.model.ActivityKind
 import com.dpsmpx.dpclock.model.AfterAlarm
-import com.dpsmpx.dpclock.model.Appearance
-import com.dpsmpx.dpclock.model.ClockBackground
-import com.dpsmpx.dpclock.model.ClockFont
-import com.dpsmpx.dpclock.model.ClockStyle
-import com.dpsmpx.dpclock.model.NoiseKind
-import com.dpsmpx.dpclock.model.ThemeMode
 import com.dpsmpx.dpclock.model.Alarm
 import com.dpsmpx.dpclock.model.AlarmGroup
 import com.dpsmpx.dpclock.model.AlarmOrder
 import com.dpsmpx.dpclock.model.AlarmSound
 import com.dpsmpx.dpclock.model.AlarmTemplate
+import com.dpsmpx.dpclock.model.Appearance
 import com.dpsmpx.dpclock.model.Bedtime
 import com.dpsmpx.dpclock.model.BedtimeMode
+import com.dpsmpx.dpclock.model.ClockBackground
+import com.dpsmpx.dpclock.model.ClockFont
+import com.dpsmpx.dpclock.model.ClockStyle
 import com.dpsmpx.dpclock.model.ExceptionPeriod
 import com.dpsmpx.dpclock.model.Moment
+import com.dpsmpx.dpclock.model.NoiseKind
 import com.dpsmpx.dpclock.model.Repeat
 import com.dpsmpx.dpclock.model.Settings
 import com.dpsmpx.dpclock.model.SignalEvent
@@ -24,6 +25,7 @@ import com.dpsmpx.dpclock.model.SignalSource
 import com.dpsmpx.dpclock.model.SignalStyle
 import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
+import com.dpsmpx.dpclock.model.ThemeMode
 import com.dpsmpx.dpclock.model.TimerPreset
 import com.dpsmpx.dpclock.model.TimerProgram
 import com.dpsmpx.dpclock.model.TimerRun
@@ -245,4 +247,9 @@ fun SignalEventEntity.toModel() = SignalEvent(
     scheduledAt = scheduledAt,
     firedAt = firedAt,
     outcome = enumOr(outcome, SignalOutcome.DISMISSED),
+    endedAt = endedAt,
 )
+
+fun ActivityEventEntity.toModel() = ActivityEvent(id, enumOr(kind, ActivityKind.TIMER), startedAt, endedAt, title, refId, amountMillis, count)
+
+fun ActivityEvent.toEntity() = ActivityEventEntity(id, kind.name, startedAt, endedAt, title, refId, amountMillis, count)

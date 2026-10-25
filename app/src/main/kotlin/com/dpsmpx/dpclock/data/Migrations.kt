@@ -142,3 +142,15 @@ val MIGRATION_9_10 = SqlMigration(
     10,
     listOf("ALTER TABLE `alarm` ADD COLUMN `calendarEventAt` INTEGER"),
 )
+
+/** 0.12.1 (D-023, п. 7): конец сигнала в журнале и действия для статистики. */
+val MIGRATION_10_11 = SqlMigration(
+    10,
+    11,
+    listOf(
+        "ALTER TABLE `signal_event` ADD COLUMN `endedAt` INTEGER",
+        "CREATE TABLE IF NOT EXISTS `activity_event` (`id` TEXT NOT NULL, `kind` TEXT NOT NULL, `startedAt` INTEGER NOT NULL, " +
+            "`endedAt` INTEGER NOT NULL, `title` TEXT NOT NULL, `refId` TEXT, `amountMillis` INTEGER NOT NULL, `count` INTEGER NOT NULL, " +
+            "PRIMARY KEY(`id`))",
+    ),
+)

@@ -200,7 +200,7 @@ data class WorldCityEntity(
     val createdAt: Long,
 )
 
-/** Журнал срабатываний (DATA_MODEL.md, п. 7), последние [ClockDao.LOG_LIMIT] событий. */
+/** Журнал срабатываний (DATA_MODEL.md, п. 7). С 0.12.1 хранится весь: основа статистики (D-023, п. 7). */
 @Entity(tableName = "signal_event")
 data class SignalEventEntity(
     @PrimaryKey val id: String,
@@ -213,6 +213,22 @@ data class SignalEventEntity(
     val outcome: String,
     /** Название будильника или таймера на момент записи (0.7.1). */
     val title: String = "",
+    /** Когда сигнал кончился — выключен, отложен, стих (0.12.1); у прежних записей — null. */
+    val endedAt: Long? = null,
+)
+
+/** Действия для статистики (D-023, п. 7): ночные часы, таймер засыпания, «пора спать», таймеры, секундомер. */
+@Entity(tableName = "activity_event")
+data class ActivityEventEntity(
+    @PrimaryKey val id: String,
+    /** ActivityKind. */
+    val kind: String,
+    val startedAt: Long,
+    val endedAt: Long,
+    val title: String,
+    val refId: String?,
+    val amountMillis: Long,
+    val count: Int,
 )
 
 @Dao
@@ -349,11 +365,18 @@ interface ClockDao {
     @Query("SELECT * FROM signal_event ORDER BY firedAt DESC")
     fun events(): Flow<List<SignalEventEntity>>
 
-    @Query(
-        "DELETE FROM signal_event WHERE id NOT IN " +
-            "(SELECT id FROM signal_event ORDER BY firedAt DESC LIMIT $LOG_LIMIT)",
-    )
-    suspend fun trimEvents()
+    @Upsert
+    suspend fun insertActivity(activity: ActivityEventEntity)
+
+    @Query("SELECT * FROM activity_event ORDER BY startedAt DESC")
+    fun activities(): Flow<List<ActivityEventEntity>>
+
+    /** «Очистить историю» в статистике: журнал и действия. */
+    @Query("DELETE FROM signal_event")
+    suspend fun clearEvents()
+
+    @Query("DELETE FROM activity_event")
+    suspend fun clearActivities()
 
     /** Идущие таймеры, секундомер и срабатывания — состояние этого устройства, не для переноса. */
     @Query("DELETE FROM timer_run")
@@ -392,10 +415,6 @@ interface ClockDao {
 
     @Query("DELETE FROM timer_preset")
     suspend fun clearPresets()
-
-    companion object {
-        const val LOG_LIMIT = 1000
-    }
 }
 
 @Database(
@@ -411,6 +430,7 @@ interface ClockDao {
         TemplateEntity::class,
         ExceptionEntity::class,
         WorldCityEntity::class,
+        ActivityEventEntity::class,
     ],
     version = ClockDatabase.VERSION,
     exportSchema = true,
@@ -422,10 +442,10 @@ abstract class ClockDatabase : RoomDatabase() {
         const val NAME = "dpclock.db"
 
         /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
-        const val VERSION = 10
+        const val VERSION = 11
 
         /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
-        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки

@@ -561,4 +561,48 @@
     </plurals>
     <string name="calendar_alarm_label">Before the event at %1$s</string>
     <string name="calendar_alarm_note">Set by the phone calendar</string>
+
+    <!-- Statistics (D-023) -->
+    <string name="stats">Statistics</string>
+    <string name="stats_week">Week</string>
+    <string name="stats_month">Month</string>
+    <string name="stats_year">Year</string>
+    <string name="stats_all">All time</string>
+    <string name="stats_clear">Clear history</string>
+    <string name="stats_clear_title">Clear history?</string>
+    <string name="stats_clear_text">The signal log and statistics will be deleted from the phone. Alarms and timers stay.</string>
+    <string name="stats_clear_confirm">Clear</string>
+    <string name="stats_wakes">Wake-ups</string>
+    <string name="stats_wakes_empty">No wake-ups in this period yet. They appear after a morning alarm (3:00–14:00) is dismissed.</string>
+    <string name="stats_wake_average">average wake-up: when the alarm was dismissed</string>
+    <string name="stats_weekdays">weekdays %1$s</string>
+    <string name="stats_weekends">weekends %1$s</string>
+    <string name="stats_snoozes">Snoozed: %1$d</string>
+    <string name="stats_ring_average">Rang on average for %1$s</string>
+    <string name="stats_overslept">Not dismissed, went quiet or missed: %1$d</string>
+    <string name="stats_sleep">Sleep</string>
+    <string name="stats_sleep_empty">No estimates yet. Sleep counts from “Time for bed”, the night clock or the sleep timer in the evening to the wake-up.</string>
+    <string name="stats_sleep_average">on average a night; goal %1$s</string>
+    <string name="stats_nights">Nights with an estimate: %1$d</string>
+    <string name="stats_night_detail">%1$s: %2$s, %3$s–%4$s</string>
+    <string name="stats_goal">goal</string>
+    <string name="stats_sleep_how">An estimate: from the latest of “Time for bed”, the night clock and the sleep timer to the wake-up.</string>
+    <string name="stats_timers">Timers and stopwatch</string>
+    <string name="stats_timers_empty">No timers or stopwatch runs in this period.</string>
+    <string name="stats_timers_total">timers, %1$s in total</string>
+    <string name="stats_timer_use">%1$s — %2$d</string>
+    <string name="stats_sleep_timers">Sleep timer: %1$d</string>
+    <string name="stats_stopwatch_sessions">Stopwatch runs: %1$d</string>
+    <string name="stats_stopwatch_total">Stopwatch in total: %1$s</string>
+    <string name="stats_laps">Laps: %1$d</string>
+    <string name="stats_reliability">Signal reliability</string>
+    <string name="stats_reliability_empty">No alarm or timer signals in this period.</string>
+    <string name="stats_on_time">signals on time, late by a minute at most</string>
+    <string name="stats_late_average">Average delay: %1$s</string>
+    <string name="stats_late_max">Largest delay: %1$s</string>
+    <string name="stats_missed">Missed: %1$d</string>
+    <string name="stats_late_detail">%1$s: largest delay %2$s</string>
+    <string name="stats_late_limit">1 minute; longer is in red</string>
+    <string name="duration_seconds">%1$d s</string>
+    <string name="duration_minutes_seconds">%1$d min %2$d s</string>
 </resources>

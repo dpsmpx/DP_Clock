@@ -58,8 +58,9 @@ enum class SignalSource { ALARM, TIMER }
 
 /**
  * Запись журнала срабатываний (DATA_MODEL.md, п. 7): когда сигнал ожидался
- * ([scheduledAt]) и когда зазвучал ([firedAt]), мс UTC. [title] — название
- * будильника или таймера на тот момент: запись переживает их удаление.
+ * ([scheduledAt]), когда зазвучал ([firedAt]) и когда кончился ([endedAt] — с
+ * 0.12.1, у записей раньше — null), мс UTC. [title] — название будильника или
+ * таймера на тот момент: запись переживает их удаление.
  */
 data class SignalEvent(
     val id: String,
@@ -69,6 +70,7 @@ data class SignalEvent(
     val scheduledAt: Long,
     val firedAt: Long,
     val outcome: SignalOutcome,
+    val endedAt: Long? = null,
 ) {
     /** Опоздание сигнала, мс; null — сигнал не звучал (пропущен или выключен заранее). */
     val lateMillis: Long?

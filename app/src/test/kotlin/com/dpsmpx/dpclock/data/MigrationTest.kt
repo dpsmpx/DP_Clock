@@ -270,6 +270,22 @@ class MigrationTest {
         assertEquals(null, alarm["calendarEventAt"])
     }
 
+    @Test
+    fun migration10To11KeepsTheJournalAndAddsAnEmptyActivityLog() = withDb { db ->
+        SchemaFile.read(10).create(db)
+        db.execSQL(
+            "INSERT INTO signal_event (id, source, sourceId, scheduledAt, firedAt, outcome, title) " +
+                "VALUES ('e', 'ALARM', 'a', 100, 130, 'DISMISSED', 'Подъём')",
+        )
+        MIGRATION_10_11.migrate(db)
+
+        val event = row(db, "SELECT * FROM signal_event")
+        assertEquals("130", event["firedAt"])
+        assertEquals("Подъём", event["title"])
+        assertEquals(null, event["endedAt"])
+        assertEquals(emptyList<Map<String, String?>>(), rows(db, "SELECT * FROM activity_event"))
+    }
+
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)
 
     private data class Table(val columns: Map<String, Column>, val indices: Set<String>, val foreignKeys: Set<String>)

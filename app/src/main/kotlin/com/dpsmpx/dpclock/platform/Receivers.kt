@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
 import com.dpsmpx.dpclock.DpClockApp
+import com.dpsmpx.dpclock.model.ActivityKind
 import com.dpsmpx.dpclock.model.SignalOutcome
 import com.dpsmpx.dpclock.model.StepSignal
 import com.dpsmpx.dpclock.model.TimerState
@@ -20,6 +21,8 @@ class AlarmReceiver : BroadcastReceiver() {
                 runAsync {
                     val graph = DpClockApp.graph(context)
                     graph.notifier.bedtime(bedAt, alarmAt, graph.repository.currentSettings().bedtime.sleepMinutes)
+                    // «Пора спать» — самое раннее «лёг» для статистики сна (D-023, п. 7).
+                    if (bedAt > 0) graph.repository.recordActivity(ActivityKind.BEDTIME, bedAt, bedAt)
                     graph.repository.syncBedtime()
                 }
                 return

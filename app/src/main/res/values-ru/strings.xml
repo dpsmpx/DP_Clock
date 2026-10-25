@@ -562,4 +562,48 @@
     </plurals>
     <string name="calendar_alarm_label">Перед событием в %1$s</string>
     <string name="calendar_alarm_note">Поставил календарь телефона</string>
+
+    <!-- Статистика (D-023) -->
+    <string name="stats">Статистика</string>
+    <string name="stats_week">Неделя</string>
+    <string name="stats_month">Месяц</string>
+    <string name="stats_year">Год</string>
+    <string name="stats_all">Всё время</string>
+    <string name="stats_clear">Очистить историю</string>
+    <string name="stats_clear_title">Очистить историю?</string>
+    <string name="stats_clear_text">Журнал срабатываний и статистика удалятся с телефона. Будильники и таймеры останутся.</string>
+    <string name="stats_clear_confirm">Очистить</string>
+    <string name="stats_wakes">Подъёмы</string>
+    <string name="stats_wakes_empty">За этот период подъёмов нет. Они появятся, когда утренний будильник (3:00–14:00) выключат.</string>
+    <string name="stats_wake_average">средний подъём: когда выключили будильник</string>
+    <string name="stats_weekdays">в будни %1$s</string>
+    <string name="stats_weekends">в выходные %1$s</string>
+    <string name="stats_snoozes">Отложено: %1$d</string>
+    <string name="stats_ring_average">Звенел в среднем %1$s</string>
+    <string name="stats_overslept">Не выключили — стих сам или пропущен: %1$d</string>
+    <string name="stats_sleep">Сон</string>
+    <string name="stats_sleep_empty">Оценок пока нет. Сон считается от «Пора ложиться», ночных часов или таймера засыпания вечером до подъёма.</string>
+    <string name="stats_sleep_average">в среднем за ночь; цель %1$s</string>
+    <string name="stats_nights">Ночей с оценкой: %1$d</string>
+    <string name="stats_night_detail">%1$s: %2$s, %3$s–%4$s</string>
+    <string name="stats_goal">цель</string>
+    <string name="stats_sleep_how">Оценка: от самого позднего из «Пора ложиться», ночных часов и таймера засыпания до подъёма.</string>
+    <string name="stats_timers">Таймеры и секундомер</string>
+    <string name="stats_timers_empty">За этот период таймеров и замеров секундомера не было.</string>
+    <string name="stats_timers_total">таймеров, всего %1$s</string>
+    <string name="stats_timer_use">%1$s — %2$d</string>
+    <string name="stats_sleep_timers">Таймер засыпания: %1$d</string>
+    <string name="stats_stopwatch_sessions">Замеров секундомера: %1$d</string>
+    <string name="stats_stopwatch_total">Секундомер всего: %1$s</string>
+    <string name="stats_laps">Кругов: %1$d</string>
+    <string name="stats_reliability">Надёжность сигналов</string>
+    <string name="stats_reliability_empty">За этот период сигналов будильников и таймеров не было.</string>
+    <string name="stats_on_time">сигналов вовремя, с опозданием не больше минуты</string>
+    <string name="stats_late_average">Опоздание в среднем: %1$s</string>
+    <string name="stats_late_max">Самое большое опоздание: %1$s</string>
+    <string name="stats_missed">Пропущено: %1$d</string>
+    <string name="stats_late_detail">%1$s: самое большое опоздание %2$s</string>
+    <string name="stats_late_limit">1 минута; больше — красным</string>
+    <string name="duration_seconds">%1$d с</string>
+    <string name="duration_minutes_seconds">%1$d мин %2$d с</string>
 </resources>

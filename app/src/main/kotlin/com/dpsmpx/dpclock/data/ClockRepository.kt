@@ -1,6 +1,8 @@
 package com.dpsmpx.dpclock.data
 
 import android.content.Context
+import com.dpsmpx.dpclock.model.ActivityEvent
+import com.dpsmpx.dpclock.model.ActivityKind
 import com.dpsmpx.dpclock.model.Alarm
 import com.dpsmpx.dpclock.model.AlarmGroup
 import com.dpsmpx.dpclock.model.AlarmRules
@@ -21,6 +23,7 @@ import com.dpsmpx.dpclock.model.SignalOutcome
 import com.dpsmpx.dpclock.model.SignalSource
 import com.dpsmpx.dpclock.model.StepSignal
 import com.dpsmpx.dpclock.model.Stopwatch
+import com.dpsmpx.dpclock.model.StopwatchState
 import com.dpsmpx.dpclock.model.TimerPreset
 import com.dpsmpx.dpclock.model.TimerProgram
 import com.dpsmpx.dpclock.model.TimerRules
@@ -112,6 +115,9 @@ class ClockRepository(
 
     /** Журнал срабатываний, новые сверху. */
     val events: Flow<List<SignalEvent>> = dao.events().map { list -> list.map { it.toModel() } }
+
+    /** Действия для статистики (D-023, п. 7), новые сверху. */
+    val activities: Flow<List<ActivityEvent>> = dao.activities().map { list -> list.map { it.toModel() } }
 
     /** Общий список исключений: свои периоды, праздники, если включены (D-014, п. 4), и дни календаря телефона (D-023). */
     val exceptions: Flow<Exceptions> = combine(dao.exceptionsFlow(), settings, calendar.exceptionDates) { periods, settings, dates ->
@@ -758,6 +764,8 @@ class ClockRepository(
         val run = TimerRules.start(UUID.randomUUID().toString(), presetId, name, program, Clocks.moment())
         dao.upsertTimerRun(run.toEntity())
         syncTimers()
+        // Таймер засыпания — «лёг» для статистики сна (D-023, п. 7).
+        if (program.sleep) logActivity(ActivityKind.SLEEP_TIMER, now(), now(), amountMillis = program.totalMillis)
         // Для плиток (D-020): длина таймера засыпания и последний обычный таймер.
         Surfaces.rememberTimer(context, program, name, presetId)
     }
@@ -775,6 +783,7 @@ class ClockRepository(
     /** Остановить и убрать таймер засыпания — плитка (D-020). */
     suspend fun stopSleepTimers() = locked {
         for (run in dao.allTimerRuns().map { it.toModel() }.filter { it.program.sleep }) {
+            logTimer(run, completed = false)
             dao.deleteTimerRun(run.id)
             scheduler.cancelTimer(run.id)
             notifier.cancelTimer(run.id)
@@ -796,6 +805,7 @@ class ClockRepository(
     }
 
     suspend fun deleteTimer(id: String) = locked {
+        dao.timerRun(id)?.toModel()?.let { logTimer(it, completed = false) }
         dao.deleteTimerRun(id)
         scheduler.cancelTimer(id)
         notifier.cancelTimer(id)
@@ -810,6 +820,7 @@ class ClockRepository(
         val now = now()
         log(SignalSource.TIMER, id, endedAt ?: now, ringingSince ?: now, outcome, run.name)
         if (run.state == TimerState.RINGING) {
+            logTimer(run, completed = true)
             dao.deleteTimerRun(id)
             scheduler.cancelTimer(id)
             notifier.cancelTimer(id)
@@ -827,12 +838,14 @@ class ClockRepository(
         val endedAt = result.endedAt?.let { now.utc + it.millisAfter(now) }
         if (result.run.state == TimerState.RINGING && run.program.sleep) {
             // Таймер засыпания закончился: без сигнала, музыку останавливает приёмник (D-016, п. 1).
+            logTimer(run, completed = true)
             dao.deleteTimerRun(id)
             scheduler.cancelTimer(id)
             notifier.cancelTimer(id)
             log(SignalSource.TIMER, id, endedAt ?: now.utc, now.utc, if (result.late) SignalOutcome.MISSED else SignalOutcome.DISMISSED, run.name)
         } else if (result.run.state == TimerState.RINGING && result.late) {
             // Закончился, пока телефон был выключен: только уведомление (DATA_MODEL.md, п. 5).
+            logTimer(run, completed = true)
             dao.deleteTimerRun(id)
             scheduler.cancelTimer(id)
             notifier.cancelTimer(id)
@@ -873,16 +886,54 @@ class ClockRepository(
     // Секундомер
 
     suspend fun updateStopwatch(change: (Stopwatch) -> Stopwatch) = locked {
-        val updated = change(dao.currentStopwatch().toModel())
+        val old = dao.currentStopwatch().toModel()
+        val updated = change(old)
+        // Сброс — конец замера: сколько шёл и сколько кругов (D-023, п. 7).
+        if (old.state != StopwatchState.RESET && updated.state == StopwatchState.RESET) {
+            val elapsed = old.elapsedAt(Clocks.moment())
+            if (elapsed > 0) logActivity(ActivityKind.STOPWATCH, now() - elapsed, now(), amountMillis = elapsed, count = old.laps.size)
+        }
         dao.upsertStopwatch(updated.toEntity())
         notifier.stopwatch(updated)
     }
 
+    /** Запись журнала в момент, когда сигнал кончился; пропущенный не звучал — кончился там же, где «зазвучал». */
     private suspend fun log(source: SignalSource, sourceId: String, scheduledAt: Long, firedAt: Long, outcome: SignalOutcome, title: String) {
+        val endedAt = if (outcome == SignalOutcome.MISSED) firedAt else maxOf(firedAt, now())
         dao.insertEvent(
-            SignalEventEntity(UUID.randomUUID().toString(), source.name, sourceId, scheduledAt, firedAt, outcome.name, title),
+            SignalEventEntity(UUID.randomUUID().toString(), source.name, sourceId, scheduledAt, firedAt, outcome.name, title, endedAt),
         )
-        dao.trimEvents()
+    }
+
+    // Статистика (D-023, п. 7)
+
+    /** Ночные часы и «пора спать» — с экрана и приёмника. */
+    suspend fun recordActivity(kind: ActivityKind, startedAt: Long, endedAt: Long) = locked(quiet = true) {
+        logActivity(kind, startedAt, endedAt)
+    }
+
+    /** «Очистить историю»: журнал срабатываний и действия. */
+    suspend fun clearHistory() = locked(quiet = true) {
+        dao.clearEvents()
+        dao.clearActivities()
+    }
+
+    private suspend fun logActivity(
+        kind: ActivityKind,
+        startedAt: Long,
+        endedAt: Long,
+        title: String = "",
+        refId: String? = null,
+        amountMillis: Long = 0L,
+        count: Int = 0,
+    ) {
+        dao.insertActivity(ActivityEvent(UUID.randomUUID().toString(), kind, startedAt, endedAt, title, refId, amountMillis, count).toEntity())
+    }
+
+    /** Таймер кончился или убран; таймер засыпания уже записан при запуске. */
+    private suspend fun logTimer(run: TimerRun, completed: Boolean) {
+        if (run.program.sleep) return
+        logActivity(ActivityKind.TIMER, run.createdAt, now(), run.name, run.presetId, run.program.totalMillis, if (completed) 1 else 0)
     }
 
     private fun now(): Long = System.currentTimeMillis()

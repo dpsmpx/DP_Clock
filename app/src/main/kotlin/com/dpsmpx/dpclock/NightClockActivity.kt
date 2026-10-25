@@ -21,6 +21,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import com.dpsmpx.dpclock.model.ActivityKind
 import com.dpsmpx.dpclock.platform.NoisePlayer
 import com.dpsmpx.dpclock.ui.NightClock
 import kotlinx.coroutines.awaitCancellation
@@ -28,10 +29,24 @@ import kotlinx.coroutines.awaitCancellation
 /**
  * Ночные часы во весь экран (D-017, п. 4): экран не гаснет, яркость — почти
  * ноль; нажатие — чуть ярче и обратно, тогда же внизу — выбор шума (D-021, п. 5).
- * Шум звучит, пока экран открыт. Видны и поверх блокировки.
+ * Шум звучит, пока экран открыт. Видны и поверх блокировки. Сколько были на
+ * экране — в статистику сна (D-023, п. 7).
  */
 class NightClockActivity : ComponentActivity() {
     private val noise by lazy { NoisePlayer(this) }
+
+    /** Ночные часы на экране с этого момента — для статистики сна (D-023, п. 7). */
+    private var shownSince = 0L
+
+    override fun onStart() {
+        super.onStart()
+        shownSince = System.currentTimeMillis()
+    }
+
+    override fun onStop() {
+        recordNightClock(this, shownSince)
+        super.onStop()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -71,4 +86,12 @@ class NightClockActivity : ComponentActivity() {
         const val DIM = 0.01f
         const val BRIGHT = 0.3f
     }
+}
+
+/** Ночные часы или заставка были на экране с [since] до сейчас; меньше минуты — не в счёт. */
+fun recordNightClock(context: android.content.Context, since: Long) {
+    val now = System.currentTimeMillis()
+    if (since <= 0 || now - since < 60_000L) return
+    val app = context.applicationContext
+    persistLater { DpClockApp.graph(app).repository.recordActivity(ActivityKind.NIGHT_CLOCK, since, now) }
 }

@@ -97,17 +97,14 @@ private enum class TasksTab(val title: Int) { ALL(R.string.tasks_tab_all), PERMA
  * вверху): «Все», «Постоянные», «Доска»; поиск и сортировка; «+» — новая задача.
  */
 @Composable
-fun TasksScreen(snackbar: SnackbarHostState, visible: Boolean = true, initialTab: Int = 0) {
+fun TasksScreen(snackbar: SnackbarHostState, initialTab: Int = 0) {
     val context = LocalContext.current
     val graph = DpClockApp.graph(context)
-    // null — ещё не прочитано: список не рисуется, иначе он прыгнул бы к задачам Google.
+    // null — ещё не прочитано: список не рисуется, чтобы не мелькало «задач пока нет».
     val loaded by graph.repository.tasks.collectAsStateWithLifecycle(null)
     val loadedMarks by graph.repository.marks.collectAsStateWithLifecycle(null)
     val own = loaded.orEmpty()
     val marks = loadedMarks.orEmpty()
-    val store = graph.tasks
-    val state by store.state.collectAsStateWithLifecycle()
-    LaunchedEffect(visible) { if (visible) persistLater { store.refresh() } }
     var tab by rememberSaveable { mutableStateOf(TasksTab.entries[initialTab]) }
     var query by rememberSaveable { mutableStateOf("") }
     var allSort by rememberSaveable { mutableStateOf(TaskSort.DUE) }
@@ -140,7 +137,7 @@ fun TasksScreen(snackbar: SnackbarHostState, visible: Boolean = true, initialTab
             }
             if (loaded == null || loadedMarks == null) return@Column
             when (tab) {
-                TasksTab.ALL -> AllTab(found, query, allSort, last, byTask, now, today, state.cache.google, state.cache.tasks, snackbar) { editing = it }
+                TasksTab.ALL -> AllTab(found, query, allSort, last, byTask, now, today, snackbar) { editing = it }
                 TasksTab.PERMANENT -> PermanentTab(found.filter { it.permanent }, permanentSort, last, byTask, now, today, snackbar) { editing = it }
                 TasksTab.BOARD -> BoardTab(found.filter { !it.done }, last, now, today) { editing = it }
             }
@@ -197,7 +194,7 @@ private fun markDone(context: android.content.Context, scope: kotlinx.coroutines
 /**
  * «Все»: свои задачи группами по сроку — просрочено, сегодня, завтра, позже, без срока,
  * постоянные; подзадачи — под своей задачей, ветки сворачиваются. С поиском или другой
- * сортировкой — одним списком. Ниже — задачи Google на сегодня и сделанные.
+ * сортировкой — одним списком. Ниже — сделанные.
  */
 @Composable
 private fun AllTab(
@@ -208,8 +205,6 @@ private fun AllTab(
     stats: Map<String, TaskStats>,
     now: Long,
     today: LocalDate,
-    google: Boolean,
-    googleTasks: List<com.dpsmpx.dpclock.model.DayTask>,
     snackbar: SnackbarHostState,
     onOpen: (Task) -> Unit,
 ) {
@@ -220,7 +215,6 @@ private fun AllTab(
     val open = tasks.filter { !it.done }
     val done = tasks.filter { it.done }.sortedByDescending { it.doneAt ?: 0L }
     val order = TaskTree.order(sort, last)
-    val dayGoogle = if (google && query.isBlank()) TaskRules.forDay(googleTasks, today) else emptyList()
     fun toggle(id: String) {
         collapsed = if (id in collapsed) collapsed - id else collapsed + id
     }
@@ -243,7 +237,7 @@ private fun AllTab(
         listOf(null to TaskTree.flatten(open, collapsed.toSet(), order))
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = 96.dp)) {
-        if (tasks.isEmpty() && dayGoogle.isEmpty()) {
+        if (tasks.isEmpty()) {
             item { Text(stringResource(if (query.isBlank()) R.string.tasks_empty else R.string.tasks_not_found), modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         for ((title, rows) in sections) {
@@ -251,12 +245,6 @@ private fun AllTab(
             if (title != null) item(key = "h$title") { GroupTitle(stringResource(title)) }
             items(rows, key = { it.first.id }) { (task, depth) ->
                 TaskRow(task, depth, open, collapsed.contains(task.id), stats[task.id], now, today, onToggle = { toggle(task.id) }, onDone = { markDone(context, scope, snackbar, task) }, onOpen = { onOpen(task) })
-            }
-        }
-        if (dayGoogle.isNotEmpty()) {
-            item(key = "google") { GroupTitle(stringResource(R.string.tasks_google)) }
-            items(dayGoogle, key = { "g" + it.listId + it.id }) { task ->
-                DayTaskRow(task, today, MaterialTheme.colorScheme.onSurface, MaterialTheme.colorScheme.onSurfaceVariant, onDone = { persistLater { complete(context, task) } }, onOpen = {})
             }
         }
         if (done.isNotEmpty()) {

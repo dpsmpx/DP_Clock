@@ -75,17 +75,15 @@ import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
 import com.dpsmpx.dpclock.model.DayTask
 import com.dpsmpx.dpclock.model.Task
-import com.dpsmpx.dpclock.model.TaskCache
 import com.dpsmpx.dpclock.model.TaskHistory
 import com.dpsmpx.dpclock.model.TaskLevel
 import com.dpsmpx.dpclock.model.TaskMark
+import com.dpsmpx.dpclock.model.TaskPrefs
 import com.dpsmpx.dpclock.model.TaskRepeat
 import com.dpsmpx.dpclock.model.TaskRules
-import com.dpsmpx.dpclock.model.TaskSource
 import com.dpsmpx.dpclock.model.TaskTree
 import com.dpsmpx.dpclock.persist
 import com.dpsmpx.dpclock.persistLater
-import com.dpsmpx.dpclock.platform.GoogleSignIn
 import com.dpsmpx.dpclock.platform.PhoneCalendarInfo
 import com.dpsmpx.dpclock.platform.TaskCalendar
 import com.dpsmpx.dpclock.platform.TimeText
@@ -111,25 +109,19 @@ internal fun rememberToday(): LocalDate {
 }
 
 /**
- * Задачи на сегодня в «Часах» (D-032; выбор автора — в «Часах» и экран «Все задачи»):
- * свои и Google, сегодня и просроченные; «+» — новая задача, касание по своей —
- * правка, кружок — «сделано». Пока раздел виден, задачи Google обновляются не чаще
- * раза в 15 минут.
+ * Задачи на сегодня в «Часах» (D-032; выбор автора — в «Часах» и раздел «Задачи»):
+ * сегодня и просроченные; «+» — новая задача, касание — правка, кружок — «сделано».
  */
 @Composable
-fun TasksPanel(active: Boolean, onBackdrop: Boolean, onOpenAll: () -> Unit, modifier: Modifier = Modifier) {
+fun TasksPanel(onBackdrop: Boolean, onOpenAll: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val graph = DpClockApp.graph(context)
-    val store = graph.tasks
-    val state by store.state.collectAsStateWithLifecycle()
+    val prefs by graph.tasks.state.collectAsStateWithLifecycle()
     val own by graph.repository.tasks.collectAsStateWithLifecycle(emptyList())
-    LaunchedEffect(active) { if (active) persistLater { store.refresh() } }
-    val cache = state.cache
-    if (!cache.showClock) return
+    if (!prefs.showClock) return
     val today = rememberToday()
-    val tasks = dayTasks(own, cache, today)
+    val tasks = dayTasks(own, today)
     var expanded by rememberSaveable { mutableStateOf(false) }
-    var failed by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Task?>(null) }
     var creating by rememberSaveable { mutableStateOf(false) }
     val shown = if (expanded) tasks else tasks.take(CLOCK_ROWS)
@@ -147,53 +139,30 @@ fun TasksPanel(active: Boolean, onBackdrop: Boolean, onOpenAll: () -> Unit, modi
             IconButton(onClick = { creating = true }) { Icon(AppIcons.Add, contentDescription = stringResource(R.string.tasks_new), tint = text) }
             TextButton(onClick = onOpenAll) { Text(stringResource(R.string.tasks_all), color = text) }
         }
-        if (tasks.isEmpty()) {
-            Text(
-                stringResource(if (state.refreshing) R.string.tasks_loading else R.string.tasks_none),
-                style = MaterialTheme.typography.bodyMedium,
-                color = secondary,
-            )
-        }
+        if (tasks.isEmpty()) Text(stringResource(R.string.tasks_none), style = MaterialTheme.typography.bodyMedium, color = secondary)
         for (task in shown) {
             DayTaskRow(
                 task,
                 today,
                 text,
                 secondary,
-                onDone = { persistLater { failed = !complete(context, task) } },
-                onOpen = { if (task.source == TaskSource.OWN) editing = own.firstOrNull { it.id == task.id } },
+                onDone = { persistLater { graph.repository.completeTask(task.id) } },
+                onOpen = { editing = own.firstOrNull { it.id == task.id } },
             )
         }
         if (tasks.size > shown.size) {
             TextButton(onClick = { expanded = true }) { Text(stringResource(R.string.tasks_more, tasks.size - shown.size), color = text) }
         }
-        if (failed) Text(stringResource(R.string.tasks_complete_failed), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-        if (cache.google && cache.failure != null) Text(stringResource(R.string.tasks_not_updated), style = MaterialTheme.typography.bodySmall, color = secondary)
     }
     if (creating) TaskEditor(null, today, onDismiss = { creating = false })
     editing?.let { task -> TaskEditor(task, today, onDismiss = { editing = null }) }
 }
 
-/** «Сделано»: своя — в базе, Google — в Google Tasks. */
-internal suspend fun complete(context: Context, task: DayTask): Boolean {
-    val graph = DpClockApp.graph(context)
-    return when (task.source) {
-        TaskSource.OWN -> {
-            graph.repository.completeTask(task.id)
-            true
-        }
-        TaskSource.GOOGLE -> graph.tasks.completeGoogle(task)
-    }
-}
-
 @Composable
-internal fun DayTaskRow(task: DayTask, today: LocalDate, text: Color, secondary: Color, onDone: () -> Unit, onOpen: () -> Unit) {
+private fun DayTaskRow(task: DayTask, today: LocalDate, text: Color, secondary: Color, onDone: () -> Unit, onOpen: () -> Unit) {
     val context = LocalContext.current
     val overdue = TaskRules.overdue(task, today)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().clickable(enabled = task.source == TaskSource.OWN, onClick = onOpen),
-    ) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
         IconButton(onClick = onDone) {
             Icon(AppIcons.TaskOpen, contentDescription = stringResource(R.string.tasks_mark_done, task.title), tint = text)
         }
@@ -207,9 +176,8 @@ internal fun DayTaskRow(task: DayTask, today: LocalDate, text: Color, secondary:
     }
 }
 
-/** «Google Tasks · 9:30» или «просрочено с 29 окт.». */
+/** «просрочено с 29 окт.» или «9:30». */
 private fun dayNote(context: Context, task: DayTask, today: LocalDate): String = listOfNotNull(
-    if (task.source == TaskSource.GOOGLE) context.getString(R.string.tasks_google) else null,
     if (TaskRules.overdue(task, today)) context.getString(R.string.tasks_overdue_since, TimeText.date(context, task.date)) else null,
     task.time?.let { TimeText.time(context, it.hour, it.minute) },
 ).joinToString(" · ")
@@ -656,30 +624,19 @@ private fun TaskCalendarDialog(onDismiss: () -> Unit, onChoose: (Long) -> Unit) 
 }
 
 /**
- * Раздел настроек «Задачи» (D-032): календарь для задач, Google Tasks входом в
- * браузере, где показывать задачи дня, «Обновить сейчас».
+ * Раздел настроек «Задачи» (D-032, D-034): календарь для задач и где показывать
+ * задачи дня.
  */
 @Composable
-fun TaskSettings(snackbar: SnackbarHostState) {
+fun TaskSettings() {
     val context = LocalContext.current
-    val resources = LocalResources.current
     val graph = DpClockApp.graph(context)
     val store = graph.tasks
-    val state by store.state.collectAsStateWithLifecycle()
+    val prefs by store.state.collectAsStateWithLifecycle()
     val calendarSettings by graph.calendar.settings.collectAsStateWithLifecycle()
-    val scope = rememberCoroutineScope()
-    var googleDialog by rememberSaveable { mutableStateOf(false) }
-    var disconnect by rememberSaveable { mutableStateOf(false) }
     var choosingCalendar by rememberSaveable { mutableStateOf(false) }
     val calendarSetup = rememberTaskCalendarSetup()
     val calendars = rememberPhoneCalendars(TaskCalendar.granted(context))
-
-    fun show(text: String) {
-        scope.launch {
-            snackbar.currentSnackbarData?.dismiss()
-            snackbar.showSnackbar(text)
-        }
-    }
 
     Text(
         stringResource(R.string.tasks_text),
@@ -687,7 +644,6 @@ fun TaskSettings(snackbar: SnackbarHostState) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
     )
-    val cache = state.cache
     ListItem(
         headlineContent = { Text(stringResource(R.string.tasks_calendar)) },
         supportingContent = {
@@ -696,157 +652,23 @@ fun TaskSettings(snackbar: SnackbarHostState) {
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         modifier = Modifier.clickable { if (calendarSettings.taskCalendar == null) calendarSetup {} else choosingCalendar = true },
     )
-    ListItem(
-        headlineContent = { Text(stringResource(R.string.tasks_google)) },
-        supportingContent = {
-            Text(
-                when {
-                    !cache.google -> stringResource(R.string.tasks_off)
-                    cache.failure == TaskCache.SIGN_IN || cache.failure == 401 || cache.failure == 403 -> stringResource(R.string.tasks_sign_in_again)
-                    cache.failure != null -> stringResource(R.string.tasks_not_updated)
-                    else -> stringResource(R.string.tasks_on)
-                },
-            )
-        },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.clickable { if (cache.google && cache.failure == null) disconnect = true else googleDialog = true },
-    )
-    SwitchRow(stringResource(R.string.tasks_show_clock), cache.showClock) { on -> persistLater { store.updateShow { it.copy(showClock = on) } } }
-    SwitchRow(stringResource(R.string.tasks_show_after_alarm), cache.showAfterAlarm, stringResource(R.string.tasks_show_after_alarm_text)) { on ->
+    SwitchRow(stringResource(R.string.tasks_show_clock), prefs.showClock) { on -> persistLater { store.updateShow { it.copy(showClock = on) } } }
+    SwitchRow(stringResource(R.string.tasks_show_after_alarm), prefs.showAfterAlarm, stringResource(R.string.tasks_show_after_alarm_text)) { on ->
         persistLater { store.updateShow { it.copy(showAfterAlarm = on) } }
     }
-    SwitchRow(stringResource(R.string.tasks_show_widget), cache.showWidget) { on -> persistLater { store.updateShow { it.copy(showWidget = on) } } }
-    if (cache.google) {
-        ListItem(
-            headlineContent = { Text(stringResource(R.string.tasks_refresh)) },
-            supportingContent = {
-                Text(
-                    when {
-                        state.refreshing -> stringResource(R.string.tasks_loading)
-                        cache.fetchedAt > 0 -> stringResource(
-                            R.string.tasks_refreshed,
-                            DateUtils.formatDateTime(context, cache.fetchedAt, DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_MONTH),
-                        )
-                        else -> stringResource(R.string.tasks_never)
-                    },
-                )
-            },
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            modifier = Modifier.clickable { scope.launch { persist { store.refresh(force = true) } } },
-        )
-    }
-
-    if (googleDialog) {
-        GoogleDialog(onDismiss = { googleDialog = false }) { result ->
-            googleDialog = false
-            show(
-                when (result) {
-                    GoogleSignIn.Done -> resources.getString(R.string.tasks_connected)
-                    is GoogleSignIn.Failed -> resources.getString(R.string.tasks_google_failed, result.reason)
-                },
-            )
-        }
-    }
+    SwitchRow(stringResource(R.string.tasks_show_widget), prefs.showWidget) { on -> persistLater { store.updateShow { it.copy(showWidget = on) } } }
     if (choosingCalendar) {
         TaskCalendarDialog(onDismiss = { choosingCalendar = false }) { id ->
             graph.calendar.update { it.copy(taskCalendar = id) }
             choosingCalendar = false
         }
     }
-    if (disconnect) {
-        AlertDialog(
-            onDismissRequest = { disconnect = false },
-            title = { Text(stringResource(R.string.tasks_google)) },
-            text = { Text(stringResource(R.string.tasks_disconnect_text)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    disconnect = false
-                    scope.launch {
-                        persist { store.disconnect() }
-                        show(resources.getString(R.string.tasks_disconnected))
-                    }
-                }) { Text(stringResource(R.string.tasks_disconnect)) }
-            },
-            dismissButton = { TextButton(onClick = { disconnect = false }) { Text(stringResource(R.string.cancel)) } },
-        )
-    }
-}
-
-/**
- * Вход в Google Tasks в браузере (D-032; выбор автора — веб-форма): Client ID и
- * секрет клиента «Компьютерное приложение» из своего проекта Google Cloud, потом —
- * страница Google в браузере. Пока ждём браузер — «Отмена».
- */
-@Composable
-private fun GoogleDialog(onDismiss: () -> Unit, onResult: (GoogleSignIn) -> Unit) {
-    val context = LocalContext.current
-    val store = DpClockApp.graph(context).tasks
-    val scope = rememberCoroutineScope()
-    var clientId by rememberSaveable { mutableStateOf("") }
-    var secret by rememberSaveable { mutableStateOf("") }
-    var waiting by remember { mutableStateOf(false) }
-    AlertDialog(
-        onDismissRequest = {
-            store.cancelSignIn()
-            onDismiss()
-        },
-        title = { Text(stringResource(R.string.tasks_google)) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (waiting) {
-                    Text(stringResource(R.string.tasks_google_waiting))
-                } else {
-                    Text(stringResource(R.string.tasks_google_setup_text), style = MaterialTheme.typography.bodyMedium)
-                    OutlinedTextField(
-                        value = clientId,
-                        onValueChange = { clientId = it.trim() },
-                        label = { Text(stringResource(R.string.tasks_google_client_id)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = secret,
-                        onValueChange = { secret = it.trim() },
-                        label = { Text(stringResource(R.string.tasks_google_secret)) },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            if (!waiting) {
-                TextButton(enabled = clientId.isNotBlank() && secret.isNotBlank(), onClick = {
-                    waiting = true
-                    scope.launch {
-                        val result = persist {
-                            store.signIn(clientId, secret) { url ->
-                                withContext(Dispatchers.Main) {
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                                }
-                            }
-                        }
-                        waiting = false
-                        onResult(result)
-                    }
-                }) { Text(stringResource(R.string.tasks_google_sign_in)) }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = {
-                store.cancelSignIn()
-                onDismiss()
-            }) { Text(stringResource(R.string.cancel)) }
-        },
-    )
 }
 
 /** «3 задачи · Купить хлеб» (D-032) для виджета — без сети. */
-fun widgetTasksText(context: Context, own: List<Task>, cache: TaskCache, today: LocalDate): String? {
-    if (!cache.showWidget) return null
-    val tasks = dayTasks(own, cache, today)
-    if (tasks.isEmpty()) return if (own.isEmpty() && !cache.google) null else context.getString(R.string.tasks_none)
+fun widgetTasksText(context: Context, own: List<Task>, prefs: TaskPrefs, today: LocalDate): String? {
+    if (!prefs.showWidget || own.isEmpty()) return null
+    val tasks = dayTasks(own, today)
+    if (tasks.isEmpty()) return context.getString(R.string.tasks_none)
     return context.resources.getQuantityString(R.plurals.tasks_count, tasks.size, tasks.size) + " · " + tasks.first().title
 }

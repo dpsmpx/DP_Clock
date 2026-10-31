@@ -19,16 +19,14 @@ import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withTranslation
 import com.dpsmpx.dpclock.model.Alarm
 import com.dpsmpx.dpclock.model.Backup
-import com.dpsmpx.dpclock.model.DayTask
 import com.dpsmpx.dpclock.model.Repeat
 import com.dpsmpx.dpclock.model.Settings
 import com.dpsmpx.dpclock.model.SyncConflict
 import com.dpsmpx.dpclock.model.SyncItems
-import com.dpsmpx.dpclock.model.TaskCache
 import com.dpsmpx.dpclock.model.Task
 import com.dpsmpx.dpclock.model.TaskLevel
+import com.dpsmpx.dpclock.model.TaskPrefs
 import com.dpsmpx.dpclock.model.TaskRepeat
-import com.dpsmpx.dpclock.model.TaskSource
 import com.dpsmpx.dpclock.model.TimerPreset
 import com.dpsmpx.dpclock.model.TimerProgram
 import com.dpsmpx.dpclock.model.TimerStep
@@ -97,7 +95,7 @@ class ScreenshotsTest {
             }
         }
         // Задачи (D-031) — только в своём снимке.
-        DpClockApp.graph(app).tasks.preview(TaskCache())
+        DpClockApp.graph(app).tasks.preview(TaskPrefs())
     }
 
     /** Задачи (D-032): в «Часах», «Все задачи», редактор и раздел настроек. */
@@ -114,7 +112,6 @@ class ScreenshotsTest {
             Task("t5", "Прочитать книгу", createdAt = 5L),
         )
         runBlocking { own.forEach { repository.saveTask(it) } }
-        DpClockApp.graph(app).tasks.preview(TaskCache(google = true, tasks = listOf(DayTask(TaskSource.GOOGLE, "g1", "L", "Полить цветы", today))))
         val controller = Robolectric.buildActivity(MainActivity::class.java, MainActivity.intent(app, Section.CLOCK)).setup()
         save(controller.get(), "section-clock-tasks")
         controller.pause().stop().destroy()
@@ -143,7 +140,7 @@ class ScreenshotsTest {
         shoot("tasks-board") { DpClockTheme { TasksScreen(SnackbarHostState(), initialTab = 2) } }
         shoot("tasks-editor-permanent") { DpClockTheme { TaskEditor(flowers, today, onDismiss = {}) } }
         runBlocking { (own + permanent).forEach { repository.deleteTask(it.id) } }
-        DpClockApp.graph(app).tasks.preview(TaskCache())
+        DpClockApp.graph(app).tasks.preview(TaskPrefs())
     }
 
     @Test

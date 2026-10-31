@@ -11,7 +11,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 
-/** Задачи (D-032): свои задачи, повтор, напоминание, Google Tasks и вход в браузере. */
+/** Задачи (D-032, D-033): свои задачи, повтор, напоминание, постоянные задачи и отметки. */
 class TasksTest {
     private val moscow = ZoneId.of("Europe/Moscow")
     private val today = LocalDate.of(2026, 10, 31)
@@ -75,69 +75,17 @@ class TasksTest {
 
     @Test
     fun dayListOverdueFirst() {
-        val overdue = DayTask(TaskSource.GOOGLE, "1", "L", "Старое", today.minusDays(2))
-        val timed = DayTask(TaskSource.OWN, "2", "", "В 9", today, LocalTime.of(9, 0))
-        val plain = DayTask(TaskSource.OWN, "4", "", "Просто", today)
-        val tomorrow = DayTask(TaskSource.OWN, "5", "", "Завтра", today.plusDays(1))
+        val overdue = DayTask("1", "Старое", today.minusDays(2))
+        val timed = DayTask("2", "В 9", today, LocalTime.of(9, 0))
+        val plain = DayTask("4", "Просто", today)
+        val tomorrow = DayTask("5", "Завтра", today.plusDays(1))
         val day = TaskRules.forDay(listOf(plain, tomorrow, timed, overdue, plain), today)
         assertEquals(listOf("1", "2", "4"), day.map { it.id })
         assertTrue(TaskRules.overdue(overdue, today))
         assertTrue(TaskRules.isMorning(LocalTime.of(7, 0)))
         assertFalse(TaskRules.isMorning(LocalTime.of(13, 0)))
-        assertEquals(DayTask(TaskSource.OWN, "9", "", "Сегодня", today, LocalTime.NOON), TaskRules.day(Task("9", "Сегодня", date = today, time = LocalTime.NOON)))
+        assertEquals(DayTask("9", "Сегодня", today, LocalTime.NOON), TaskRules.day(Task("9", "Сегодня", date = today, time = LocalTime.NOON)))
         assertNull(TaskRules.day(Task("10", "Без срока")))
-    }
-
-    @Test
-    fun googleTasksDayOnly() {
-        val (lists, next) = GoogleTasksApi.parseLists("""{"kind": "tasks#taskLists", "items": [{"id": "L1", "title": "Мои задачи"}, {"id": "L2"}], "nextPageToken": "n"}""")
-        assertEquals(listOf("L1", "L2"), lists)
-        assertEquals("n", next)
-        val page = GoogleTasksApi.parseTasks(
-            """
-            {"items": [
-              {"id": "g1", "title": "Полить цветы", "status": "needsAction", "due": "2026-10-31T00:00:00.000Z"},
-              {"id": "g2", "title": "Без срока", "status": "needsAction"},
-              {"id": "g3", "title": "Сделано", "status": "completed", "due": "2026-10-31T00:00:00.000Z"}
-            ]}
-            """,
-            "L1",
-        )
-        assertEquals(listOf("g1"), page.tasks.map { it.id })
-        assertEquals(today, page.tasks.single().date)
-        assertEquals("L1", page.tasks.single().listId)
-        assertNull(page.next)
-        assertTrue(GoogleTasksApi.tasksUrl("L1", today, null).contains("dueMax=2026-10-31T23%3A59%3A59Z"))
-        assertEquals(mapOf("status" to "completed"), Json.parse(GoogleTasksApi.COMPLETE_BODY))
-    }
-
-    @Test(expected = TaskFormatException::class)
-    fun foreignAnswerIsAnError() {
-        GoogleTasksApi.parseLists("[1, 2]")
-    }
-
-    @Test
-    fun browserSignIn() {
-        // Образец из RFC 7636, приложение B.
-        assertEquals("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", GoogleOAuth.challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"))
-        assertEquals(43, GoogleOAuth.verifier(ByteArray(32) { it.toByte() }).length)
-        val url = GoogleOAuth.authUrl("123.apps.googleusercontent.com", "http://127.0.0.1:41234", "ch", "st")
-        assertTrue(url.startsWith("https://accounts.google.com/o/oauth2/v2/auth?client_id=123.apps.googleusercontent.com&redirect_uri=http%3A%2F%2F127.0.0.1%3A41234&response_type=code"))
-        assertTrue(url.contains("scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Ftasks"))
-        assertTrue(url.contains("code_challenge=ch&code_challenge_method=S256&state=st&access_type=offline&prompt=consent"))
-        assertEquals(
-            GoogleOAuth.Redirect("4/0Ab_c", "st", null),
-            GoogleOAuth.parseRedirect("/?state=st&code=4%2F0Ab_c&scope=https://www.googleapis.com/auth/tasks"),
-        )
-        assertEquals(GoogleOAuth.Redirect(null, "st", "access_denied"), GoogleOAuth.parseRedirect("/?error=access_denied&state=st"))
-        assertEquals(GoogleOAuth.Redirect(null, null, null), GoogleOAuth.parseRedirect("/favicon.ico"))
-        assertEquals(
-            GoogleOAuth.Tokens("ya29.a", 3599L, "1//r"),
-            GoogleOAuth.parseTokens("""{"access_token": "ya29.a", "expires_in": 3599, "refresh_token": "1//r", "scope": "https://www.googleapis.com/auth/tasks", "token_type": "Bearer"}"""),
-        )
-        assertEquals("invalid_client: The OAuth client was not found.", GoogleOAuth.parseError("""{"error": "invalid_client", "error_description": "The OAuth client was not found."}"""))
-        assertEquals("", GoogleOAuth.parseError("<html>"))
-        assertTrue(GoogleOAuth.codeBody("c", "s", "4/x", "v", "http://127.0.0.1:1").contains("grant_type=authorization_code&redirect_uri=http%3A%2F%2F127.0.0.1%3A1"))
     }
 
     @Test
@@ -167,20 +115,13 @@ class TasksTest {
     }
 
     @Test
-    fun cacheRoundTripAndTheOldFile() {
-        val cache = TaskCache(
-            google = true,
-            tasks = listOf(DayTask(TaskSource.GOOGLE, "a", "L", "Хлеб \"бородинский\"", today, LocalTime.of(9, 30))),
-            fetchedAt = 123L,
-            failure = TaskCache.SIGN_IN,
-            showWidget = false,
-            notifiedOn = today,
-        )
-        assertEquals(cache, TaskCache.decode(TaskCache.encode(cache)))
-        assertEquals(TaskCache(), TaskCache.decode("не JSON"))
-        // 0.18.0: Todoist и TickTick убраны, вход Google другой — остаётся только выбор показа.
-        val old = """{"connected": ["TODOIST", "GOOGLE"], "fetchedAt": 5, "showClock": false, "tasks": [{"service": "TODOIST", "id": "x"}]}"""
-        assertEquals(TaskCache(showClock = false), TaskCache.decode(old))
+    fun prefsRoundTripAndTheOldFile() {
+        val prefs = TaskPrefs(showWidget = false, notifiedOn = today)
+        assertEquals(prefs, TaskPrefs.decode(TaskPrefs.encode(prefs)))
+        assertEquals(TaskPrefs(), TaskPrefs.decode("не JSON"))
+        // 0.18.0–0.20.0: задачи Google убраны (D-034) — остаётся только выбор показа.
+        val old = """{"version": 2, "google": true, "fetchedAt": 5, "showClock": false, "tasks": [{"id": "x", "listId": "L", "title": "Т", "date": "2026-10-31"}]}"""
+        assertEquals(TaskPrefs(showClock = false), TaskPrefs.decode(old))
     }
 
     // Постоянные задачи и история (D-033)

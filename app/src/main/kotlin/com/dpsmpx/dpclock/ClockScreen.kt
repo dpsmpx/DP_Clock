@@ -82,8 +82,8 @@ fun ClockScreen(modifier: Modifier = Modifier, visible: Boolean = true, openTask
             contentAlignment = Alignment.Center,
         ) {
             // Задачи на сегодня (D-032): под часами, на широком окне — справа от них.
-            val tasks by DpClockApp.graph(context).tasks.state.collectAsStateWithLifecycle()
-            val withTasks = tasks.cache.showClock
+            val taskPrefs by DpClockApp.graph(context).tasks.state.collectAsStateWithLifecycle()
+            val withTasks = taskPrefs.showClock
             val wide = maxWidth > maxHeight
             val event = rememberNextEvent(active = visible)
             val bottom = if (event != null) BOTTOM_WITH_EVENT else BOTTOM_PLAIN
@@ -126,7 +126,7 @@ fun ClockScreen(modifier: Modifier = Modifier, visible: Boolean = true, openTask
                     horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
                     face()
-                    TasksPanel(visible, backdrop, openTasks, Modifier.widthIn(max = TASKS_WIDTH).weight(1f, fill = false))
+                    TasksPanel(backdrop, openTasks, Modifier.widthIn(max = TASKS_WIDTH).weight(1f, fill = false))
                 }
                 else -> Column(
                     Modifier.fillMaxSize().padding(bottom = bottom),
@@ -135,7 +135,7 @@ fun ClockScreen(modifier: Modifier = Modifier, visible: Boolean = true, openTask
                 ) {
                     face()
                     Spacer(Modifier.height(16.dp))
-                    TasksPanel(visible, backdrop, openTasks, Modifier.widthIn(max = TASKS_WIDTH).fillMaxWidth().padding(horizontal = 24.dp))
+                    TasksPanel(backdrop, openTasks, Modifier.widthIn(max = TASKS_WIDTH).fillMaxWidth().padding(horizontal = 24.dp))
                 }
             }
             // Ближайшее событие сегодня (D-023, п. 4) — над кнопкой ночных часов.

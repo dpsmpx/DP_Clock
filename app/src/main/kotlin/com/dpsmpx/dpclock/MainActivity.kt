@@ -99,6 +99,8 @@ class MainActivity : ComponentActivity() {
         // Календарь телефона мог измениться, пока приложение не работало (D-023, п. 6).
         val appContext = applicationContext
         persistLater { CalendarSync.refresh(appContext) }
+        // Google Tasks убран (D-034): ключи прежних версий — с телефона.
+        persistLater { DpClockApp.graph(appContext).tasks.cleanUp() }
         // Тема из базы — и после восстановления на новом телефоне, где ночной режим приложения ещё не задан (D-021, п. 2).
         if (savedInstanceState == null) {
             val app = applicationContext
@@ -372,7 +374,7 @@ private fun AppRoot(request: SectionRequest) {
                             onQuickHandled = { handledQuick = it },
                             request = request,
                         )
-                        Section.TASKS -> TasksScreen(snackbar, visible = pager.currentPage == Section.TASKS.ordinal)
+                        Section.TASKS -> TasksScreen(snackbar)
                         Section.CLOCK -> ClockScreen(visible = pager.currentPage == Section.CLOCK.ordinal, openTasks = { open(Section.TASKS) })
                         Section.WORLD -> WorldClockScreen(visible = pager.currentPage == Section.WORLD.ordinal && !pager.isScrollInProgress)
                     }

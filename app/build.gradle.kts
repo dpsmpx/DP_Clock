@@ -25,8 +25,8 @@ android {
         applicationId = "com.dpsmpx.dpclock"
         minSdk = 31
         targetSdk = 37
-        versionCode = 22
-        versionName = "0.16.0"
+        versionCode = 23
+        versionName = "0.17.0"
     }
 
     signingConfigs {
@@ -60,9 +60,11 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
         unitTests.all { test ->
-            // Снимки — по запросу: `-Pscreenshots`; обычная проверка их пропускает и образ Android не качает.
+            // Снимки и другие тесты на Robolectric — по запросу: `-Pscreenshots`; обычная проверка
+            // их пропускает и образ Android не качает.
             val screenshots = project.findProperty("screenshots") != null
             test.systemProperty("dpclock.screenshots", screenshots)
+            test.systemProperty("dpclock.robolectric", screenshots)
             test.systemProperty("dpclock.screenshots.dir", layout.buildDirectory.dir("screenshots").get().asFile.path)
             // Образ Android — из папки, куда его положил Gradle: Robolectric сам в сеть не ходит.
             test.systemProperty("robolectric.offline", "true")

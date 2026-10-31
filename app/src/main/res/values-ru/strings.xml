@@ -862,4 +862,57 @@
     <string name="onboarding_item_full_screen">Сигнал поверх блокировки</string>
     <string name="onboarding_item_exact">Точные будильники</string>
     <string name="onboarding_item_dnd">«Не беспокоить» пропускает будильники</string>
+
+    <!-- Синхронизация (D-030) -->
+    <string name="channel_sync">Синхронизация</string>
+    <string name="settings_sync">Синхронизация</string>
+    <string name="settings_other">Другое</string>
+    <string name="sync_text">Один файл на Google Диске или в другом облаке — общий для ваших телефонов: будильники и группы, шаблоны и исключения, пресеты таймеров, настройки и мировые часы. Включён ли будильник и пропуск — свои у каждого телефона: будильник с другого телефона приходит выключенным.</string>
+    <string name="sync_create">Создать файл</string>
+    <string name="sync_create_text">На первом телефоне: выберите Google Диск и папку</string>
+    <string name="sync_choose">Выбрать файл</string>
+    <string name="sync_choose_text">На других телефонах: тот же файл dp-clock-sync.json</string>
+    <string name="sync_now">Синхронизировать сейчас</string>
+    <string name="sync_running">Идёт синхронизация…</string>
+    <string name="sync_last">Последняя: %1$s</string>
+    <string name="sync_never">Ещё не было</string>
+    <string name="sync_file">Файл</string>
+    <string name="sync_off">Выключить синхронизацию</string>
+    <string name="sync_off_text">Данные на телефоне и файл в облаке остаются</string>
+    <string name="sync_off_done">Синхронизация выключена</string>
+    <string name="sync_done">Синхронизировано</string>
+    <string name="sync_failed">Синхронизировать не удалось</string>
+    <string name="sync_error_unavailable">Файл не открылся: проверьте интернет или выберите файл снова</string>
+    <string name="sync_error_foreign">Это не файл синхронизации DP Clock — он не тронут</string>
+    <string name="sync_error_write">Записать файл не удалось — попробую снова</string>
+    <string name="sync_first_title">В файле уже есть данные</string>
+    <plurals name="sync_first_text">
+        <item quantity="one">В файле %1$d будильник. Объединить файл с данными этого телефона или заменить данные телефона данными из файла?</item>
+        <item quantity="few">В файле %1$d будильника. Объединить файл с данными этого телефона или заменить данные телефона данными из файла?</item>
+        <item quantity="many">В файле %1$d будильников. Объединить файл с данными этого телефона или заменить данные телефона данными из файла?</item>
+        <item quantity="other">В файле %1$d будильника. Объединить файл с данными этого телефона или заменить данные телефона данными из файла?</item>
+    </plurals>
+    <string name="sync_first_merge">Объединить</string>
+    <string name="sync_first_replace">Взять из файла</string>
+    <string name="sync_conflicts_title">Синхронизация: выберите версию</string>
+    <plurals name="sync_conflicts_count">
+        <item quantity="one">%1$d запись изменили на двух телефонах</item>
+        <item quantity="few">%1$d записи изменили на двух телефонах</item>
+        <item quantity="many">%1$d записей изменили на двух телефонах</item>
+        <item quantity="other">%1$d записи изменили на двух телефонах</item>
+    </plurals>
+    <string name="sync_conflicts_choose">Выбрать</string>
+    <string name="sync_conflicts_text">Одно и то же изменили на двух телефонах. Выбранная версия уйдёт на все телефоны; пока не выбрано, у каждого — своя.</string>
+    <string name="sync_this_phone">Этот телефон · %1$s</string>
+    <string name="sync_other_phone">«%1$s» · %2$s</string>
+    <string name="sync_another_phone">Другой телефон</string>
+    <string name="sync_apply">Применить</string>
+    <string name="sync_later">Позже</string>
+    <string name="sync_deleted">Удалено</string>
+    <string name="sync_no_cities">Нет городов</string>
+    <string name="sync_kind_alarm">Будильник</string>
+    <string name="sync_kind_group">Группа</string>
+    <string name="sync_kind_template">Шаблон</string>
+    <string name="sync_kind_exception">Исключение</string>
+    <string name="sync_kind_preset">Пресет таймера</string>
 </resources>

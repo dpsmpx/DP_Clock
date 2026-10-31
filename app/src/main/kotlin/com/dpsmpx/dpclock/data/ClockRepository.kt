@@ -24,6 +24,9 @@ import com.dpsmpx.dpclock.model.SleepRules
 import com.dpsmpx.dpclock.model.SignalOutcome
 import com.dpsmpx.dpclock.model.SignalSource
 import com.dpsmpx.dpclock.model.StepSignal
+import com.dpsmpx.dpclock.model.SyncChange
+import com.dpsmpx.dpclock.model.SyncItems
+import com.dpsmpx.dpclock.model.SyncResult
 import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
 import com.dpsmpx.dpclock.model.TimerPreset
@@ -181,7 +184,10 @@ class ClockRepository(
 
     suspend fun updateSettings(change: (Settings) -> Settings) = locked {
         val old = dao.currentSettings().toModel()
-        val new = change(old)
+        saveSettingsLocked(old, change(old))
+    }
+
+    private suspend fun saveSettingsLocked(old: Settings, new: Settings) {
         dao.upsertSettings(new.toEntity())
         // Праздники включили или выключили — у будильников другие даты.
         if (old.holidaysRu != new.holidaysRu) rescheduleAllLocked()
@@ -354,15 +360,19 @@ class ClockRepository(
     suspend fun deleteAlarm(id: String): Alarm? = locked {
         val alarm = dao.alarm(id)?.toModel() ?: return@locked null
         if (dao.occurrence(id)?.state == Occ.RINGING) return@locked null
+        removeAlarmLocked(id)
+        // Удалённый будильник перед событием календарь в эту дату не вернёт (D-023, п. 3).
+        calendarDateOf(alarm)?.let { calendar.setCancelled(it, cancelled = true) }
+        alarm
+    }
+
+    private suspend fun removeAlarmLocked(id: String) {
         dao.deleteAlarm(id)
         dao.deleteOccurrence(id)
         scheduler.cancelAlarm(id)
         notifier.cancelSnoozed(id)
         notifier.cancelWarning(id)
-        // Удалённый будильник перед событием календарь в эту дату не вернёт (D-023, п. 3).
-        calendarDateOf(alarm)?.let { calendar.setCancelled(it, cancelled = true) }
         alarmsChanged = true
-        alarm
     }
 
     /** «Отменить» после удаления. */
@@ -785,7 +795,9 @@ class ClockRepository(
     // Перенос файлом (D-018)
 
     /** Всё, что переносится файлом. */
-    suspend fun exportBackup(): Backup = locked(quiet = true) {
+    suspend fun exportBackup(): Backup = locked(quiet = true) { backupLocked() }
+
+    private suspend fun backupLocked(): Backup =
         Backup(
             // Будильники перед событиями — от календаря этого телефона, в файл не идут (D-023, п. 6).
             alarms = dao.allAlarms().map { it.toModel() }.filter { it.calendarEventAt == null }.sortedBy { it.createdAt },
@@ -796,7 +808,6 @@ class ClockRepository(
             worldCities = dao.allWorldCities().map { it.zoneId },
             settings = dao.currentSettings().toModel(),
         )
-    }
 
     /**
      * Загрузить файл (D-018, п. 4): добавить к имеющемуся или, при [replace],
@@ -804,24 +815,7 @@ class ClockRepository(
      * Звонящий сейчас будильник остаётся. Настройки — из файла, если [withSettings].
      */
     suspend fun importBackup(backup: Backup, replace: Boolean, withSettings: Boolean) = locked {
-        if (replace) {
-            for (alarm in dao.allAlarms()) {
-                if (dao.occurrence(alarm.id)?.state == Occ.RINGING) {
-                    dao.upsertAlarm(alarm.copy(groupId = null))
-                    continue
-                }
-                dao.deleteAlarm(alarm.id)
-                dao.deleteOccurrence(alarm.id)
-                scheduler.cancelAlarm(alarm.id)
-                notifier.cancelSnoozed(alarm.id)
-                notifier.cancelWarning(alarm.id)
-            }
-            dao.clearGroups()
-            dao.clearTemplates()
-            dao.clearExceptions()
-            dao.clearPresets()
-            dao.clearWorldCities()
-        }
+        if (replace) clearLocked(keepCalendar = false)
         val prepared = BackupRules.forImport(backup) { UUID.randomUUID().toString() }
         prepared.groups.forEach { dao.upsertGroup(it.toEntity()) }
         prepared.templates.forEach { dao.upsertTemplate(it.toEntity()) }
@@ -843,6 +837,106 @@ class ClockRepository(
         }
         alarmsChanged = true
         rescheduleAllLocked()
+    }
+
+    /** Удалить будильники, группы, шаблоны, исключения, пресеты и города; звонящий будильник остаётся без группы. */
+    private suspend fun clearLocked(keepCalendar: Boolean) {
+        for (alarm in dao.allAlarms()) {
+            if (keepCalendar && alarm.calendarEventAt != null) continue
+            if (dao.occurrence(alarm.id)?.state == Occ.RINGING) {
+                dao.upsertAlarm(alarm.copy(groupId = null))
+                continue
+            }
+            removeAlarmLocked(alarm.id)
+        }
+        dao.clearGroups()
+        dao.clearTemplates()
+        dao.clearExceptions()
+        dao.clearPresets()
+        dao.clearWorldCities()
+    }
+
+    // Синхронизация (D-030)
+
+    /**
+     * Проход синхронизации под общим замком, чтобы правка человека не потерялась между
+     * снимком и применением: снимок данных, слияние [merge] (чистая функция ядра) и
+     * применение пришедшего. Звонящий будильник и ждущий проверки «Не спите?» —
+     * в [merge] вторым аргументом: их ждёт следующий проход. При [replace] — первая
+     * синхронизация «Взять данные из файла»: свои будильники, группы, шаблоны,
+     * исключения, пресеты и города удаляются, настройки берутся из файла.
+     */
+    suspend fun sync(replace: Boolean, merge: (Map<String, Map<String, Any?>>, Set<String>) -> SyncResult): SyncResult = locked(quiet = true) {
+        val busy = dao.occurrences().filter { it.state == Occ.RINGING || it.state == Occ.RECHECK }.map { SyncItems.ALARM + it.alarmId }.toSet()
+        if (replace) clearLocked(keepCalendar = true)
+        val snapshot = SyncItems.snapshot(backupLocked())
+        val result = merge(if (replace) snapshot - SyncItems.SETTINGS - SyncItems.WORLD_CITIES else snapshot, busy)
+        if (result.changes.isNotEmpty() || replace) {
+            applySyncLocked(result.changes)
+            rescheduleAllLocked()
+            alarmsChanged = true
+            onChanged()
+        }
+        result
+    }
+
+    /**
+     * Пришедшее с другого телефона — в базу. Включение и пропуск будильника — свои у
+     * телефона: новый будильник приходит выключенным. Отметки о настройке телефона и
+     * своя картинка фона не меняются. Сначала группы, потом будильники в них; удалённая
+     * группа — последней, её будильники остаются без группы.
+     */
+    private suspend fun applySyncLocked(changes: List<SyncChange>) {
+        val order = listOf(SyncItems.GROUP, SyncItems.TEMPLATE, SyncItems.EXCEPTION, SyncItems.PRESET, SyncItems.ALARM, SyncItems.SETTINGS, SyncItems.WORLD_CITIES)
+        val sorted = changes.sortedWith(
+            compareBy<SyncChange>({ it is SyncChange.Remove && it.key.startsWith(SyncItems.GROUP) }, { change -> order.indexOfFirst { change.key.startsWith(it) } }),
+        )
+        for (change in sorted) {
+            val key = change.key
+            val id = SyncItems.id(key)
+            when (change) {
+                is SyncChange.Put -> {
+                    val data = change.data
+                    when {
+                        key.startsWith(SyncItems.GROUP) -> dao.upsertGroup(SyncItems.group(data).toEntity())
+                        key.startsWith(SyncItems.TEMPLATE) -> dao.upsertTemplate(SyncItems.template(data).toEntity())
+                        key.startsWith(SyncItems.EXCEPTION) -> dao.upsertException(SyncItems.exception(data).toEntity())
+                        key.startsWith(SyncItems.PRESET) -> dao.upsertPreset(SyncItems.preset(data).toEntity())
+                        key.startsWith(SyncItems.ALARM) -> {
+                            val incoming = SyncItems.alarm(data)
+                            val phone = dao.alarm(incoming.id)?.toModel()
+                            val alarm = incoming.copy(
+                                enabled = phone?.enabled ?: false,
+                                skipDate = phone?.skipDate,
+                                skipTime = phone?.skipTime,
+                                calendarEventAt = null,
+                            )
+                            dao.upsertAlarm(normalized(alarm).toEntity())
+                            resetOccurrence(alarm.id)
+                        }
+                        key == SyncItems.SETTINGS -> {
+                            val old = dao.currentSettings().toModel()
+                            val new = SyncItems.settings(data).copy(xiaomiHintsDone = old.xiaomiHintsDone, onboardingDone = old.onboardingDone)
+                            saveSettingsLocked(old, new)
+                        }
+                        key == SyncItems.WORLD_CITIES -> {
+                            dao.clearWorldCities()
+                            SyncItems.worldCities(data).forEachIndexed { index, zoneId -> dao.upsertWorldCity(WorldCityEntity(zoneId, index, now())) }
+                        }
+                    }
+                }
+                is SyncChange.Remove -> when {
+                    key.startsWith(SyncItems.GROUP) -> {
+                        dao.ungroup(id)
+                        dao.deleteGroup(id)
+                    }
+                    key.startsWith(SyncItems.TEMPLATE) -> dao.deleteTemplate(id)
+                    key.startsWith(SyncItems.EXCEPTION) -> dao.deleteException(id)
+                    key.startsWith(SyncItems.PRESET) -> dao.deletePreset(id)
+                    key.startsWith(SyncItems.ALARM) -> if (dao.alarm(id) != null) removeAlarmLocked(id)
+                }
+            }
+        }
     }
 
     // Мировые часы (D-019)

@@ -495,6 +495,9 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
                     modifier = Modifier.clickable { dialog = "journal" },
                 )
             },
+            SettingsSection(R.string.settings_sync, listOf(R.string.sync_create, R.string.sync_choose, R.string.sync_now, R.string.sync_off)) {
+                SyncSettings(snackbar)
+            },
             SettingsSection(R.string.settings_transfer, listOf(R.string.backup_save, R.string.backup_load)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.backup_save)) },

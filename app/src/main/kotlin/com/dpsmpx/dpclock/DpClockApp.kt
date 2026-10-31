@@ -9,6 +9,7 @@ import com.dpsmpx.dpclock.data.ClockDatabase
 import com.dpsmpx.dpclock.data.ClockRepository
 import com.dpsmpx.dpclock.data.WeatherStore
 import com.dpsmpx.dpclock.platform.Clocks
+import com.dpsmpx.dpclock.platform.CloudSync
 import com.dpsmpx.dpclock.platform.Notifier
 import com.dpsmpx.dpclock.platform.Scheduler
 import com.dpsmpx.dpclock.platform.Surfaces
@@ -28,7 +29,13 @@ class AppGraph(context: Context) {
 
     /** Календарь телефона (D-023): выбор календарей и даты исключений. */
     val calendar = CalendarStore(context)
-    val repository = ClockRepository(context, ClockDatabase.open(context), scheduler, notifier, calendar) { Surfaces.changed(context) }
+    val repository: ClockRepository = ClockRepository(context, ClockDatabase.open(context), scheduler, notifier, calendar) {
+        Surfaces.changed(context)
+        cloud.changed()
+    }
+
+    /** Синхронизация общим файлом (D-030). */
+    val cloud: CloudSync by lazy { CloudSync(context, repository, notifier) }
 
     /** Погода нужна только экрану «Мировые часы» (D-019). */
     val weather by lazy { WeatherStore(context, repository) }

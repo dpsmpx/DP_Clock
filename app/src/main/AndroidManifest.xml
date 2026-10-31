@@ -19,6 +19,8 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Погода вашего города в «Мировых часах» (D-019): только запросы к MET Norway. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Задание синхронизации ждёт сети (D-030): без этого разрешения Android 14+ его не ставит. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Погода по геолокации (D-019): приблизительное место, спрашивается, только когда выбран такой способ. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Календарь телефона (D-023): только чтение, спрашивается, когда выбирают календари. События не покидают телефон. -->
@@ -145,6 +147,10 @@
         <!-- Календарь телефона изменился или прошло полдня — перечитать (D-023, п. 6). -->
         <service
             android:name=".platform.CalendarJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+        <service
+            android:name=".platform.SyncJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
 

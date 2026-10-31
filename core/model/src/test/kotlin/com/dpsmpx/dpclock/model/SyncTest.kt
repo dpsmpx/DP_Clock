@@ -177,6 +177,28 @@ class SyncTest {
     }
 
     @Test
+    fun aRingingAlarmWaitsAndLocalChangesAreSeen() {
+        val cloud = Cloud()
+        val a = Phone("a")
+        val b = Phone("b")
+        a.local["alarm:1"] = alarm("1", 7)
+        a.sync(cloud, now = 100)
+        b.sync(cloud, now = 200)
+        assertFalse(SyncRules.hasLocalChanges(b.local, b.state))
+        a.local["alarm:1"] = alarm("1", 6)
+        assertTrue(SyncRules.hasLocalChanges(a.local, a.state))
+        a.sync(cloud, now = 300)
+        // У «b» будильник звонит — правка подождёт.
+        val result = SyncRules.run(b.local, b.state, SyncFormat.decode(cloud.text!!), "b", 400, hold = setOf("alarm:1"))
+        assertTrue(result.changes.isEmpty())
+        assertFalse(result.upload)
+        b.sync(cloud, now = 500)
+        assertEquals(alarm("1", 6), b.local["alarm:1"])
+        b.local.remove("alarm:1")
+        assertTrue(SyncRules.hasLocalChanges(b.local, b.state))
+    }
+
+    @Test
     fun threePhonesAndTombstonesExpire() {
         val cloud = Cloud()
         val a = Phone("a")

@@ -111,6 +111,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Синхронизация (D-030): при открытии — прочитать общий файл.
+        DpClockApp.graph(this).cloud.opened()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)

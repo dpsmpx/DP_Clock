@@ -16,7 +16,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withTranslation
+import com.dpsmpx.dpclock.model.Alarm
+import com.dpsmpx.dpclock.model.Backup
 import com.dpsmpx.dpclock.model.Repeat
+import com.dpsmpx.dpclock.model.Settings
+import com.dpsmpx.dpclock.model.SyncConflict
+import com.dpsmpx.dpclock.model.SyncItems
 import com.dpsmpx.dpclock.model.TimerPreset
 import com.dpsmpx.dpclock.model.TimerProgram
 import com.dpsmpx.dpclock.model.TimerStep
@@ -27,6 +32,7 @@ import com.dpsmpx.dpclock.ui.FullScreenTime
 import com.dpsmpx.dpclock.ui.NewAlarmDialog
 import com.dpsmpx.dpclock.ui.OnboardingContent
 import com.dpsmpx.dpclock.ui.SettingsScreen
+import com.dpsmpx.dpclock.ui.SyncConflictsDialog
 import kotlinx.coroutines.runBlocking
 import org.junit.Assume
 import org.junit.Before
@@ -94,6 +100,20 @@ class ScreenshotsTest {
     fun settings() {
         shoot("settings") { DpClockTheme { SettingsScreen(onBack = {}) } }
         shoot("settings-appearance") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_appearance) } }
+        shoot("settings-sync") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_sync) } }
+    }
+
+    /** Синхронизация (D-030): окно расхождений с будильником и настройками. */
+    @Test
+    fun syncConflicts() {
+        val alarm = Alarm("1", 7, 0, Repeat.Weekly(DayOfWeek.entries.take(5).toSet()), enabled = true, createdAt = 1L, label = "Подъём")
+        val mine = SyncItems.snapshot(Backup(alarms = listOf(alarm), settings = Settings()))
+        val theirs = SyncItems.snapshot(Backup(alarms = listOf(alarm.copy(hour = 6, minute = 30)), settings = Settings(snoozeMinutes = 5)))
+        val at = 1_793_430_000_000L
+        val conflicts = listOf("alarm:1", SyncItems.SETTINGS).map { key ->
+            SyncConflict(key, mine.getValue(key), at, theirs.getValue(key), at + 600_000L, "Redmi Pad")
+        }
+        shoot("sync-conflicts") { DpClockTheme { SyncConflictsDialog(conflicts) {} } }
     }
 
     /** Окна 0.16.0 (D-029): новый будильник, первый запуск, таймер во весь экран. */

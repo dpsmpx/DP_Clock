@@ -38,6 +38,7 @@ class Notifier(private val context: Context) {
                 // Предупреждения до сигнала (D-025, п. 5): звук у канала, поэтому каналов два.
                 NotificationChannel(CHANNEL_WARNING, text(R.string.channel_warning), NotificationManager.IMPORTANCE_LOW),
                 NotificationChannel(CHANNEL_WARNING_SOUND, text(R.string.channel_warning_sound), NotificationManager.IMPORTANCE_DEFAULT),
+                NotificationChannel(CHANNEL_SYNC, text(R.string.channel_sync), NotificationManager.IMPORTANCE_LOW),
             ),
         )
     }
@@ -192,6 +193,22 @@ class Notifier(private val context: Context) {
             .build(),
         tag = "missed:${alarm.id}",
     )
+
+    // Синхронизация (D-030)
+
+    /** Одно и то же поправили на двух телефонах — спросить, какую версию оставить. */
+    fun syncConflicts(count: Int) = show(
+        ID_SYNC,
+        Notification.Builder(context, CHANNEL_SYNC)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(text(R.string.sync_conflicts_title))
+            .setContentText(context.resources.getQuantityString(R.plurals.sync_conflicts_count, count, count))
+            .setContentIntent(openApp(Section.ALARMS))
+            .setAutoCancel(true)
+            .build(),
+    )
+
+    fun cancelSyncConflicts() = manager.cancel(ID_SYNC)
 
     // Сон и после будильника (D-017)
 
@@ -379,6 +396,8 @@ class Notifier(private val context: Context) {
         private const val ID_STOPWATCH = 4
         private const val ID_SLEEP = 5
         private const val ID_WARNING = 6
+        private const val ID_SYNC = 7
+        private const val CHANNEL_SYNC = "sync"
         private const val CHANNEL_WARNING = "warning"
         private const val CHANNEL_WARNING_SOUND = "warning-sound"
 

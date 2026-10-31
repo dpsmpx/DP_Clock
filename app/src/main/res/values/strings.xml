@@ -831,4 +831,53 @@
     <string name="onboarding_item_full_screen">Alarm over the lock screen</string>
     <string name="onboarding_item_exact">Exact alarms</string>
     <string name="onboarding_item_dnd">Do not disturb lets alarms through</string>
+
+    <!-- Синхронизация (D-030) -->
+    <string name="channel_sync">Sync</string>
+    <string name="settings_sync">Sync</string>
+    <string name="settings_other">Other</string>
+    <string name="sync_text">One file in Google Drive or another cloud, shared by your phones: alarms and groups, templates and exceptions, timer presets, settings and world clock. Whether an alarm is on, and a skipped alarm, stay each phone\'s own: an alarm from another phone arrives turned off.</string>
+    <string name="sync_create">Create a file</string>
+    <string name="sync_create_text">On the first phone: choose Google Drive and a folder</string>
+    <string name="sync_choose">Choose a file</string>
+    <string name="sync_choose_text">On the other phones: the same file, dp-clock-sync.json</string>
+    <string name="sync_now">Sync now</string>
+    <string name="sync_running">Syncing…</string>
+    <string name="sync_last">Last: %1$s</string>
+    <string name="sync_never">Not synced yet</string>
+    <string name="sync_file">File</string>
+    <string name="sync_off">Turn off sync</string>
+    <string name="sync_off_text">The data on this phone and the file in the cloud stay</string>
+    <string name="sync_off_done">Sync is off</string>
+    <string name="sync_done">Synced</string>
+    <string name="sync_failed">Sync failed</string>
+    <string name="sync_error_unavailable">The file didn\'t open: check the internet or choose the file again</string>
+    <string name="sync_error_foreign">This isn\'t a DP Clock sync file — it is left untouched</string>
+    <string name="sync_error_write">Couldn\'t write the file — will try again</string>
+    <string name="sync_first_title">The file already has data</string>
+    <plurals name="sync_first_text">
+        <item quantity="one">The file has %1$d alarm. Merge the file with this phone\'s data, or replace this phone\'s data with the file\'s?</item>
+        <item quantity="other">The file has %1$d alarms. Merge the file with this phone\'s data, or replace this phone\'s data with the file\'s?</item>
+    </plurals>
+    <string name="sync_first_merge">Merge</string>
+    <string name="sync_first_replace">Take from file</string>
+    <string name="sync_conflicts_title">Sync: choose a version</string>
+    <plurals name="sync_conflicts_count">
+        <item quantity="one">%1$d item was changed on two phones</item>
+        <item quantity="other">%1$d items were changed on two phones</item>
+    </plurals>
+    <string name="sync_conflicts_choose">Choose</string>
+    <string name="sync_conflicts_text">The same thing was changed on two phones. The chosen version goes to all phones; until you choose, each keeps its own.</string>
+    <string name="sync_this_phone">This phone · %1$s</string>
+    <string name="sync_other_phone">“%1$s” · %2$s</string>
+    <string name="sync_another_phone">Another phone</string>
+    <string name="sync_apply">Apply</string>
+    <string name="sync_later">Later</string>
+    <string name="sync_deleted">Deleted</string>
+    <string name="sync_no_cities">No cities</string>
+    <string name="sync_kind_alarm">Alarm</string>
+    <string name="sync_kind_group">Group</string>
+    <string name="sync_kind_template">Template</string>
+    <string name="sync_kind_exception">Exception</string>
+    <string name="sync_kind_preset">Timer preset</string>
 </resources>

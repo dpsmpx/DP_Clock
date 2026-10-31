@@ -65,6 +65,8 @@ object SyncRules {
      * файл (null — его ещё нет), [choices] — ответы на расхождения. Возвращает, что
      * внести в базу, какие расхождения спросить, новое состояние и файл для записи.
      * Пока на расхождение не ответили, в файле остаётся чужая версия, на телефоне — своя.
+     * [hold] — записи, которые сейчас трогать нельзя (звонящий будильник): они ждут
+     * следующего прохода.
      */
     fun run(
         local: Map<String, Map<String, Any?>>,
@@ -73,6 +75,7 @@ object SyncRules {
         deviceName: String,
         now: Long,
         choices: Map<String, SyncChoice> = emptyMap(),
+        hold: Set<String> = emptySet(),
     ): SyncResult {
         val published = state.published.toMutableMap()
         // Свои правки и удаления — с версией, которую они заменили.
@@ -90,6 +93,7 @@ object SyncRules {
         val changes = mutableListOf<SyncChange>()
         val conflicts = mutableListOf<SyncConflict>()
         for (key in (published.keys + items.keys).sorted()) {
+            if (key in hold) continue
             val mine = published[key]
             val theirs = items[key]
             if (theirs == null) {
@@ -148,6 +152,11 @@ object SyncRules {
         val file = if (remote != null && !upload) remote else SyncFile(deviceName, now, shared)
         return SyncResult(changes, conflicts, SyncState(synced, published), file, upload)
     }
+
+    /** Есть ли на телефоне правки, которых файл ещё не видел: без них читать файл после правки незачем. */
+    fun hasLocalChanges(local: Map<String, Map<String, Any?>>, state: SyncState): Boolean =
+        local.any { (key, data) -> state.published[key]?.hash != hash(data) } ||
+            state.published.any { (key, item) -> !item.deleted && key !in local }
 
     private const val DAY_MILLIS = 86_400_000L
 }

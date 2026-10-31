@@ -15,6 +15,7 @@
 | `./gradlew :app:assembleDebug` | отладочный APK — `app/build/outputs/apk/debug/app-debug.apk` |
 | `./gradlew :core:model:test :app:testDebugUnitTest` | unit-тесты на JVM: правила времени (`:core:model`), приложения и миграций базы |
 | `./gradlew :app:lintDebug` | Lint; предупреждения — ошибки |
+| `./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*ScreenshotsTest*'` | снимки экранов на JVM (Robolectric, D-029) — `app/build/screenshots/*.png`; первый раз Gradle качает образ Android 16 (213 МБ) |
 | `python3 tools/check-core-api.py` | после сборки `:core:model`: вызовы Java в модели есть в Android minSdk (31) — Lint этот модуль не проверяет (D-020, п. 7) |
 | `python3 tools/make-zones.py` | пересобрать таблицу поясов мировых часов из `zone.tab` базы tz (D-019) |
 | `tools/debug-apk.sh` | APK из закоммиченного дерева — `build/debug-apk/debug-<коммит>.apk` и его SHA-256 |

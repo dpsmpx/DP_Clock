@@ -12,6 +12,10 @@ data class Settings(
     val showAlarmDate: Boolean = false,
     /** Человек отметил, что настроил автозапуск и батарею на Xiaomi (SCREEN_MAP.md, п. 10). */
     val xiaomiHintsDone: Boolean = false,
+    /** Первый запуск пройден (D-029, п. 10): разрешения и подсказки показаны. Относится к телефону. */
+    val onboardingDone: Boolean = false,
+    /** Вибро-отклик кнопок таймеров и секундомера (D-029, п. 7). */
+    val haptics: Boolean = true,
     val signalStyle: SignalStyle = SignalStyle.FULL_SCREEN,
     val volumeButtons: VolumeButtons = VolumeButtons.SNOOZE,
     /** Праздники и переносы производственного календаря России — в общем списке исключений (D-014, п. 3). */

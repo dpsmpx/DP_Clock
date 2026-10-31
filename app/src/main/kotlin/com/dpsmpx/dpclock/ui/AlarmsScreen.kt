@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +26,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -139,6 +141,7 @@ fun AlarmsScreen(
     val scope = rememberCoroutineScope()
 
     var creating by rememberSaveable { mutableStateOf(false) }
+    var napOpen by rememberSaveable { mutableStateOf(false) }
     /** Новый будильник — в эту группу; null — без группы. */
     var creatingIn by rememberSaveable { mutableStateOf<String?>(null) }
     var editingId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -201,6 +204,14 @@ fun AlarmsScreen(
                 isSelected = layout.twoPane && alarm.id == editingId,
                 onClick = { editingId = alarm.id },
                 onDelete = { delete(alarm) },
+                // Копия — сразу в редактор: поправить время или дни (D-029, п. 4).
+                onCopy = { scope.launch { persist { repository.copyAlarm(alarm.id) }?.let { editingId = it } } },
+                // Дни недели прямо в строке (D-029, п. 2) — у однократного и по дням недели.
+                onDays = if (alarm.calendarEventAt == null && (alarm.repeat == Repeat.Once || alarm.repeat is Repeat.Weekly)) {
+                    { days -> scope.launch { announce(persist { repository.saveAlarm(alarm.copy(repeat = Repeat.of(days))) }) } }
+                } else {
+                    null
+                },
                 onToggle = { enabled ->
                     val at = AlarmRules.nextTrigger(alarm, Instant.now(), zone, exceptions)
                     if (enabled && at == null && !alarm.repeat.isRepeating) {
@@ -325,13 +336,20 @@ fun AlarmsScreen(
                     items(members, key = { it.id }) { AlarmItem(it) }
                 }
             }
-            FloatingActionButton(
-                onClick = {
+            Column(
+                Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // «Вздремнуть» (D-029, п. 3) — над «+»: однократный через 10–60 минут.
+                SmallFloatingActionButton(onClick = { napOpen = true }) {
+                    Icon(AppIcons.Moon, contentDescription = stringResource(R.string.nap))
+                }
+                FloatingActionButton(onClick = {
                     creatingIn = null
                     creating = true
-                },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-            ) { Icon(AppIcons.Add, contentDescription = stringResource(R.string.new_alarm)) }
+                }) { Icon(AppIcons.Add, contentDescription = stringResource(R.string.new_alarm)) }
+            }
         }
         if (layout.twoPane) {
             Box(
@@ -352,15 +370,28 @@ fun AlarmsScreen(
     }
 
     if (creating) {
-        TimePickerDialog(
-            initialHour = 7,
-            initialMinute = 0,
+        // Время, дни и название — сразу (D-029, п. 1).
+        NewAlarmDialog(
             onDismiss = { creating = false },
-            onConfirm = { hour, minute ->
+            onCreate = { hour, minute, days, label ->
                 creating = false
                 requestNotifications()
                 val group = creatingIn
-                scope.launch { announce(persist { repository.addAlarm(hour, minute, group) }) }
+                scope.launch { announce(persist { repository.addAlarm(hour, minute, group, days, label) }) }
+            },
+        )
+    }
+    if (napOpen) {
+        val napLabel = stringResource(R.string.nap)
+        ChoiceDialog(
+            title = napLabel,
+            choices = NAP_CHOICES,
+            selected = -1,
+            label = { stringResource(R.string.nap_in, it) },
+            onDismiss = { napOpen = false },
+            onSelect = { minutes ->
+                requestNotifications()
+                scope.launch { announce(persist { repository.nap(minutes, napLabel) }) }
             },
         )
     }
@@ -620,7 +651,11 @@ private fun AlarmRow(
     onClick: () -> Unit,
     onToggle: (Boolean) -> Unit,
     onDelete: () -> Unit,
+    onCopy: () -> Unit,
+    onDays: ((Set<DayOfWeek>) -> Unit)?,
 ) {
+    var menu by remember { mutableStateOf(false) }
+    var daysOpen by rememberSaveable(alarm.id) { mutableStateOf(false) }
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     val next = if (alarm.enabled) AlarmRules.nextTrigger(alarm, now, zone, exceptions) else null
@@ -628,6 +663,7 @@ private fun AlarmRow(
     // удалить — действием, свайп ему недоступен; переключатель назван временем будильника.
     val state = stringResource(if (alarm.enabled) R.string.alarm_state_on else R.string.alarm_state_off)
     val deleteLabel = stringResource(R.string.delete)
+    val copyLabel = stringResource(R.string.copy)
     val switchDescription = stringResource(R.string.alarm_switch_description, TimeText.time(context, alarm.hour, alarm.minute))
     Surface(
         shape = MaterialTheme.shapes.large,
@@ -635,13 +671,32 @@ private fun AlarmRow(
         border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClickLabel = stringResource(R.string.edit), onClick = onClick)
+            // Долгое касание — меню: копировать, удалить (D-029, п. 4).
+            .combinedClickable(
+                onClickLabel = stringResource(R.string.edit),
+                onLongClickLabel = stringResource(R.string.more),
+                onClick = onClick,
+                onLongClick = { menu = true },
+            )
             .semantics {
                 stateDescription = state
                 if (isSelected) selected = true
-                customActions = listOf(CustomAccessibilityAction(deleteLabel) { onDelete(); true })
+                customActions = listOf(
+                    CustomAccessibilityAction(copyLabel) { onCopy(); true },
+                    CustomAccessibilityAction(deleteLabel) { onDelete(); true },
+                )
             },
     ) {
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(text = { Text(copyLabel) }, onClick = {
+                menu = false
+                onCopy()
+            })
+            DropdownMenuItem(text = { Text(deleteLabel) }, onClick = {
+                menu = false
+                onDelete()
+            })
+        }
         Row(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 if (alarm.label.isNotBlank()) {
@@ -656,7 +711,21 @@ private fun AlarmRow(
                     style = MaterialTheme.typography.displaySmall,
                     fontWeight = if (alarm.enabled) FontWeight.Medium else FontWeight.Normal,
                 )
-                Text(repeatText(context, alarm.repeat), style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                if (onDays != null) {
+                    // Повтор — кнопкой: касание раскрывает дни недели прямо здесь.
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable(onClickLabel = stringResource(R.string.repeat_by_days)) { daysOpen = !daysOpen },
+                    ) {
+                        Text(repeatText(context, alarm.repeat), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                        Icon(if (daysOpen) AppIcons.Up else AppIcons.Down, contentDescription = null, modifier = Modifier.size(18.dp))
+                    }
+                    if (daysOpen) DayChips(alarm.repeat.days) { day -> onDays(if (day in alarm.repeat.days) alarm.repeat.days - day else alarm.repeat.days + day) }
+                } else {
+                    Text(repeatText(context, alarm.repeat), style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                }
                 // Полная дата и время срабатывания (D-025, п. 2).
                 if (showDate && next != null) {
                     Text(

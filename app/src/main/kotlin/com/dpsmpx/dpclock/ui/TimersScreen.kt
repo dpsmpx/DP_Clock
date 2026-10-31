@@ -1,5 +1,9 @@
 package com.dpsmpx.dpclock.ui
 
+import com.dpsmpx.dpclock.platform.Surfaces
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.material3.AssistChip
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -84,6 +88,11 @@ fun TimersScreen(requestNotifications: () -> Unit, quick: QuickRequest? = null, 
     var sleepOpen by rememberSaveable { mutableStateOf(false) }
     var pomodoroOpen by rememberSaveable { mutableStateOf(false) }
     var intervalOpen by rememberSaveable { mutableStateOf(false) }
+    /** Таймер во весь экран (D-029, п. 6). */
+    var fullScreen by rememberSaveable { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val recent by remember(context) { Surfaces.recentTimers(context) }.collectAsStateWithLifecycle()
+    val click = rememberHaptic()
     val settings by repository.settings.collectAsStateWithLifecycle(null)
     val resources = LocalResources.current
     val now = rememberMoment(200L, active = runs.orEmpty().any { it.state == TimerState.RUNNING })
@@ -99,6 +108,7 @@ fun TimersScreen(requestNotifications: () -> Unit, quick: QuickRequest? = null, 
     val inputVisible = list.isEmpty() || showInput
 
     fun start(program: TimerProgram, name: String, presetId: String?) {
+        click()
         requestNotifications()
         showInput = false
         persistLater { repository.startTimer(program, name, presetId) }
@@ -106,11 +116,31 @@ fun TimersScreen(requestNotifications: () -> Unit, quick: QuickRequest? = null, 
 
     // Запущенные таймеры и ввод; на широком окне заготовки — во второй колонке (D-022, п. 2).
     val timersPart: LazyListScope.() -> Unit = {
-        items(list, key = { it.id }) { run -> TimerCard(run, run.remainingAt(now)) }
+        items(list, key = { it.id }) { run -> TimerCard(run, run.remainingAt(now), onFullScreen = { fullScreen = run.id }) }
         if (inputVisible) {
             item(key = "input") {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    DurationEntry(input, onChange = { input = it })
+                    // Недавние длительности (D-029, п. 5): одно касание — и таймер пошёл.
+                    if (recent.isNotEmpty()) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        ) {
+                            for (millis in recent) {
+                                val description = stringResource(R.string.recent_timer_start, TimeText.duration(millis))
+                                AssistChip(
+                                    onClick = { start(TimerProgram.single(millis), "", null) },
+                                    label = { Text(TimeText.duration(millis)) },
+                                    leadingIcon = { Icon(AppIcons.Play, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                    modifier = Modifier.semantics { contentDescription = description },
+                                )
+                            }
+                        }
+                    }
+                    DurationEntry(input, onChange = {
+                        click()
+                        input = it
+                    })
                     Spacer(Modifier.size(12.dp))
                     // Крупным шрифтом кнопки переносятся на вторую строку, а не обрезаются.
                     FlowRow(
@@ -254,6 +284,15 @@ fun TimersScreen(requestNotifications: () -> Unit, quick: QuickRequest? = null, 
             },
         )
     }
+    // Во весь экран; таймер закончился и убран — окно закрывается само.
+    list.firstOrNull { it.id == fullScreen }?.let { run ->
+        FullScreenTime(
+            title = run.name.ifBlank { stringResource(R.string.timer_default_name) },
+            time = if (run.state == TimerState.RINGING) stringResource(R.string.ring_timer_finished) else TimeText.countdown(run.remainingAt(now)),
+            subtitle = if (run.program.isChain) stepLine(run) else null,
+            onClose = { fullScreen = null },
+        ) { TimerControls(run) }
+    }
     editingPreset?.let { preset ->
         PresetEditor(
             initial = preset,
@@ -268,9 +307,10 @@ fun TimersScreen(requestNotifications: () -> Unit, quick: QuickRequest? = null, 
 }
 
 @Composable
-private fun TimerCard(run: TimerRun, remaining: Long) {
+private fun TimerCard(run: TimerRun, remaining: Long, onFullScreen: () -> Unit) {
     val context = LocalContext.current
     val repository = DpClockApp.graph(context).repository
+    val click = rememberHaptic()
     // Звонящий таймер выключается через службу сигнала: она же глушит звук.
     val ringing = run.state == TimerState.RINGING
     fun ringAction(action: String) = context.startService(RingService.intent(context, action, run.id))
@@ -286,7 +326,11 @@ private fun TimerCard(run: TimerRun, remaining: Long) {
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
                 )
+                IconButton(onClick = onFullScreen) {
+                    Icon(AppIcons.FullScreen, contentDescription = stringResource(R.string.full_screen))
+                }
                 IconButton(onClick = {
+                    click()
                     if (ringing) ringAction(RingService.ACTION_TIMER_STOP) else persistLater { repository.deleteTimer(run.id) }
                 }) {
                     Icon(AppIcons.Close, contentDescription = stringResource(R.string.delete))
@@ -295,27 +339,16 @@ private fun TimerCard(run: TimerRun, remaining: Long) {
             if (run.program.sleep) {
                 Text(stringResource(R.string.sleep_timer_note), style = MaterialTheme.typography.bodyMedium)
             }
-            if (run.program.isChain) {
-                val step = if (run.program.steps.size > 1 || run.step.name.isNotBlank()) {
-                    run.step.name.ifBlank { stringResource(R.string.step_of, run.stepIndex + 1, run.program.steps.size) }
-                } else {
-                    null
-                }
-                val cycle = when {
-                    run.program.forever -> stringResource(R.string.cycle_number, run.cycleIndex + 1)
-                    run.program.cycles > 1 -> stringResource(R.string.cycle_of, run.cycleIndex + 1, run.program.cycles)
-                    else -> null
-                }
-                Text(listOfNotNull(step, cycle).joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
-            }
+            if (run.program.isChain) Text(stepLine(run), style = MaterialTheme.typography.bodyMedium)
             // Помидор ждёт «Дальше» (D-025, п. 1).
             if (run.isWaiting) {
                 Text(stringResource(R.string.timer_waiting_card), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
             }
+            // Касание по цифрам — во весь экран (D-029, п. 6).
             FitText(
                 if (run.state == TimerState.RINGING) stringResource(R.string.ring_timer_finished) else TimeText.countdown(remaining),
                 style = MaterialTheme.typography.displayLarge,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().clickable(onClickLabel = stringResource(R.string.full_screen), onClick = onFullScreen).padding(vertical = 8.dp),
                 textAlign = TextAlign.Center,
             )
             // Крупным шрифтом кнопки переносятся, а не обрезаются (D-022, п. 4).
@@ -323,35 +356,65 @@ private fun TimerCard(run: TimerRun, remaining: Long) {
                 horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth(),
-            ) {
+            ) { TimerControls(run) }
+        }
+    }
+}
+
+/** «Шаг 2 из 8 · Круг 1 из 3» или название шага. */
+@Composable
+private fun stepLine(run: TimerRun): String {
+    val step = if (run.program.steps.size > 1 || run.step.name.isNotBlank()) {
+        run.step.name.ifBlank { stringResource(R.string.step_of, run.stepIndex + 1, run.program.steps.size) }
+    } else {
+        null
+    }
+    val cycle = when {
+        run.program.forever -> stringResource(R.string.cycle_number, run.cycleIndex + 1)
+        run.program.cycles > 1 -> stringResource(R.string.cycle_of, run.cycleIndex + 1, run.program.cycles)
+        else -> null
+    }
+    return listOfNotNull(step, cycle).joinToString(" · ")
+}
+
+/** Кнопки идущего таймера — в карточке и во весь экран; каждая — с вибро-откликом (D-029, п. 7). */
+@Composable
+private fun TimerControls(run: TimerRun) {
+    val context = LocalContext.current
+    val repository = DpClockApp.graph(context).repository
+    val haptic = rememberHaptic()
+    val ringing = run.state == TimerState.RINGING
+    fun ringAction(action: String) = context.startService(RingService.intent(context, action, run.id))
+    fun act(block: suspend () -> Unit) {
+        haptic()
+        persistLater(block)
+    }
                 when {
-                    run.isWaiting -> Button(onClick = { persistLater { repository.resumeTimer(run.id) } }) {
+                    run.isWaiting -> Button(onClick = { act { repository.resumeTimer(run.id) } }) {
                         Text(stringResource(R.string.timer_next))
                     }
-                    run.state == TimerState.RUNNING -> FilledIconButton(onClick = { persistLater { repository.pauseTimer(run.id) } }) {
+                    run.state == TimerState.RUNNING -> FilledIconButton(onClick = { act { repository.pauseTimer(run.id) } }) {
                         Icon(AppIcons.Pause, contentDescription = stringResource(R.string.pause))
                     }
-                    run.state == TimerState.PAUSED -> FilledIconButton(onClick = { persistLater { repository.resumeTimer(run.id) } }) {
+                    run.state == TimerState.PAUSED -> FilledIconButton(onClick = { act { repository.resumeTimer(run.id) } }) {
                         Icon(AppIcons.Play, contentDescription = stringResource(R.string.resume))
                     }
                 }
                 // «Дальше» у цепочки — следующий шаг сейчас.
                 if (run.program.steps.size > 1 && !run.isWaiting && run.state != TimerState.RINGING) {
-                    FilledTonalButton(onClick = { persistLater { repository.skipStep(run.id) } }) { Text(stringResource(R.string.timer_skip)) }
+                    FilledTonalButton(onClick = { act { repository.skipStep(run.id) } }) { Text(stringResource(R.string.timer_skip)) }
                 }
                 if (run.state != TimerState.RINGING) {
-                    FilledTonalIconButton(onClick = { persistLater { repository.resetTimer(run.id) } }) {
+                    FilledTonalIconButton(onClick = { act { repository.resetTimer(run.id) } }) {
                         Icon(AppIcons.Reset, contentDescription = stringResource(R.string.reset))
                     }
                 }
                 FilledTonalButton(onClick = {
+                    haptic()
                     if (ringing) ringAction(RingService.ACTION_TIMER_ADD_MINUTE) else persistLater { repository.addMinute(run.id) }
                 }) {
                     Text(stringResource(R.string.add_minute))
                 }
-            }
-        }
-    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)

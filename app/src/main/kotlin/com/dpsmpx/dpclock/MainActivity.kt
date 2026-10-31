@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.model.AlarmOrder
 import com.dpsmpx.dpclock.model.ClockBackground
@@ -64,6 +65,8 @@ import com.dpsmpx.dpclock.ui.AlarmsScreen
 import com.dpsmpx.dpclock.ui.AppBackdrop
 import com.dpsmpx.dpclock.ui.AppIcons
 import com.dpsmpx.dpclock.ui.ExceptionsScreen
+import com.dpsmpx.dpclock.ui.FitText
+import com.dpsmpx.dpclock.ui.OnboardingDialog
 import com.dpsmpx.dpclock.ui.SettingsScreen
 import com.dpsmpx.dpclock.ui.StatsScreen
 import com.dpsmpx.dpclock.ui.StopwatchScreen
@@ -74,6 +77,7 @@ import com.dpsmpx.dpclock.ui.isShown
 import com.dpsmpx.dpclock.ui.orderTitle
 import com.dpsmpx.dpclock.ui.rememberNotificationPermissionRequest
 import com.dpsmpx.dpclock.ui.rememberWindowLayout
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -187,6 +191,9 @@ private val SECTION_TITLES = mapOf(
 )
 
 /** В нижней панели пять подписей — у мировых часов короткая. */
+/** Подписи разделов ужимаются до этого, а не обрезаются: «Секундомер» в пять пунктов на 393 dp не влезает в 12 sp. */
+private val NAV_MIN_FONT = 9.sp
+
 private val NAV_LABELS = SECTION_TITLES + (Section.WORLD to R.string.nav_world)
 
 private fun Section.icon(): ImageVector = when (this) {
@@ -201,6 +208,8 @@ private fun Section.icon(): ImageVector = when (this) {
 @Composable
 private fun AppRoot(request: SectionRequest) {
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    /** С какого раздела открыть настройки: с плашки надёжности — сразу «Разрешения и надёжность». */
+    var settingsSection by rememberSaveable { mutableStateOf<Int?>(null) }
     var exceptionsOpen by rememberSaveable { mutableStateOf(false) }
     var statsOpen by rememberSaveable { mutableStateOf(false) }
     var alarmsDialog by rememberSaveable { mutableStateOf<AlarmsDialog?>(null) }
@@ -220,9 +229,19 @@ private fun AppRoot(request: SectionRequest) {
         pager.scrollToPage(request.section.ordinal)
     }
 
+    // Первый запуск — три шага с разрешениями (D-029, п. 10); показывается один раз.
+    val app = DpClockApp.graph(LocalContext.current).repository
+    val onboarded by remember(app) { app.settings.map { it.onboardingDone } }.collectAsStateWithLifecycle(true)
+    if (!onboarded) {
+        OnboardingDialog(
+            onXiaomiDone = { persistLater { app.updateSettings { it.copy(xiaomiHintsDone = true) } } },
+            onDone = { persistLater { app.updateSettings { it.copy(onboardingDone = true) } } },
+        )
+    }
+
     if (settingsOpen) {
         BackHandler { settingsOpen = false }
-        SettingsScreen(onBack = { settingsOpen = false })
+        SettingsScreen(onBack = { settingsOpen = false }, initialSection = settingsSection)
         return
     }
     if (exceptionsOpen) {
@@ -258,7 +277,7 @@ private fun AppRoot(request: SectionRequest) {
                             selected = pager.currentPage == item.ordinal,
                             onClick = { open(item) },
                             icon = { Icon(item.icon(), contentDescription = null) },
-                            label = { Text(stringResource(NAV_LABELS.getValue(item)), maxLines = 1) },
+                            label = { FitText(stringResource(NAV_LABELS.getValue(item)), style = MaterialTheme.typography.labelMedium, minFontSize = NAV_MIN_FONT) },
                         )
                     }
                     Spacer(Modifier.weight(1f))
@@ -282,7 +301,10 @@ private fun AppRoot(request: SectionRequest) {
                                 AlarmOrderMenu()
                                 AlarmsMenu(openExceptions = { exceptionsOpen = true }, onDialog = { alarmsDialog = it })
                             }
-                            IconButton(onClick = { settingsOpen = true }) {
+                            IconButton(onClick = {
+                                settingsSection = null
+                                settingsOpen = true
+                            }) {
                                 Icon(AppIcons.Settings, contentDescription = stringResource(R.string.settings))
                             }
                         },
@@ -296,7 +318,7 @@ private fun AppRoot(request: SectionRequest) {
                                     selected = pager.currentPage == item.ordinal,
                                     onClick = { open(item) },
                                     icon = { Icon(item.icon(), contentDescription = null) },
-                                    label = { Text(stringResource(NAV_LABELS.getValue(item)), maxLines = 1) },
+                                    label = { FitText(stringResource(NAV_LABELS.getValue(item)), style = MaterialTheme.typography.labelMedium, minFontSize = NAV_MIN_FONT) },
                                 )
                             }
                         }
@@ -315,7 +337,10 @@ private fun AppRoot(request: SectionRequest) {
                         Section.ALARMS -> AlarmsScreen(
                             snackbar,
                             requestNotifications,
-                            openSettings = { settingsOpen = true },
+                            openSettings = {
+                                settingsSection = R.string.settings_reliability
+                                settingsOpen = true
+                            },
                             dialog = alarmsDialog,
                             onDialog = { alarmsDialog = it },
                             quick = quick?.takeIf { it.action == QuickAction.NEW_ALARM || it.action == QuickAction.EDIT_ALARM },

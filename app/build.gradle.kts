@@ -7,6 +7,14 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// Образ Android для снимков экранов (D-029): только по запросу `-Pscreenshots`.
+val robolectricSdk: Configuration by configurations.creating { isTransitive = false }
+val robolectricJars = layout.buildDirectory.dir("robolectric-jars")
+val copyRobolectricSdk = tasks.register<Copy>("copyRobolectricSdk") {
+    from(robolectricSdk)
+    into(robolectricJars)
+}
+
 android {
     namespace = "com.dpsmpx.dpclock"
     // compileSdk и build-tools совпадают с tools/setup-android-sdk.sh.
@@ -17,8 +25,8 @@ android {
         applicationId = "com.dpsmpx.dpclock"
         minSdk = 31
         targetSdk = 37
-        versionCode = 21
-        versionName = "0.15.0"
+        versionCode = 22
+        versionName = "0.16.0"
     }
 
     signingConfigs {
@@ -46,6 +54,23 @@ android {
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    }
+
+    // Снимки экранов на JVM (D-029): Robolectric рисует настоящие экраны с ресурсами приложения.
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all { test ->
+            // Снимки — по запросу: `-Pscreenshots`; обычная проверка их пропускает и образ Android не качает.
+            val screenshots = project.findProperty("screenshots") != null
+            test.systemProperty("dpclock.screenshots", screenshots)
+            test.systemProperty("dpclock.screenshots.dir", layout.buildDirectory.dir("screenshots").get().asFile.path)
+            // Образ Android — из папки, куда его положил Gradle: Robolectric сам в сеть не ходит.
+            test.systemProperty("robolectric.offline", "true")
+            test.systemProperty("robolectric.dependency.dir", robolectricJars.get().asFile.path)
+            if (screenshots) test.dependsOn(copyRobolectricSdk)
+            // Robolectric пишет в поля FileDescriptor через SharedSecrets — на Java 17+ их надо открыть.
+            test.jvmArgs("--add-opens=java.base/java.io=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
+        }
     }
 
     lint {
@@ -90,4 +115,6 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.sqlite.bundled.jvm)
+    testImplementation(libs.robolectric)
+    robolectricSdk(libs.robolectric.android.all)
 }

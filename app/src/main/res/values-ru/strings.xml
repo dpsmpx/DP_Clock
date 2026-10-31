@@ -825,4 +825,41 @@
     <string name="interval_count">Сколько раз</string>
     <string name="interval_name">Каждые %1$s</string>
     <string name="interval_forever_summary">Каждые %1$s · без конца</string>
+
+    <!-- Улучшения интерфейса (D-029) -->
+    <string name="new_alarm_once">Без дней — один раз</string>
+    <string name="new_alarm_repeat">Повторяется в выбранные дни</string>
+    <string name="nap">Вздремнуть</string>
+    <string name="nap_in">Через %1$d мин</string>
+    <string name="copy">Копировать</string>
+    <string name="full_screen">Во весь экран</string>
+    <string name="close_full_screen">Закрыть полноэкранный режим</string>
+    <string name="recent_timer_start">Запустить таймер на %1$s</string>
+    <plurals name="laps_count">
+        <item quantity="one">%1$d круг</item>
+        <item quantity="few">%1$d круга</item>
+        <item quantity="many">%1$d кругов</item>
+        <item quantity="other">%1$d круга</item>
+    </plurals>
+    <string name="settings_search">Поиск по настройкам</string>
+    <string name="settings_search_none">Ничего не нашлось</string>
+    <string name="haptics">Вибро-отклик кнопок</string>
+    <string name="haptics_text">Короткий отклик на кнопки таймеров и секундомера</string>
+    <string name="clock_tap_night">Ночные часы</string>
+    <string name="clock_long_style">Сменить стиль часов</string>
+    <string name="onboarding_step">Шаг %1$d из %2$d</string>
+    <string name="onboarding_skip">Пропустить</string>
+    <string name="onboarding_next">Далее</string>
+    <string name="onboarding_allow">Разрешить уведомления</string>
+    <string name="onboarding_ok">В порядке</string>
+    <string name="onboarding_notifications_title">Уведомления</string>
+    <string name="onboarding_notifications_text">Звонящий и отложенный будильник, идущие таймеры показываются уведомлением. Без разрешения сигнал может не появиться.</string>
+    <string name="onboarding_signal_title">Поверх блокировки и вовремя</string>
+    <string name="onboarding_signal_text">Экран будильника появляется поверх экрана блокировки, а сам будильник звонит точно в срок.</string>
+    <string name="onboarding_volume_title">Громкость будильника</string>
+    <string name="onboarding_volume_text">Будильник звучит с громкостью будильника телефона; «Не беспокоить» должен пропускать будильники.</string>
+    <string name="onboarding_item_notifications">Уведомления</string>
+    <string name="onboarding_item_full_screen">Сигнал поверх блокировки</string>
+    <string name="onboarding_item_exact">Точные будильники</string>
+    <string name="onboarding_item_dnd">«Не беспокоить» пропускает будильники</string>
 </resources>

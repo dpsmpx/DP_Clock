@@ -46,6 +46,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -195,11 +196,46 @@ class ClockRepository(
      * Новый будильник — однократный и включённый (SCREEN_MAP.md, п. 1), можно сразу в группе,
      * с общими предупреждениями (D-025, п. 5). Возвращает момент срабатывания.
      */
-    suspend fun addAlarm(hour: Int, minute: Int, groupId: String? = null): Long = locked {
+    suspend fun addAlarm(
+        hour: Int,
+        minute: Int,
+        groupId: String? = null,
+        days: Set<DayOfWeek> = emptySet(),
+        label: String = "",
+    ): Long = locked {
         val warnings = dao.currentSettings().toModel().defaultWarnings
-        val alarm = Alarm(UUID.randomUUID().toString(), hour, minute, Repeat.Once, enabled = true, createdAt = now(), groupId = groupId, warnings = warnings)
+        val alarm = Alarm(
+            UUID.randomUUID().toString(), hour, minute, Repeat.of(days), enabled = true, createdAt = now(),
+            label = label, groupId = groupId, warnings = warnings,
+        )
         dao.upsertAlarm(alarm.toEntity())
         scheduleAlarm(alarm)
+    }
+
+    /**
+     * «Вздремнуть» (D-029, п. 3): однократный будильник через [minutes] минут, с точностью
+     * до минуты — вверх. Будильник с названием [label] переиспользуется: список не копит их.
+     */
+    suspend fun nap(minutes: Int, label: String): Long = locked {
+        val zone = ZoneId.systemDefault()
+        val at = Instant.ofEpochMilli(now() + minutes * 60_000L + 59_999L).atZone(zone)
+        val existing = dao.allAlarms().map { it.toModel() }
+            .firstOrNull { it.label == label && it.repeat == Repeat.Once && it.groupId == null && it.calendarEventAt == null }
+        if (existing != null && dao.occurrence(existing.id)?.state == Occ.RINGING) return@locked 0L
+        val alarm = existing?.copy(hour = at.hour, minute = at.minute, enabled = true, skipDate = null, skipTime = null)
+            ?: Alarm(UUID.randomUUID().toString(), at.hour, at.minute, Repeat.Once, enabled = true, createdAt = now(), label = label)
+        dao.upsertAlarm(alarm.toEntity())
+        resetOccurrence(alarm.id)
+        scheduleAlarm(alarm)
+    }
+
+    /** Копия будильника (D-029, п. 4): тот же, но свой; без пропуска и не от календаря. Возвращает её id. */
+    suspend fun copyAlarm(id: String): String? = locked {
+        val alarm = dao.alarm(id)?.toModel() ?: return@locked null
+        val copy = alarm.copy(id = UUID.randomUUID().toString(), createdAt = now(), skipDate = null, skipTime = null, calendarEventAt = null)
+        dao.upsertAlarm(copy.toEntity())
+        scheduleAlarm(copy)
+        copy.id
     }
 
     /**
@@ -800,8 +836,9 @@ class ClockRepository(
         }
         val settings = prepared.settings
         if (withSettings && settings != null) {
-            // Отметка про Xiaomi — о настройке этого телефона, её файл не меняет.
-            dao.upsertSettings(settings.copy(xiaomiHintsDone = dao.currentSettings().toModel().xiaomiHintsDone).toEntity())
+            // Отметки про Xiaomi и первый запуск — о настройке этого телефона, их файл не меняет.
+            val phone = dao.currentSettings().toModel()
+            dao.upsertSettings(settings.copy(xiaomiHintsDone = phone.xiaomiHintsDone, onboardingDone = phone.onboardingDone).toEntity())
             Appearances.apply(context, settings.appearance)
         }
         alarmsChanged = true

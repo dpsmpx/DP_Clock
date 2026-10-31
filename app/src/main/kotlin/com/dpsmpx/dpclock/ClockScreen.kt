@@ -2,6 +2,7 @@ package com.dpsmpx.dpclock
 
 import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -19,11 +20,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dpsmpx.dpclock.model.ClockStyle
 import com.dpsmpx.dpclock.model.Settings
 import com.dpsmpx.dpclock.ui.AppIcons
 import com.dpsmpx.dpclock.ui.ClockBackdrop
@@ -44,7 +48,9 @@ private const val FACE_FRACTION = 0.7f
 @Composable
 fun ClockScreen(modifier: Modifier = Modifier, visible: Boolean = true) {
     val context = LocalContext.current
-    val settings by DpClockApp.graph(context).repository.settings.collectAsStateWithLifecycle(Settings())
+    val repository = DpClockApp.graph(context).repository
+    val settings by repository.settings.collectAsStateWithLifecycle(Settings())
+    val haptic = LocalHapticFeedback.current
     val background = settings.appearance.background
     val backdrop = background.isShown(context)
     Surface(modifier = modifier.fillMaxSize()) {
@@ -57,13 +63,31 @@ fun ClockScreen(modifier: Modifier = Modifier, visible: Boolean = true) {
                 .safeDrawingPadding(),
             contentAlignment = Alignment.Center,
         ) {
-            ClockFace(
-                settings.appearance,
-                night = false,
-                size = clockSide(maxWidth, maxHeight, FACE_FRACTION),
-                active = visible,
-                onBackdrop = backdrop,
-            )
+            val side = clockSide(maxWidth, maxHeight, FACE_FRACTION)
+            // Касание по часам — ночные часы, долгое — следующий стиль часов (D-029, п. 9).
+            Box(
+                Modifier.combinedClickable(
+                    interactionSource = null,
+                    indication = null,
+                    onClickLabel = stringResource(R.string.clock_tap_night),
+                    onLongClickLabel = stringResource(R.string.clock_long_style),
+                    onClick = { context.startActivity(Intent(context, NightClockActivity::class.java)) },
+                    onLongClick = {
+                        val styles = ClockStyle.entries
+                        val next = styles[(styles.indexOf(settings.appearance.clockStyle) + 1) % styles.size]
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        persistLater { repository.updateSettings { it.copy(appearance = it.appearance.copy(clockStyle = next)) } }
+                    },
+                ),
+            ) {
+                ClockFace(
+                    settings.appearance,
+                    night = false,
+                    size = side,
+                    active = visible,
+                    onBackdrop = backdrop,
+                )
+            }
             // Ближайшее событие сегодня (D-023, п. 4) — над кнопкой ночных часов.
             val event = rememberNextEvent(active = visible)
             if (event != null) {

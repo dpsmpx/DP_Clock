@@ -17,7 +17,7 @@ data class Backup(
     val presets: List<TimerPreset> = emptyList(),
     /** Города мировых часов — пояса tz по порядку (D-019). */
     val worldCities: List<String> = emptyList(),
-    /** null — в файле настроек нет. Отметка про Xiaomi относится к телефону и не переносится. */
+    /** null — в файле настроек нет. Отметки про Xiaomi и первый запуск относятся к телефону и не переносятся. */
     val settings: Settings? = null,
     /** Когда и какой версией приложения сохранён файл; не указано — null и пусто. */
     val exportedAt: Instant? = null,
@@ -232,6 +232,7 @@ object BackupFormat {
         "alarmOrder" to settings.alarmOrder.name,
         "showAlarmCountdown" to settings.showAlarmCountdown,
         "showAlarmDate" to settings.showAlarmDate,
+        "haptics" to settings.haptics,
         "defaultWarnings" to settings.defaultWarnings,
         "warningSound" to settings.warningSound,
         "chimes" to settings.chimes.let {
@@ -397,6 +398,7 @@ object BackupFormat {
             alarmOrder = o.enum("alarmOrder", defaults.alarmOrder),
             showAlarmCountdown = o.bool("showAlarmCountdown", defaults.showAlarmCountdown),
             showAlarmDate = o.bool("showAlarmDate", defaults.showAlarmDate),
+            haptics = o.bool("haptics", defaults.haptics),
             defaultWarnings = Warnings.normalize(o.list("defaultWarnings").map { (it as? Long)?.toInt() ?: 0 }),
             warningSound = o.bool("warningSound", defaults.warningSound),
             chimes = o.obj("chimes")?.let {

@@ -188,3 +188,18 @@ val MIGRATION_13_14 = SqlMigration(
         "ALTER TABLE `settings` ADD COLUMN `pomodoro` TEXT NOT NULL DEFAULT ''",
     ),
 )
+
+/**
+ * 0.15.0 (D-027): фон один на всё приложение. Не было фона «Часов» — им становится фон
+ * приложения, иначе фон ночных часов; прежние столбцы обнуляются. Схема не меняется.
+ */
+val MIGRATION_14_15 = SqlMigration(
+    14,
+    15,
+    listOf(
+        "UPDATE `settings` SET `background` = CASE " +
+            "WHEN `background` = 'NONE' AND `appBackground` != 'NONE' THEN `appBackground` " +
+            "WHEN `background` = 'NONE' AND `nightBackground` != 'NONE' THEN `nightBackground` " +
+            "ELSE `background` END, `appBackground` = 'NONE', `nightBackground` = 'NONE'",
+    ),
+)

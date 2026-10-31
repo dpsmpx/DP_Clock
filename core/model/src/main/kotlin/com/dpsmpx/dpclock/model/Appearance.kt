@@ -71,13 +71,13 @@ data class Appearance(
     /** Размер крупных цифр, % от ширины экрана. */
     val clockSize: Int = MAX_SIZE,
     val nightNoise: NoiseKind = NoiseKind.NONE,
+    /**
+     * Фон приложения (D-027): один на все разделы — в «Часах» ярко, за списками
+     * едва заметно, в ночных часах тёмно-красным. До 0.15.0 — фон только «Часов».
+     */
     val background: ClockBackground = ClockBackground.NONE,
     /** «Высокий контраст» (D-022, п. 5): текст и границы темнее; включается и системной настройкой Android 14+. */
     val highContrast: Boolean = false,
-    /** Фон ночных часов (D-024, п. 1): нет или эффект-обои, тёмно-красным. */
-    val nightBackground: ClockBackground = ClockBackground.NONE,
-    /** Фон всего приложения за списками (D-024, п. 1): нет или эффект-обои, приглушённо. */
-    val appBackground: ClockBackground = ClockBackground.NONE,
     /** Что показывают обои Android DP Clock (D-024, п. 2). */
     val wallpaper: ClockBackground = ClockBackground.CONSTELLATION,
 ) {

@@ -513,7 +513,6 @@
     <string name="noise_white">White</string>
     <string name="noise_pink">Pink</string>
     <string name="noise_brown">Brown</string>
-    <string name="clock_background">Background of Clock</string>
     <string name="background_none">None</string>
     <string name="background_image">Your picture</string>
     <string name="background_sky">Sky by time of day</string>
@@ -641,7 +640,7 @@
     <string name="background_hourglass">Hourglass — sand pours over an hour</string>
     <string name="background_mechanism">Clock mechanism — gears and balance</string>
     <string name="background_digit_rain">Digit rain — digits gather into the time</string>
-    <string name="night_background">Night clock background</string>
+    <string name="app_background_text">Everywhere: bright in Clock, barely visible behind lists, dim red in the night clock</string>
     <string name="app_background">App background</string>
     <string name="wallpaper">Live wallpaper</string>
     <string name="wallpaper_set">Set</string>

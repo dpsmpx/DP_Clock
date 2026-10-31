@@ -512,7 +512,6 @@
     <string name="noise_white">Белый</string>
     <string name="noise_pink">Розовый</string>
     <string name="noise_brown">Коричневый</string>
-    <string name="clock_background">Фон раздела «Часы»</string>
     <string name="background_none">Нет</string>
     <string name="background_image">Своя картинка</string>
     <string name="background_sky">Небо по времени суток</string>
@@ -654,7 +653,7 @@
     <string name="background_hourglass">Песочные часы — песок за час</string>
     <string name="background_mechanism">Механизм часов — колёса и баланс</string>
     <string name="background_digit_rain">Дождь цифр — цифры складываются во время</string>
-    <string name="night_background">Фон ночных часов</string>
+    <string name="app_background_text">Во всех разделах: в «Часах» — ярко, за списками — едва заметно, в ночных часах — тёмно-красным</string>
     <string name="app_background">Фон приложения</string>
     <string name="wallpaper">Живые обои</string>
     <string name="wallpaper_set">Поставить</string>

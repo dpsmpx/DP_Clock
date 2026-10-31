@@ -28,7 +28,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
 import com.dpsmpx.dpclock.model.AlarmRules
-import com.dpsmpx.dpclock.model.ClockBackground
 import com.dpsmpx.dpclock.model.Exceptions
 import com.dpsmpx.dpclock.model.NoiseKind
 import com.dpsmpx.dpclock.model.Settings
@@ -58,10 +57,8 @@ fun NightClock(modifier: Modifier = Modifier, controls: Boolean = false) {
     val nearest = AlarmRules.nearest(alarms, Instant.ofEpochMilli(now), ZoneId.systemDefault(), exceptions)
     val minute = now / 60_000L
     BoxWithConstraints(modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
-        // Фон — эффект-обои тёмно-красным и тусклым (D-024, п. 1); палец — у ночных часов свой.
-        if (settings.appearance.nightBackground != ClockBackground.NONE) {
-            SceneBackdrop(settings.appearance.nightBackground, animate = true, palette = rememberScenePalette(SceneLook.NIGHT), interactive = false)
-        }
+        // Фон приложения — тёмно-красным и тускло (D-027); палец — у ночных часов свой.
+        if (settings.appearance.background.isShown(context)) NightBackdrop(settings.appearance.background)
         val side = clockSide(maxWidth, maxHeight, NIGHT_FACE_FRACTION)
         Column(
             Modifier.offset(x = (minute * 37 % 41 - 20).toInt().dp, y = (minute * 53 % 61 - 30).toInt().dp),

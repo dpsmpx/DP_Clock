@@ -79,7 +79,7 @@ class BackupTest {
             volumeButtons = VolumeButtons.NOTHING, holidaysRu = true,
             bedtime = Bedtime(BedtimeMode.SCHEDULE, 450, 22, 30, setOf(DayOfWeek.SUNDAY, DayOfWeek.MONDAY), 30),
             weather = WeatherSettings(WeatherMode.CITY, WeatherPlace("Тула", 54.1931, 37.6177)),
-            appearance = Appearance(ThemeMode.BLACK, 0xFF3F5AA9.toInt(), ClockStyle.DIGITS, ClockFont.SEGMENT, 80, NoiseKind.PINK, ClockBackground.STARS, highContrast = true, nightBackground = ClockBackground.POLAR_CLOCK, appBackground = ClockBackground.CONSTELLATION, wallpaper = ClockBackground.HYPERCUBE),
+            appearance = Appearance(ThemeMode.BLACK, 0xFF3F5AA9.toInt(), ClockStyle.DIGITS, ClockFont.SEGMENT, 80, NoiseKind.PINK, ClockBackground.STARS, highContrast = true, wallpaper = ClockBackground.HYPERCUBE),
             showAlarmDate = true, defaultWarnings = listOf(60, 5), warningSound = true,
             chimes = Chimes(ChimeEvery.HALF_HOUR, vibrate = true, countHours = false, quiet = true, LocalTime.of(23, 30), LocalTime.of(7, 15), setOf(DayOfWeek.SATURDAY)),
             pomodoro = Pomodoro(50, 10, 30, 3, 2, autoAdvance = true, dnd = true),
@@ -102,6 +102,18 @@ class BackupTest {
         assertTrue(BackupFormat.encode(full, exportedAt, "0.14.0").contains("\"format\": 2"))
         val plain = full.copy(alarms = full.alarms.filter { it.repeat !is Repeat.Rules }, templates = full.templates.take(1))
         assertTrue(BackupFormat.encode(plain, exportedAt, "0.14.0").contains("\"format\": 1"))
+    }
+
+    @Test
+    fun oldAppAndNightBackgroundsBecomeTheOneBackground() {
+        fun background(appearance: String) =
+            BackupFormat.decode("""{"app": "DP_Clock", "format": 1, "settings": {"appearance": {$appearance}}}""").settings!!.appearance.background
+        // Файл 0.13–0.14 (D-027): фон «Часов» главнее, иначе фон приложения, иначе ночных часов.
+        assertEquals(ClockBackground.STARS, background(""""background": "STARS", "appBackground": "HYPERCUBE""""))
+        assertEquals(ClockBackground.HYPERCUBE, background(""""background": "NONE", "appBackground": "HYPERCUBE", "nightBackground": "MECHANISM""""))
+        assertEquals(ClockBackground.MECHANISM, background(""""nightBackground": "MECHANISM""""))
+        assertEquals(ClockBackground.CONSTELLATION, background(""""background": "IMAGE", "appBackground": "CONSTELLATION""""))
+        assertEquals(ClockBackground.NONE, background(""""appBackground": "SKY""""))
     }
 
     @Test

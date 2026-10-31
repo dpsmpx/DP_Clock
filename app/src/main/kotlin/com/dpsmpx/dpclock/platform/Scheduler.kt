@@ -36,7 +36,33 @@ class Scheduler(private val context: Context) {
     fun cancelAlarm(alarmId: String) {
         alarmManager.cancel(alarmIntent(alarmId, 0L))
         cancelGentle(alarmId)
+        cancelWarning(alarmId)
     }
+
+    /** Предупреждение (D-025, п. 5) в [at] о срабатывании [alarmAt]; одно на будильник — следующее ставится, когда придёт это. */
+    fun setWarning(alarmId: String, at: Long, alarmAt: Long) = setExact(at, warningIntent(alarmId, alarmAt))
+
+    fun cancelWarning(alarmId: String) = alarmManager.cancel(warningIntent(alarmId, 0L))
+
+    private fun warningIntent(alarmId: String, alarmAt: Long): PendingIntent = broadcast(
+        Intent(context, AlarmReceiver::class.java)
+            .setAction(AlarmReceiver.ACTION_WARNING)
+            .setData("dpclock://warning/$alarmId".toUri())
+            .putExtra(AlarmReceiver.EXTRA_ID, alarmId)
+            .putExtra(AlarmReceiver.EXTRA_ALARM_AT, alarmAt),
+    )
+
+    /** Бой курантов в [at] (D-025, п. 4); один на приложение. Точный: бой в начале часа, а не когда-нибудь. */
+    fun setChime(at: Long) = setExact(at, chimeIntent(at))
+
+    fun cancelChime() = alarmManager.cancel(chimeIntent(0L))
+
+    private fun chimeIntent(at: Long): PendingIntent = broadcast(
+        Intent(context, AlarmReceiver::class.java)
+            .setAction(AlarmReceiver.ACTION_CHIME)
+            .setData("dpclock://chime".toUri())
+            .putExtra(AlarmReceiver.EXTRA_SCHEDULED_AT, at),
+    )
 
     /** Мягкое пробуждение (D-017, п. 3): в [at] — свет и тихий звук до будильника в [alarmAt]. */
     fun setGentle(alarmId: String, at: Long, alarmAt: Long) = setExact(at, gentleIntent(alarmId, alarmAt))
@@ -69,6 +95,18 @@ class Scheduler(private val context: Context) {
                 .putExtra(AlarmReceiver.EXTRA_ID, alarmId)
                 .putExtra(AlarmReceiver.EXTRA_TEXT, text),
         ),
+    )
+
+    /**
+     * Перечитать календарь телефона в [at] (D-023, п. 4): ближайшее событие началось
+     * или наступила полночь. Не будит телефон — виджет обновится, когда экран включат.
+     */
+    fun setCalendarRefresh(at: Long) = alarmManager.set(AlarmManager.RTC, at, calendarIntent())
+
+    fun cancelCalendarRefresh() = alarmManager.cancel(calendarIntent())
+
+    private fun calendarIntent(): PendingIntent = broadcast(
+        Intent(context, AlarmReceiver::class.java).setAction(AlarmReceiver.ACTION_CALENDAR).setData("dpclock://calendar".toUri()),
     )
 
     private fun setExact(at: Long, operation: PendingIntent) {

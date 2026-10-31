@@ -1,11 +1,15 @@
 package com.dpsmpx.dpclock.ui
 
+import android.app.WallpaperManager
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -24,6 +28,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -63,13 +68,20 @@ import com.dpsmpx.dpclock.model.ClockStyle
 import com.dpsmpx.dpclock.model.NoiseKind
 import com.dpsmpx.dpclock.model.ThemeMode
 import com.dpsmpx.dpclock.model.Bedtime
+import com.dpsmpx.dpclock.model.Scenes
+import com.dpsmpx.dpclock.model.CalendarSettings
+import com.dpsmpx.dpclock.model.ChimeEvery
+import com.dpsmpx.dpclock.model.Chimes
 import com.dpsmpx.dpclock.model.BedtimeMode
 import com.dpsmpx.dpclock.model.Settings
 import com.dpsmpx.dpclock.model.SignalStyle
 import com.dpsmpx.dpclock.model.VolumeButtons
 import com.dpsmpx.dpclock.persistLater
+import com.dpsmpx.dpclock.platform.CalendarSync
+import com.dpsmpx.dpclock.platform.ClockWallpaper
 import com.dpsmpx.dpclock.platform.TimeText
 import kotlinx.coroutines.launch
+import java.time.LocalTime
 import java.time.format.TextStyle
 
 /** Настройки MVP (SCREEN_MAP.md, п. 9). */
@@ -86,6 +98,17 @@ fun SettingsScreen(onBack: () -> Unit) {
     val snackbar = remember { SnackbarHostState() }
     val backup = rememberBackupActions(snackbar)
     val weatherChoice = rememberWeatherChoice()
+    val calendarStore = DpClockApp.graph(context).calendar
+    val calendarSettings by calendarStore.settings.collectAsStateWithLifecycle()
+    val calendarAccess = rememberCalendarAccess()
+    val phoneCalendars = rememberPhoneCalendars(calendarAccess.granted)
+
+    /** Календарь телефона (D-023): настройки — в хранилище устройства, потом перечитать календарь. */
+    fun updateCalendar(change: (CalendarSettings) -> CalendarSettings) {
+        calendarStore.update(change)
+        val app = context.applicationContext
+        persistLater { CalendarSync.refresh(app) }
+    }
 
     fun update(change: (Settings) -> Settings) = persistLater { repository.updateSettings(change) }
 
@@ -131,6 +154,125 @@ fun SettingsScreen(onBack: () -> Unit) {
                     supportingContent = { Text(stringResource(orderTitle(settings.alarmOrder))) },
                     modifier = Modifier.clickable { dialog = "order" },
                 )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.alarm_countdown)) },
+                    supportingContent = { Text(stringResource(R.string.alarm_countdown_text)) },
+                    trailingContent = { Switch(checked = settings.showAlarmCountdown, onCheckedChange = null) },
+                    modifier = Modifier.toggleable(value = settings.showAlarmCountdown, role = Role.Switch) { show ->
+                        update { it.copy(showAlarmCountdown = show) }
+                    },
+                )
+                // Полная дата и предупреждения до сигнала (D-025, п. 2, 5).
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.alarm_date)) },
+                    supportingContent = { Text(stringResource(R.string.alarm_date_text)) },
+                    trailingContent = { Switch(checked = settings.showAlarmDate, onCheckedChange = null) },
+                    modifier = Modifier.toggleable(value = settings.showAlarmDate, role = Role.Switch) { show ->
+                        update { it.copy(showAlarmDate = show) }
+                    },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.warnings_default)) },
+                    supportingContent = { Text(warningsText(context, settings.defaultWarnings)) },
+                    modifier = Modifier.clickable { dialog = "defaultWarnings" },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.warning_sound)) },
+                    supportingContent = { Text(stringResource(R.string.warning_sound_text)) },
+                    trailingContent = { Switch(checked = settings.warningSound, onCheckedChange = null) },
+                    modifier = Modifier.toggleable(value = settings.warningSound, role = Role.Switch) { on ->
+                        update { it.copy(warningSound = on) }
+                    },
+                )
+            },
+            SettingsSection(R.string.settings_chimes) {
+                val chimes = settings.chimes
+                fun updateChimes(change: (Chimes) -> Chimes) = update { it.copy(chimes = change(it.chimes)) }
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.chimes)) },
+                    supportingContent = { Text(stringResource(chimeEveryTitle(chimes.every))) },
+                    modifier = Modifier.clickable { dialog = "chimeEvery" },
+                )
+                if (chimes.every != ChimeEvery.OFF) {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.chimes_vibrate)) },
+                        supportingContent = { Text(stringResource(R.string.chimes_vibrate_text)) },
+                        trailingContent = { Switch(checked = chimes.vibrate, onCheckedChange = null) },
+                        modifier = Modifier.toggleable(value = chimes.vibrate, role = Role.Switch) { on -> updateChimes { it.copy(vibrate = on) } },
+                    )
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.chimes_count)) },
+                        supportingContent = { Text(stringResource(R.string.chimes_count_text)) },
+                        trailingContent = { Switch(checked = chimes.countHours, onCheckedChange = null) },
+                        modifier = Modifier.toggleable(value = chimes.countHours, role = Role.Switch) { on -> updateChimes { it.copy(countHours = on) } },
+                    )
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.chimes_quiet)) },
+                        supportingContent = {
+                            Text(
+                                stringResource(
+                                    R.string.chimes_quiet_text,
+                                    TimeText.time(context, chimes.quietFrom.hour, chimes.quietFrom.minute),
+                                    TimeText.time(context, chimes.quietTo.hour, chimes.quietTo.minute),
+                                ),
+                            )
+                        },
+                        trailingContent = { Switch(checked = chimes.quiet, onCheckedChange = null) },
+                        modifier = Modifier.toggleable(value = chimes.quiet, role = Role.Switch) { on -> updateChimes { it.copy(quiet = on) } },
+                    )
+                    if (chimes.quiet) {
+                        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { dialog = "chimeFrom" }) {
+                                Text(stringResource(R.string.rules_window_from, TimeText.time(context, chimes.quietFrom.hour, chimes.quietFrom.minute)))
+                            }
+                            OutlinedButton(onClick = { dialog = "chimeTo" }) {
+                                Text(stringResource(R.string.rules_window_to, TimeText.time(context, chimes.quietTo.hour, chimes.quietTo.minute)))
+                            }
+                        }
+                    }
+                    Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        DayChips(chimes.days) { day -> updateChimes { it.copy(days = if (day in it.days) it.days - day else it.days + day) } }
+                    }
+                }
+            },
+            SettingsSection(R.string.settings_calendar) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.calendar_exceptions)) },
+                    supportingContent = {
+                        Text(calendarNames(calendarSettings.exceptionCalendars, phoneCalendars, stringResource(R.string.calendar_exceptions_none)))
+                    },
+                    modifier = Modifier.clickable { calendarAccess.request { dialog = "calendarExceptions" } },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.calendar_events)) },
+                    supportingContent = {
+                        Text(calendarNames(calendarSettings.eventCalendars, phoneCalendars, stringResource(R.string.calendar_events_none)))
+                    },
+                    modifier = Modifier.clickable { calendarAccess.request { dialog = "calendarEvents" } },
+                )
+                if (calendarSettings.eventCalendars.isNotEmpty()) {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.calendar_early)) },
+                        supportingContent = { Text(earlyLeadText(calendarSettings.earlyLeadMinutes)) },
+                        modifier = Modifier.clickable { dialog = "calendarLead" },
+                    )
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.calendar_show_next)) },
+                        supportingContent = { Text(stringResource(R.string.calendar_show_next_text)) },
+                        trailingContent = { Switch(checked = calendarSettings.showNext, onCheckedChange = null) },
+                        modifier = Modifier.toggleable(value = calendarSettings.showNext, role = Role.Switch) { on ->
+                            updateCalendar { it.copy(showNext = on) }
+                        },
+                    )
+                }
+                // Доступ отняли в настройках Android — исключения и события не читаются.
+                if (calendarSettings.isEnabled && !calendarAccess.granted) {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.calendar_no_access)) },
+                        supportingContent = { Text(stringResource(R.string.calendar_no_access_text)) },
+                        trailingContent = { TextButton(onClick = { context.openAppSettings() }) { Text(stringResource(R.string.fix)) } },
+                    )
+                }
             },
             SettingsSection(R.string.settings_signal) {
                 ListItem(
@@ -229,6 +371,24 @@ fun SettingsScreen(onBack: () -> Unit) {
                     headlineContent = { Text(stringResource(R.string.clock_background)) },
                     supportingContent = { Text(stringResource(backgroundTitle(settings.appearance.background))) },
                     modifier = Modifier.clickable { dialog = "background" },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.night_background)) },
+                    supportingContent = { Text(stringResource(backgroundTitle(settings.appearance.nightBackground))) },
+                    modifier = Modifier.clickable { dialog = "nightBackground" },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.app_background)) },
+                    supportingContent = { Text(stringResource(backgroundTitle(settings.appearance.appBackground))) },
+                    modifier = Modifier.clickable { dialog = "appBackground" },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.wallpaper)) },
+                    supportingContent = { Text(stringResource(backgroundTitle(settings.appearance.wallpaper))) },
+                    trailingContent = {
+                        TextButton(onClick = { context.setLiveWallpaper() }) { Text(stringResource(R.string.wallpaper_set)) }
+                    },
+                    modifier = Modifier.clickable { dialog = "wallpaper" },
                 )
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.night_noise)) },
@@ -388,6 +548,65 @@ fun SettingsScreen(onBack: () -> Unit) {
             },
         )
         "journal" -> JournalDialog(onDismiss = { dialog = null })
+        "defaultWarnings" -> WarningsDialog(
+            title = stringResource(R.string.warnings_default),
+            initial = settings.defaultWarnings,
+            onDismiss = { dialog = null },
+            onDone = { list ->
+                dialog = null
+                update { it.copy(defaultWarnings = list) }
+            },
+        )
+        "chimeEvery" -> ChoiceDialog(
+            title = stringResource(R.string.chimes),
+            choices = ChimeEvery.entries,
+            selected = settings.chimes.every,
+            label = { stringResource(chimeEveryTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(chimes = it.chimes.copy(every = value)) } },
+        )
+        "chimeFrom", "chimeTo" -> {
+            val from = dialog == "chimeFrom"
+            val time = if (from) settings.chimes.quietFrom else settings.chimes.quietTo
+            TimePickerDialog(
+                initialHour = time.hour,
+                initialMinute = time.minute,
+                onDismiss = { dialog = null },
+                onConfirm = { h, m ->
+                    dialog = null
+                    val picked = LocalTime.of(h, m)
+                    update { it.copy(chimes = if (from) it.chimes.copy(quietFrom = picked) else it.chimes.copy(quietTo = picked)) }
+                },
+            )
+        }
+        "calendarExceptions" -> CalendarChooserDialog(
+            title = stringResource(R.string.calendar_exceptions),
+            calendars = phoneCalendars,
+            selected = calendarSettings.exceptionCalendars,
+            onDismiss = { dialog = null },
+            onSave = { ids ->
+                dialog = null
+                updateCalendar { it.copy(exceptionCalendars = ids) }
+            },
+        )
+        "calendarEvents" -> CalendarChooserDialog(
+            title = stringResource(R.string.calendar_events),
+            calendars = phoneCalendars,
+            selected = calendarSettings.eventCalendars,
+            onDismiss = { dialog = null },
+            onSave = { ids ->
+                dialog = null
+                updateCalendar { it.copy(eventCalendars = ids) }
+            },
+        )
+        "calendarLead" -> ChoiceDialog(
+            title = stringResource(R.string.calendar_early),
+            choices = CalendarSettings.LEAD_CHOICES,
+            selected = calendarSettings.earlyLeadMinutes,
+            label = { earlyLeadText(it) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> updateCalendar { it.copy(earlyLeadMinutes = value) } },
+        )
         "theme" -> ChoiceDialog(
             title = stringResource(R.string.appearance_theme),
             choices = ThemeMode.entries,
@@ -443,6 +662,30 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
             },
         )
+        "nightBackground" -> ChoiceDialog(
+            title = stringResource(R.string.night_background),
+            choices = listOf(ClockBackground.NONE) + Scenes.WALLPAPERS,
+            selected = settings.appearance.nightBackground,
+            label = { stringResource(backgroundTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(nightBackground = value)) } },
+        )
+        "appBackground" -> ChoiceDialog(
+            title = stringResource(R.string.app_background),
+            choices = listOf(ClockBackground.NONE) + Scenes.WALLPAPERS,
+            selected = settings.appearance.appBackground,
+            label = { stringResource(backgroundTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(appBackground = value)) } },
+        )
+        "wallpaper" -> ChoiceDialog(
+            title = stringResource(R.string.wallpaper),
+            choices = Scenes.WALLPAPERS,
+            selected = settings.appearance.wallpaper,
+            label = { stringResource(backgroundTitle(it)) },
+            onDismiss = { dialog = null },
+            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(wallpaper = value)) } },
+        )
         "noise" -> ChoiceDialog(
             title = stringResource(R.string.night_noise),
             choices = NoiseKind.entries,
@@ -489,6 +732,19 @@ private fun PermissionRow(issue: Issue, granted: Boolean) {
         },
     )
 }
+
+/** «За 1 ч 30 мин до событий до 12:00» или «Выключено». */
+@Composable
+private fun earlyLeadText(minutes: Int): String =
+    if (minutes == 0) {
+        stringResource(R.string.calendar_early_off)
+    } else {
+        stringResource(
+            R.string.calendar_early_value,
+            durationText(LocalResources.current, minutes * 60_000L),
+            TimeText.time(LocalContext.current, CalendarSettings.EARLY_BEFORE.hour, CalendarSettings.EARLY_BEFORE.minute),
+        )
+    }
 
 @Composable
 private fun autoStopText(minutes: Int?): String =
@@ -558,4 +814,24 @@ fun <T> ChoiceDialog(
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
+}
+
+/**
+ * Поставить живые обои DP Clock (D-024, п. 2): системное окно сразу с ними;
+ * у оболочек без него — общий выбор живых обоев.
+ */
+private fun Context.setLiveWallpaper() {
+    val component = ComponentName(this, ClockWallpaper::class.java)
+    runCatching {
+        startActivity(Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, component))
+    }.recoverCatching {
+        startActivity(Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER))
+    }
+}
+
+private fun chimeEveryTitle(every: ChimeEvery): Int = when (every) {
+    ChimeEvery.OFF -> R.string.chimes_off
+    ChimeEvery.HOUR -> R.string.chimes_hour
+    ChimeEvery.HALF_HOUR -> R.string.chimes_half_hour
+    ChimeEvery.QUARTER -> R.string.chimes_quarter
 }

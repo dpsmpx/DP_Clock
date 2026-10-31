@@ -18,6 +18,7 @@ import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
 import com.dpsmpx.dpclock.model.TimerRun
 import com.dpsmpx.dpclock.model.TimerState
+import com.dpsmpx.dpclock.ui.leadText
 
 /** Уведомления (SCREEN_MAP.md, п. 11). */
 class Notifier(private val context: Context) {
@@ -34,6 +35,9 @@ class Notifier(private val context: Context) {
                 NotificationChannel(CHANNEL_MISSED, text(R.string.channel_missed), NotificationManager.IMPORTANCE_DEFAULT),
                 NotificationChannel(CHANNEL_ONGOING, text(R.string.channel_ongoing), NotificationManager.IMPORTANCE_LOW),
                 NotificationChannel(CHANNEL_SLEEP, text(R.string.channel_sleep), NotificationManager.IMPORTANCE_DEFAULT),
+                // Предупреждения до сигнала (D-025, п. 5): звук у канала, поэтому каналов два.
+                NotificationChannel(CHANNEL_WARNING, text(R.string.channel_warning), NotificationManager.IMPORTANCE_LOW),
+                NotificationChannel(CHANNEL_WARNING_SOUND, text(R.string.channel_warning_sound), NotificationManager.IMPORTANCE_DEFAULT),
             ),
         )
     }
@@ -92,7 +96,11 @@ class Notifier(private val context: Context) {
                 .setContentTitle(timerTitle(item.name))
                 .setContentText(text(if (item.finished) R.string.ring_timer_finished else R.string.ring_step_finished))
                 .addAction(action(text(R.string.stop), ringAction(RingService.ACTION_TIMER_STOP, item.runId)))
-                .addAction(action(text(R.string.add_minute), ringAction(RingService.ACTION_TIMER_ADD_MINUTE, item.runId)))
+                .addAction(
+                    // Таймер ждёт «Дальше» (D-025, п. 1): одна кнопка глушит сигнал и начинает следующий шаг.
+                    if (item.waiting) action(text(R.string.timer_next), ringAction(RingService.ACTION_TIMER_NEXT, item.runId))
+                    else action(text(R.string.add_minute), ringAction(RingService.ACTION_TIMER_ADD_MINUTE, item.runId)),
+                )
         }
         return builder.build()
     }
@@ -137,6 +145,34 @@ class Notifier(private val context: Context) {
     )
 
     fun cancelSnoozed(alarmId: String) = manager.cancel("snoozed:$alarmId", ID_ALARM)
+
+    /**
+     * Предупреждение до сигнала (D-025, п. 5): полная дата и время, обратный отсчёт;
+     * «Пропустить этот раз», а за два часа и меньше — «Выключить сейчас» (если пробуждение
+     * не нужно подтверждать). Исчезает само к сроку будильника.
+     */
+    fun warning(alarm: Alarm, alarmAt: Long, minutes: Int, sound: Boolean) {
+        val now = System.currentTimeMillis()
+        val builder = Notification.Builder(context, if (sound) CHANNEL_WARNING_SOUND else CHANNEL_WARNING)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setCategory(Notification.CATEGORY_REMINDER)
+            .setContentTitle(context.getString(R.string.warning_title, alarmTitle(alarm.label), leadText(context, minutes)))
+            .setContentText(TimeText.fullDateTime(context, alarmAt))
+            .setContentIntent(openApp(Section.ALARMS))
+            .setWhen(alarmAt)
+            .setShowWhen(true)
+            .setUsesChronometer(true)
+            .setChronometerCountDown(true)
+            .setTimeoutAfter((alarmAt - now).coerceAtLeast(1_000L))
+            .addAction(action(text(R.string.warning_skip), broadcast(ActionReceiver.ACTION_WARNING_SKIP, alarm.id)))
+        if (alarmAt - now <= DISMISS_NOW_MILLIS && !alarm.wakeCheck.required) {
+            builder.addAction(action(text(R.string.warning_dismiss), broadcast(ActionReceiver.ACTION_WARNING_DISMISS, alarm.id)))
+        }
+        show(ID_WARNING, builder.build(), tag = "warning:${alarm.id}")
+    }
+
+    fun cancelWarning(alarmId: String) = manager.cancel("warning:$alarmId", ID_WARNING)
+
 
     fun missedAlarm(alarm: Alarm, scheduledAt: Long, autoStopped: Boolean) = show(
         ID_ALARM,
@@ -232,18 +268,20 @@ class Notifier(private val context: Context) {
             .setShowWhen(running)
             .setUsesChronometer(running)
             .setChronometerCountDown(true)
-        if (run.program.isChain) {
-            builder.setSubText(
-                context.getString(R.string.step_of, run.stepIndex + 1, run.program.steps.size) +
-                    if (run.program.cycles > 1) " · " + context.getString(R.string.cycle_of, run.cycleIndex + 1, run.program.cycles) else "",
-            )
+        if (run.program.isChain) builder.setSubText(stepText(run))
+        when {
+            running -> builder.addAction(action(text(R.string.pause), broadcast(ActionReceiver.ACTION_TIMER_PAUSE, run.id)))
+            // Ждёт «Дальше» (D-025, п. 1): что будет следующим и сколько.
+            run.isWaiting -> {
+                builder.setContentText(context.getString(R.string.timer_waiting, run.step.name.ifBlank { stepText(run) }, TimeText.countdown(remaining)))
+                builder.addAction(action(text(R.string.timer_next), broadcast(ActionReceiver.ACTION_TIMER_NEXT, run.id)))
+            }
+            else -> {
+                builder.setContentText(text(R.string.paused) + " · " + TimeText.countdown(remaining))
+                builder.addAction(action(text(R.string.resume), broadcast(ActionReceiver.ACTION_TIMER_RESUME, run.id)))
+            }
         }
-        if (running) {
-            builder.addAction(action(text(R.string.pause), broadcast(ActionReceiver.ACTION_TIMER_PAUSE, run.id)))
-        } else {
-            builder.setContentText(text(R.string.paused) + " · " + TimeText.countdown(remaining))
-            builder.addAction(action(text(R.string.resume), broadcast(ActionReceiver.ACTION_TIMER_RESUME, run.id)))
-        }
+        if (running && run.step.name.isNotBlank()) builder.setContentText(run.step.name)
         builder.addAction(action(text(R.string.stop), broadcast(ActionReceiver.ACTION_TIMER_DELETE, run.id)))
         show(ID_TIMER, builder.build(), tag = "timer:${run.id}")
     }
@@ -295,6 +333,17 @@ class Notifier(private val context: Context) {
 
     private fun timerTitle(name: String): String = name.ifBlank { text(R.string.timer_default_name) }
 
+    /** «Шаг 2 из 8 · круг 1 из 3»; у бесконечного — «круг 5». */
+    private fun stepText(run: TimerRun): String {
+        val step = context.getString(R.string.step_of, run.stepIndex + 1, run.program.steps.size)
+        val cycle = when {
+            run.program.forever -> " · " + context.getString(R.string.cycle_number, run.cycleIndex + 1)
+            run.program.cycles > 1 -> " · " + context.getString(R.string.cycle_of, run.cycleIndex + 1, run.program.cycles)
+            else -> ""
+        }
+        return if (run.program.steps.size > 1) step + cycle else cycle.removePrefix(" · ")
+    }
+
     private fun alarmTitle(label: String): String = label.ifBlank { text(R.string.ring_alarm_title) }
 
     private fun text(id: Int): String = context.getString(id)
@@ -329,6 +378,12 @@ class Notifier(private val context: Context) {
         private const val ID_TIMER = 3
         private const val ID_STOPWATCH = 4
         private const val ID_SLEEP = 5
+        private const val ID_WARNING = 6
+        private const val CHANNEL_WARNING = "warning"
+        private const val CHANNEL_WARNING_SOUND = "warning-sound"
+
+        /** «Выключить сейчас» — только когда до будильника не больше двух часов. */
+        private const val DISMISS_NOW_MILLIS = 2 * 3_600_000L
         private const val CHANNEL_SLEEP = "sleep"
         private const val CHANNEL_RING = "ring"
         private const val CHANNEL_MISSED = "missed"

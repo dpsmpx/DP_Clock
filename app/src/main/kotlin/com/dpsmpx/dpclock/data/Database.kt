@@ -63,6 +63,14 @@ data class AlarmEntity(
     val afterReminder: String,
     val afterReminderMinutes: Int,
     val afterApp: String,
+    /** Перед ранним событием календаря (D-023, п. 3): начало события, мс UTC; null — обычный. */
+    val calendarEventAt: Long? = null,
+    /** Сложный повтор (D-025, п. 3): RulesCode.encode(); null — повтор в других столбцах. */
+    val repeatRules: String? = null,
+    /** Пропускаемое срабатывание сложного повтора — минута суток в дату skipDate; null — вся дата. */
+    val skipTime: Int? = null,
+    /** Предупреждения до сигнала, минуты через запятую (D-025, п. 5). */
+    val warnings: String = "",
 )
 
 /** Группа будильников (D-014, п. 5). */
@@ -158,6 +166,8 @@ data class SettingsEntity(
     /** null — «никогда». */
     val autoStopMinutes: Int?,
     val alarmOrder: String,
+    /** Показывать обратный отсчёт у включённых будильников. */
+    val showAlarmCountdown: Boolean = false,
     val xiaomiHintsDone: Boolean,
     /** SignalStyle. */
     val signalStyle: String,
@@ -188,6 +198,19 @@ data class SettingsEntity(
     val background: String = "NONE",
     /** «Высокий контраст» (D-022, п. 5). */
     val highContrast: Boolean = false,
+    /** Фон ночных часов, фон приложения и обои Android (D-024): ClockBackground. */
+    val nightBackground: String = "NONE",
+    val appBackground: String = "NONE",
+    val wallpaper: String = "CONSTELLATION",
+    /** Полная дата срабатывания в строках будильников (D-025, п. 2). */
+    val showAlarmDate: Boolean = false,
+    /** Предупреждения новых будильников, минуты через запятую; со звуком или тихо (D-025, п. 5). */
+    val defaultWarnings: String = "",
+    val warningSound: Boolean = false,
+    /** Куранты: Chimes.encode(); пусто — выключены (D-025, п. 4). */
+    val chimes: String = "",
+    /** Помидор: Pomodoro.encode(); пусто — классика (D-025, п. 1). */
+    val pomodoro: String = "",
 )
 
 /** Город мировых часов (D-019): пояс tz и место в списке. */
@@ -198,7 +221,7 @@ data class WorldCityEntity(
     val createdAt: Long,
 )
 
-/** Журнал срабатываний (DATA_MODEL.md, п. 7), последние [ClockDao.LOG_LIMIT] событий. */
+/** Журнал срабатываний (DATA_MODEL.md, п. 7). С 0.12.1 хранится весь: основа статистики (D-023, п. 7). */
 @Entity(tableName = "signal_event")
 data class SignalEventEntity(
     @PrimaryKey val id: String,
@@ -211,6 +234,22 @@ data class SignalEventEntity(
     val outcome: String,
     /** Название будильника или таймера на момент записи (0.7.1). */
     val title: String = "",
+    /** Когда сигнал кончился — выключен, отложен, стих (0.12.1); у прежних записей — null. */
+    val endedAt: Long? = null,
+)
+
+/** Действия для статистики (D-023, п. 7): ночные часы, таймер засыпания, «пора спать», таймеры, секундомер. */
+@Entity(tableName = "activity_event")
+data class ActivityEventEntity(
+    @PrimaryKey val id: String,
+    /** ActivityKind. */
+    val kind: String,
+    val startedAt: Long,
+    val endedAt: Long,
+    val title: String,
+    val refId: String?,
+    val amountMillis: Long,
+    val count: Int,
 )
 
 @Dao
@@ -347,11 +386,18 @@ interface ClockDao {
     @Query("SELECT * FROM signal_event ORDER BY firedAt DESC")
     fun events(): Flow<List<SignalEventEntity>>
 
-    @Query(
-        "DELETE FROM signal_event WHERE id NOT IN " +
-            "(SELECT id FROM signal_event ORDER BY firedAt DESC LIMIT $LOG_LIMIT)",
-    )
-    suspend fun trimEvents()
+    @Upsert
+    suspend fun insertActivity(activity: ActivityEventEntity)
+
+    @Query("SELECT * FROM activity_event ORDER BY startedAt DESC")
+    fun activities(): Flow<List<ActivityEventEntity>>
+
+    /** «Очистить историю» в статистике: журнал и действия. */
+    @Query("DELETE FROM signal_event")
+    suspend fun clearEvents()
+
+    @Query("DELETE FROM activity_event")
+    suspend fun clearActivities()
 
     /** Идущие таймеры, секундомер и срабатывания — состояние этого устройства, не для переноса. */
     @Query("DELETE FROM timer_run")
@@ -390,10 +436,6 @@ interface ClockDao {
 
     @Query("DELETE FROM timer_preset")
     suspend fun clearPresets()
-
-    companion object {
-        const val LOG_LIMIT = 1000
-    }
 }
 
 @Database(
@@ -409,6 +451,7 @@ interface ClockDao {
         TemplateEntity::class,
         ExceptionEntity::class,
         WorldCityEntity::class,
+        ActivityEventEntity::class,
     ],
     version = ClockDatabase.VERSION,
     exportSchema = true,
@@ -420,10 +463,10 @@ abstract class ClockDatabase : RoomDatabase() {
         const val NAME = "dpclock.db"
 
         /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
-        const val VERSION = 9
+        const val VERSION = 14
 
         /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
-        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки

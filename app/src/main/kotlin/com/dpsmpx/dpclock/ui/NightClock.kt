@@ -1,5 +1,6 @@
 package com.dpsmpx.dpclock.ui
 
+import android.app.KeyguardManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,11 +22,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
 import com.dpsmpx.dpclock.model.AlarmRules
+import com.dpsmpx.dpclock.model.ClockBackground
 import com.dpsmpx.dpclock.model.Exceptions
 import com.dpsmpx.dpclock.model.NoiseKind
 import com.dpsmpx.dpclock.model.Settings
@@ -39,9 +42,10 @@ private const val NIGHT_FACE_FRACTION = 0.62f
 
 /**
  * Ночные часы (D-007, п. 5; D-017, п. 4): время в выбранном стиле (D-021, п. 4)
- * и ближайший будильник тёмно-красным на чёрном. Раз в минуту всё сдвигается на
- * несколько точек — экран OLED не выгорает. [controls] — экран ярче: внизу выбор
- * шума (D-021, п. 5); у заставки его нет.
+ * и ближайший будильник тёмно-красным на чёрном, под ним — ближайшее событие
+ * календаря (D-023, п. 4). Раз в минуту всё сдвигается на несколько точек —
+ * экран OLED не выгорает. [controls] — экран ярче: внизу выбор шума (D-021, п. 5);
+ * у заставки его нет.
  */
 @Composable
 fun NightClock(modifier: Modifier = Modifier, controls: Boolean = false) {
@@ -54,6 +58,10 @@ fun NightClock(modifier: Modifier = Modifier, controls: Boolean = false) {
     val nearest = AlarmRules.nearest(alarms, Instant.ofEpochMilli(now), ZoneId.systemDefault(), exceptions)
     val minute = now / 60_000L
     BoxWithConstraints(modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+        // Фон — эффект-обои тёмно-красным и тусклым (D-024, п. 1); палец — у ночных часов свой.
+        if (settings.appearance.nightBackground != ClockBackground.NONE) {
+            SceneBackdrop(settings.appearance.nightBackground, animate = true, palette = rememberScenePalette(SceneLook.NIGHT), interactive = false)
+        }
         val side = clockSide(maxWidth, maxHeight, NIGHT_FACE_FRACTION)
         Column(
             Modifier.offset(x = (minute * 37 % 41 - 20).toInt().dp, y = (minute * 53 % 61 - 30).toInt().dp),
@@ -66,6 +74,19 @@ fun NightClock(modifier: Modifier = Modifier, controls: Boolean = false) {
                     color = NightFace.dim,
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+            // Ближайшее событие (D-023, п. 4). Ночные часы видны и на заблокированном экране — там без названия.
+            val event = rememberNextEvent()
+            if (event != null) {
+                val locked = context.getSystemService(KeyguardManager::class.java)?.isKeyguardLocked != false
+                Text(
+                    eventText(context, event, withTitle = !locked),
+                    color = NightFace.dim,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp, start = 24.dp, end = 24.dp),
                 )
             }
         }

@@ -88,6 +88,16 @@ object Synth {
         return ShortArray(frames) { (mix[it] * scale).roundToInt().toShort() }
     }
 
+    /**
+     * Бой курантов (D-025, п. 4): [count] ударов низкого колокола через [step] с и
+     * затухание [tail] с после последнего. Не круг — звучит один раз.
+     */
+    fun strikes(count: Int, step: Double, tail: Double): ShortArray {
+        val notes = (0 until count).map { Note(it * step, 523.3, step + tail, Timbre.BELL) }
+        // Круг длиннее всех нот: хвостам переноситься некуда.
+        return render(Builtin("strikes", (count - 1) * step + step + tail + 0.05, notes))
+    }
+
     private fun envelope(note: Note, t: Double): Double {
         val attack = min(1.0, t / note.timbre.attack)
         // Короткий спад в конце ноты убирает щелчок.

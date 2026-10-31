@@ -180,7 +180,7 @@ class RingActivity : ComponentActivity() {
             when (volumeButtons) {
                 VolumeButtons.SNOOZE -> when (item) {
                     is RingItem.AlarmRing -> if (item.wakeCheck.snoozeAllowed) onAction(RingService.ACTION_SNOOZE, item)
-                    is RingItem.TimerRing -> onAction(RingService.ACTION_TIMER_ADD_MINUTE, item)
+                    is RingItem.TimerRing -> onAction(if (item.waiting) RingService.ACTION_TIMER_NEXT else RingService.ACTION_TIMER_ADD_MINUTE, item)
                     is RingItem.RecheckRing, is RingItem.GentleRing -> Unit
                 }
                 VolumeButtons.DISMISS -> when (item) {
@@ -257,10 +257,17 @@ private fun RingContent(item: RingItem, onAction: (String, RingItem) -> Unit) {
             }
             is RingItem.TimerRing -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.height(IntrinsicSize.Min)) {
+                    // Таймер ждёт «Дальше» (D-025, п. 1): вместо «+1 мин» — следующий шаг.
                     FilledTonalButton(
-                        onClick = { onAction(RingService.ACTION_TIMER_ADD_MINUTE, item) },
+                        onClick = { onAction(if (item.waiting) RingService.ACTION_TIMER_NEXT else RingService.ACTION_TIMER_ADD_MINUTE, item) },
                         modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = 88.dp),
-                    ) { Text(stringResource(R.string.add_minute), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center) }
+                    ) {
+                        Text(
+                            stringResource(if (item.waiting) R.string.timer_next else R.string.add_minute),
+                            style = MaterialTheme.typography.titleLarge,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                     Button(
                         onClick = { onAction(RingService.ACTION_TIMER_STOP, item) },
                         modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = 88.dp),

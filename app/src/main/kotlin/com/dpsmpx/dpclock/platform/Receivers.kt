@@ -5,10 +5,15 @@ import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
 import com.dpsmpx.dpclock.DpClockApp
+import com.dpsmpx.dpclock.model.ActivityKind
+import com.dpsmpx.dpclock.model.ChimeRules
 import com.dpsmpx.dpclock.model.SignalOutcome
 import com.dpsmpx.dpclock.model.StepSignal
 import com.dpsmpx.dpclock.model.TimerState
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.ZoneId
+import kotlin.math.abs
 
 /** Будильник Android пришёл: конец будильника, «Отложить» или шага таймера. */
 class AlarmReceiver : BroadcastReceiver() {
@@ -20,12 +25,42 @@ class AlarmReceiver : BroadcastReceiver() {
                 runAsync {
                     val graph = DpClockApp.graph(context)
                     graph.notifier.bedtime(bedAt, alarmAt, graph.repository.currentSettings().bedtime.sleepMinutes)
+                    // «Пора спать» — самое раннее «лёг» для статистики сна (D-023, п. 7).
+                    if (bedAt > 0) graph.repository.recordActivity(ActivityKind.BEDTIME, bedAt, bedAt)
                     graph.repository.syncBedtime()
                 }
                 return
             }
             ACTION_REMINDER -> {
                 DpClockApp.graph(context).notifier.reminder(intent.getStringExtra(EXTRA_ID).orEmpty(), intent.getStringExtra(EXTRA_TEXT).orEmpty())
+                return
+            }
+            ACTION_CALENDAR -> {
+                runAsync { CalendarSync.run(context) }
+                return
+            }
+            ACTION_CHIME -> {
+                val at = intent.getLongExtra(EXTRA_SCHEDULED_AT, 0L)
+                runAsync {
+                    val repository = DpClockApp.graph(context).repository
+                    val chimes = repository.currentSettings().chimes
+                    // Телефон спал дольше — старый бой не нужен, только следующий.
+                    if (chimes.enabled && abs(System.currentTimeMillis() - at) <= CHIME_LATE_MILLIS) {
+                        val time = Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()).toLocalTime()
+                        Sounds.chime(context, ChimeRules.strikes(chimes, time), chimes.vibrate)
+                    }
+                    repository.onChimeFired()
+                }
+                return
+            }
+            ACTION_WARNING -> {
+                val id = intent.getStringExtra(EXTRA_ID) ?: return
+                val alarmAt = intent.getLongExtra(EXTRA_ALARM_AT, 0L)
+                runAsync {
+                    val graph = DpClockApp.graph(context)
+                    val fire = graph.repository.onWarningFired(id, alarmAt) ?: return@runAsync
+                    graph.notifier.warning(fire.alarm, fire.alarmAt, fire.minutes, graph.repository.currentSettings().warningSound)
+                }
                 return
             }
         }
@@ -44,7 +79,9 @@ class AlarmReceiver : BroadcastReceiver() {
                         when (fire?.signal) {
                             StepSignal.SHORT -> Sounds.shortSignal(context, fire.sound)
                             // Шаг стал последним после «+1 мин» на паузе — сигнал полный.
-                            StepSignal.FULL -> RingService.ringTimer(context, id, fire.run.name, fire.run.state == TimerState.RINGING, fire.sound, fire.endedAt)
+                            StepSignal.FULL -> RingService.ringTimer(
+                                context, id, fire.run.name, fire.run.state == TimerState.RINGING, fire.sound, fire.endedAt, fire.run.isWaiting,
+                            )
                             StepSignal.SLEEP -> MediaStop.fadeAndPause(context)
                             StepSignal.NONE, null -> Unit
                         }
@@ -59,6 +96,12 @@ class AlarmReceiver : BroadcastReceiver() {
         const val ACTION_GENTLE = "com.dpsmpx.dpclock.action.GENTLE"
         const val ACTION_BEDTIME = "com.dpsmpx.dpclock.action.BEDTIME"
         const val ACTION_REMINDER = "com.dpsmpx.dpclock.action.REMINDER"
+        const val ACTION_CALENDAR = "com.dpsmpx.dpclock.action.CALENDAR"
+        const val ACTION_WARNING = "com.dpsmpx.dpclock.action.WARNING"
+        const val ACTION_CHIME = "com.dpsmpx.dpclock.action.CHIME"
+
+        /** Бой опоздал больше этого (телефон был выключен) — не звонить. */
+        private const val CHIME_LATE_MILLIS = 2 * 60_000L
         const val EXTRA_ALARM_AT = "alarmAt"
         const val EXTRA_BED_AT = "bedAt"
         const val EXTRA_TEXT = "text"
@@ -71,18 +114,24 @@ class AlarmReceiver : BroadcastReceiver() {
 /**
  * События системы, после которых расписания пересчитываются (D-008, п. 5):
  * загрузка (и до разблокировки), смена времени и пояса, обновление
- * приложения, выдача разрешения на точные будильники.
+ * приложения, выдача разрешения на точные будильники. После разблокировки —
+ * и календарь телефона (D-023, п. 6): до неё он недоступен, будильники идут по
+ * сохранённым датам.
  */
 class SystemEventsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             Intent.ACTION_LOCKED_BOOT_COMPLETED,
+            android.app.AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED,
+            -> runAsync { DpClockApp.graph(context).repository.rescheduleAll() }
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_TIME_CHANGED,
             Intent.ACTION_TIMEZONE_CHANGED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
-            android.app.AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED,
-            -> runAsync { DpClockApp.graph(context).repository.rescheduleAll() }
+            -> runAsync {
+                DpClockApp.graph(context).repository.rescheduleAll()
+                CalendarSync.refresh(context)
+            }
         }
     }
 }
@@ -95,6 +144,10 @@ class ActionReceiver : BroadcastReceiver() {
         runAsync {
             when (intent.action) {
                 ACTION_DISMISS_SNOOZED -> repository.stopAlarm(id, SignalOutcome.DISMISSED)
+                // Предупреждение до сигнала (D-025, п. 5).
+                ACTION_WARNING_SKIP -> repository.skipOccurrence(id)
+                ACTION_WARNING_DISMISS -> repository.dismissEarly(id)
+                ACTION_TIMER_NEXT -> repository.resumeTimer(id)
                 ACTION_TIMER_PAUSE -> repository.pauseTimer(id)
                 ACTION_TIMER_RESUME -> repository.resumeTimer(id)
                 ACTION_TIMER_DELETE -> repository.deleteTimer(id)
@@ -111,6 +164,11 @@ class ActionReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_DISMISS_SNOOZED = "com.dpsmpx.dpclock.action.DISMISS_SNOOZED"
+        const val ACTION_WARNING_SKIP = "com.dpsmpx.dpclock.action.WARNING_SKIP"
+        const val ACTION_WARNING_DISMISS = "com.dpsmpx.dpclock.action.WARNING_DISMISS"
+
+        /** Таймер ждёт «Дальше» — следующий шаг пошёл (D-025, п. 1). */
+        const val ACTION_TIMER_NEXT = "com.dpsmpx.dpclock.action.TIMER_NEXT"
         const val ACTION_TIMER_PAUSE = "com.dpsmpx.dpclock.action.TIMER_PAUSE"
         const val ACTION_TIMER_RESUME = "com.dpsmpx.dpclock.action.TIMER_RESUME"
         const val ACTION_TIMER_DELETE = "com.dpsmpx.dpclock.action.TIMER_DELETE"

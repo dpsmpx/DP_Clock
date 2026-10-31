@@ -8,6 +8,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -24,6 +26,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
@@ -44,26 +47,33 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.model.AlarmOrder
+import com.dpsmpx.dpclock.model.ClockBackground
 import com.dpsmpx.dpclock.model.Settings
 import com.dpsmpx.dpclock.platform.Appearances
+import com.dpsmpx.dpclock.platform.CalendarSync
 import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.ui.AlarmsDialog
 import com.dpsmpx.dpclock.ui.AlarmsMenu
 import com.dpsmpx.dpclock.ui.AlarmsScreen
 import com.dpsmpx.dpclock.ui.AppIcons
 import com.dpsmpx.dpclock.ui.ExceptionsScreen
+import com.dpsmpx.dpclock.ui.SceneBackdrop
+import com.dpsmpx.dpclock.ui.SceneLook
 import com.dpsmpx.dpclock.ui.SettingsScreen
+import com.dpsmpx.dpclock.ui.StatsScreen
 import com.dpsmpx.dpclock.ui.StopwatchScreen
 import com.dpsmpx.dpclock.ui.TimersScreen
 import com.dpsmpx.dpclock.ui.TitleText
 import com.dpsmpx.dpclock.ui.WorldClockScreen
 import com.dpsmpx.dpclock.ui.orderTitle
 import com.dpsmpx.dpclock.ui.rememberNotificationPermissionRequest
+import com.dpsmpx.dpclock.ui.rememberScenePalette
 import com.dpsmpx.dpclock.ui.rememberWindowLayout
 import kotlinx.coroutines.launch
 
@@ -83,6 +93,9 @@ class MainActivity : ComponentActivity() {
         // При запуске — пересчитать расписания: после принудительной остановки
         // Android 15 отменяет будильники (D-008, п. 6).
         persistLater { DpClockApp.graph(this).repository.rescheduleAll() }
+        // Календарь телефона мог измениться, пока приложение не работало (D-023, п. 6).
+        val appContext = applicationContext
+        persistLater { CalendarSync.refresh(appContext) }
         // Тема из базы — и после восстановления на новом телефоне, где ночной режим приложения ещё не задан (D-021, п. 2).
         if (savedInstanceState == null) {
             val app = applicationContext
@@ -190,6 +203,7 @@ private fun Section.icon(): ImageVector = when (this) {
 private fun AppRoot(request: SectionRequest) {
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var exceptionsOpen by rememberSaveable { mutableStateOf(false) }
+    var statsOpen by rememberSaveable { mutableStateOf(false) }
     var alarmsDialog by rememberSaveable { mutableStateOf<AlarmsDialog?>(null) }
     val pager = rememberPagerState(initialPage = request.section.ordinal) { Section.entries.size }
     val scope = rememberCoroutineScope()
@@ -203,6 +217,7 @@ private fun AppRoot(request: SectionRequest) {
         if (request.serial < 0) return@LaunchedEffect
         settingsOpen = false
         exceptionsOpen = false
+        statsOpen = false
         pager.scrollToPage(request.section.ordinal)
     }
 
@@ -216,87 +231,107 @@ private fun AppRoot(request: SectionRequest) {
         ExceptionsScreen(onBack = { exceptionsOpen = false })
         return
     }
+    if (statsOpen) {
+        BackHandler { statsOpen = false }
+        StatsScreen(onBack = { statsOpen = false })
+        return
+    }
 
     val section = Section.entries[pager.currentPage]
     val layout = rememberWindowLayout()
+    val settings by DpClockApp.graph(LocalContext.current).repository.settings.collectAsStateWithLifecycle(null)
     fun open(item: Section) {
         scope.launch { pager.animateScrollToPage(item.ordinal) }
     }
-    Row(Modifier.fillMaxSize()) {
-        if (layout.rail) {
-            // Разделы — по центру по высоте: телефон боком держат двумя руками, большим пальцем достать проще.
-            NavigationRail(windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start)) {
-                Spacer(Modifier.weight(1f))
-                for (item in Section.entries) {
-                    NavigationRailItem(
-                        selected = pager.currentPage == item.ordinal,
-                        onClick = { open(item) },
-                        icon = { Icon(item.icon(), contentDescription = null) },
-                        label = { Text(stringResource(NAV_LABELS.getValue(item)), maxLines = 1) },
-                    )
-                }
-                Spacer(Modifier.weight(1f))
-            }
+    // Фон приложения за списками (D-024, п. 1): эффект-обои, едва заметно; в «Часах» — их собственный фон.
+    val appBackground = settings?.appearance?.appBackground ?: ClockBackground.NONE
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        if (appBackground != ClockBackground.NONE) {
+            SceneBackdrop(appBackground, animate = section != Section.CLOCK, palette = rememberScenePalette(SceneLook.APP), interactive = false)
         }
-        Scaffold(
-            // Отступ от края уже у боковой панели.
-            modifier = if (layout.rail) Modifier.weight(1f).consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Start)) else Modifier.weight(1f),
-            topBar = {
-                TopAppBar(
-                    title = { TitleText(stringResource(SECTION_TITLES.getValue(section))) },
-                    actions = {
-                        if (section == Section.ALARMS) {
-                            AlarmOrderMenu()
-                            AlarmsMenu(openExceptions = { exceptionsOpen = true }, onDialog = { alarmsDialog = it })
-                        }
-                        IconButton(onClick = { settingsOpen = true }) {
-                            Icon(AppIcons.Settings, contentDescription = stringResource(R.string.settings))
-                        }
-                    },
-                )
-            },
-            bottomBar = {
-                if (!layout.rail) {
-                    NavigationBar {
-                        for (item in Section.entries) {
-                            NavigationBarItem(
-                                selected = pager.currentPage == item.ordinal,
-                                onClick = { open(item) },
-                                icon = { Icon(item.icon(), contentDescription = null) },
-                                label = { Text(stringResource(NAV_LABELS.getValue(item)), maxLines = 1) },
-                            )
+        Row(Modifier.fillMaxSize()) {
+            if (layout.rail) {
+                // Разделы — по центру по высоте: телефон боком держат двумя руками, большим пальцем достать проще.
+                NavigationRail(windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start)) {
+                    Spacer(Modifier.weight(1f))
+                    for (item in Section.entries) {
+                        NavigationRailItem(
+                            selected = pager.currentPage == item.ordinal,
+                            onClick = { open(item) },
+                            icon = { Icon(item.icon(), contentDescription = null) },
+                            label = { Text(stringResource(NAV_LABELS.getValue(item)), maxLines = 1) },
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+            Scaffold(
+                // Отступ от края уже у боковой панели.
+                modifier = if (layout.rail) Modifier.weight(1f).consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Start)) else Modifier.weight(1f),
+                containerColor = if (appBackground != ClockBackground.NONE) Color.Transparent else MaterialTheme.colorScheme.background,
+                // На прозрачном каркасе цвет текста не выводится из фона — задать явно, как у фона темы.
+                contentColor = MaterialTheme.colorScheme.onBackground,
+                topBar = {
+                    TopAppBar(
+                        title = { TitleText(stringResource(SECTION_TITLES.getValue(section))) },
+                        actions = {
+                            if (section == Section.ALARMS) {
+                                // Статистика (D-023, п. 7; выбор автора — кнопка в «Будильниках»).
+                                IconButton(onClick = { statsOpen = true }) {
+                                    Icon(AppIcons.Chart, contentDescription = stringResource(R.string.stats))
+                                }
+                                AlarmOrderMenu()
+                                AlarmsMenu(openExceptions = { exceptionsOpen = true }, onDialog = { alarmsDialog = it })
+                            }
+                            IconButton(onClick = { settingsOpen = true }) {
+                                Icon(AppIcons.Settings, contentDescription = stringResource(R.string.settings))
+                            }
+                        },
+                    )
+                },
+                bottomBar = {
+                    if (!layout.rail) {
+                        NavigationBar {
+                            for (item in Section.entries) {
+                                NavigationBarItem(
+                                    selected = pager.currentPage == item.ordinal,
+                                    onClick = { open(item) },
+                                    icon = { Icon(item.icon(), contentDescription = null) },
+                                    label = { Text(stringResource(NAV_LABELS.getValue(item)), maxLines = 1) },
+                                )
+                            }
                         }
                     }
-                }
-            },
-            snackbarHost = { SnackbarHost(snackbar) },
-        ) { padding ->
-            HorizontalPager(
-                state = pager,
-                modifier = Modifier.padding(padding).consumeWindowInsets(padding),
-                beyondViewportPageCount = 1,
-                // С боковой панелью свайп не листает разделы: в двух колонках он мешал бы редактору.
-                userScrollEnabled = !layout.rail,
-            ) { page ->
-                when (Section.entries[page]) {
-                    Section.ALARMS -> AlarmsScreen(
-                        snackbar,
-                        requestNotifications,
-                        openSettings = { settingsOpen = true },
-                        dialog = alarmsDialog,
-                        onDialog = { alarmsDialog = it },
-                        quick = quick?.takeIf { it.action == QuickAction.NEW_ALARM || it.action == QuickAction.EDIT_ALARM },
-                        onQuickHandled = { handledQuick = it },
-                        visible = pager.currentPage == Section.ALARMS.ordinal,
-                    )
-                    Section.TIMERS -> TimersScreen(
-                        requestNotifications,
-                        quick = quick?.takeIf { it.action == QuickAction.SLEEP_TIMER },
-                        onQuickHandled = { handledQuick = it },
-                    )
-                    Section.STOPWATCH -> StopwatchScreen()
-                    Section.CLOCK -> ClockScreen(visible = pager.currentPage == Section.CLOCK.ordinal)
-                    Section.WORLD -> WorldClockScreen(visible = pager.currentPage == Section.WORLD.ordinal && !pager.isScrollInProgress)
+                },
+                snackbarHost = { SnackbarHost(snackbar) },
+            ) { padding ->
+                HorizontalPager(
+                    state = pager,
+                    modifier = Modifier.padding(padding).consumeWindowInsets(padding),
+                    beyondViewportPageCount = 1,
+                    // С боковой панелью свайп не листает разделы: в двух колонках он мешал бы редактору.
+                    userScrollEnabled = !layout.rail,
+                ) { page ->
+                    when (Section.entries[page]) {
+                        Section.ALARMS -> AlarmsScreen(
+                            snackbar,
+                            requestNotifications,
+                            openSettings = { settingsOpen = true },
+                            dialog = alarmsDialog,
+                            onDialog = { alarmsDialog = it },
+                            quick = quick?.takeIf { it.action == QuickAction.NEW_ALARM || it.action == QuickAction.EDIT_ALARM },
+                            onQuickHandled = { handledQuick = it },
+                            visible = pager.currentPage == Section.ALARMS.ordinal,
+                        )
+                        Section.TIMERS -> TimersScreen(
+                            requestNotifications,
+                            quick = quick?.takeIf { it.action == QuickAction.SLEEP_TIMER },
+                            onQuickHandled = { handledQuick = it },
+                        )
+                        Section.STOPWATCH -> StopwatchScreen()
+                        Section.CLOCK -> ClockScreen(visible = pager.currentPage == Section.CLOCK.ordinal)
+                        Section.WORLD -> WorldClockScreen(visible = pager.currentPage == Section.WORLD.ordinal && !pager.isScrollInProgress)
+                    }
                 }
             }
         }

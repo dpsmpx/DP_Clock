@@ -41,12 +41,13 @@ data class AlarmTemplate(val id: String, val name: String, val alarms: List<Alar
             "ar" to alarm.after.reminder,
             "am" to alarm.after.reminderMinutes.toString(),
             "aa" to alarm.after.app,
+            "wn" to Warnings.encode(alarm.warnings),
         ).joinToString("&") { (k, v) -> k + "=" + URLEncoder.encode(v, "UTF-8") }
     }
 
     companion object {
         fun from(group: AlarmGroup, alarms: List<Alarm>, id: String, now: Long, name: String = group.name) =
-            AlarmTemplate(id, name, alarms.map { it.copy(id = "", enabled = true, createdAt = 0L, skipDate = null, groupId = null) }, now)
+            AlarmTemplate(id, name, alarms.map { it.copy(id = "", enabled = true, createdAt = 0L, skipDate = null, skipTime = null, groupId = null) }, now)
 
         fun decodeAlarms(text: String): List<Alarm> {
             val lines = text.split('\n')
@@ -84,13 +85,14 @@ data class AlarmTemplate(val id: String, val name: String, val alarms: List<Alar
                         reminderMinutes = f["am"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0,
                         app = f["aa"].orEmpty(),
                     ),
+                    warnings = Warnings.decode(f["wn"].orEmpty()),
                 )
             }
         }
     }
 }
 
-/** Повтор строкой: `once`, `w:<биты>`, `d:<день>`, `c:<день>:<дни цикла>`, `wd`. */
+/** Повтор строкой: `once`, `w:<биты>`, `d:<день>`, `c:<день>:<дни цикла>`, `wd`, `x:<правила JSON>` (D-025). */
 object RepeatCode {
     fun encode(repeat: Repeat): String = when (repeat) {
         Repeat.Once -> "once"
@@ -98,9 +100,11 @@ object RepeatCode {
         is Repeat.OnDate -> "d:" + repeat.date.toEpochDay()
         is Repeat.Cycle -> "c:" + repeat.anchor.toEpochDay() + ":" + repeat.encodeDays()
         Repeat.Workdays -> "wd"
+        is Repeat.Rules -> "x:" + RulesCode.encode(repeat)
     }
 
     fun decode(code: String): Repeat {
+        if (code.startsWith("x:")) return RulesCode.decode(code.removePrefix("x:"))
         val parts = code.split(':', limit = 3)
         return when (parts[0]) {
             "w" -> Repeat.fromBits(parts[1].toInt())

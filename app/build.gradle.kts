@@ -17,8 +17,8 @@ android {
         applicationId = "com.dpsmpx.dpclock"
         minSdk = 31
         targetSdk = 37
-        versionCode = 14
-        versionName = "0.11.0"
+        versionCode = 20
+        versionName = "0.14.1"
     }
 
     signingConfigs {
@@ -54,6 +54,8 @@ android {
         // Сверяет версии с сетью: новый выпуск чужой библиотеки ронял бы сборку без
         // изменений в коде. Версии меняются осознанно, в gradle/libs.versions.toml.
         disable += "NewerVersionAvailable"
+        // То же для самого Android Gradle Plugin: выход AGP 9.5.0 ронял Lint на нетронутом коде.
+        disable += "AndroidGradlePluginVersion"
     }
 }
 

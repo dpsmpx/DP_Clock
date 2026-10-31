@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Превью живых обоев (D-024): гиперкуб на тёмном — нарисован для проекта. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <path
+        android:fillColor="#FF0E1220"
+        android:pathData="M0,0h96v96h-96z" />
+    <path
+        android:pathData="M22,22h52v52h-52z M36,36h24v24h-24z M22,22L36,36 M74,22L60,36 M22,74L36,60 M74,74L60,60"
+        android:strokeWidth="2"
+        android:strokeColor="#FF8FB8FF" />
+</vector>

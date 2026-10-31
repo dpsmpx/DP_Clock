@@ -93,7 +93,8 @@ class AssistantActivity : Activity() {
         afterSaving {
             val repository = DpClockApp.graph(app).repository
             val existing = AssistantRules.matching(repository.surfaceData().alarms, wanted)
-            val alarm = existing?.copy(enabled = true) ?: wanted
+            // Новый — с общими предупреждениями до сигнала (D-025, п. 5).
+            val alarm = existing?.copy(enabled = true) ?: wanted.copy(warnings = repository.currentSettings().defaultWarnings)
             val at = repository.saveAlarm(alarm)
             if (skipUi) {
                 val text = app.getString(R.string.assistant_alarm_set, TimeText.time(app, alarm.hour, alarm.minute)) +

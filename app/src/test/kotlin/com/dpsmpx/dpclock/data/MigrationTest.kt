@@ -55,6 +55,28 @@ class MigrationTest {
     }
 
     @Test
+    fun migration11To12KeepsSettingsAndDefaultsCountdownOff() = withDb { db ->
+        SchemaFile.read(11).create(db)
+        db.execSQL(
+            "INSERT INTO settings (id, snoozeMinutes, autoStopMinutes, alarmOrder, xiaomiHintsDone, signalStyle, volumeButtons, " +
+                "holidaysRu, bedtimeMode, sleepMinutes, bedtimeHour, bedtimeMinute, bedtimeDays, bedtimeLeadMinutes, " +
+                "weatherMode, weatherPlace, weatherLat, weatherLon, theme, seedColor, clockStyle, clockFont, clockSize, " +
+                "nightNoise, background, highContrast) VALUES " +
+                "(0, 15, NULL, 'NEXT', 1, 'NOTIFICATION', 'NOTHING', 1, 'SCHEDULE', 450, 22, 30, 3, 30, " +
+                "'CITY', 'Tula', 54.1931, 37.6177, 'DARK', NULL, 'DIGITS', 'BOLD', 90, 'PINK', 'STARS', 1)",
+        )
+
+        MIGRATION_11_12.migrate(db)
+
+        val settings = row(db, "SELECT * FROM settings")
+        assertEquals("15", settings["snoozeMinutes"])
+        assertEquals("NEXT", settings["alarmOrder"])
+        assertEquals("NOTIFICATION", settings["signalStyle"])
+        assertEquals("1", settings["highContrast"])
+        assertEquals("0", settings["showAlarmCountdown"])
+    }
+
+    @Test
     fun migration1To2KeepsAlarmsAndSettings() = withDb { db ->
         SchemaFile.read(1).create(db)
         db.execSQL("INSERT INTO alarm (id, hour, minute, repeatDays, enabled, createdAt) VALUES ('a', 7, 30, 31, 1, 1000)")
@@ -251,6 +273,93 @@ class MigrationTest {
         assertEquals("-12345", settings["seedColor"])
         assertEquals("STARS", settings["background"])
         assertEquals("0", settings["highContrast"])
+    }
+
+    @Test
+    fun migration9To10KeepsAlarmsAsOrdinary() = withDb { db ->
+        SchemaFile.read(9).create(db)
+        db.execSQL(
+            "INSERT INTO alarm (id, hour, minute, repeatDays, enabled, createdAt, label, sound, soundTitle, vibrate, rampSeconds, " +
+                "honorExceptions, workdays, wakeMethod, wakeLevel, wakeTasks, wakeReference, wakeSnooze, recheckMinutes, " +
+                "gentleMinutes, afterReminder, afterReminderMinutes, afterApp) " +
+                "VALUES ('a', 6, 30, 31, 1, 1, 'Подъём', '', '', 1, 0, 1, 0, 'NONE', 'MEDIUM', 1, '', 1, 0, 0, '', 0, '')",
+        )
+        MIGRATION_9_10.migrate(db)
+
+        val alarm = row(db, "SELECT * FROM alarm")
+        assertEquals("Подъём", alarm["label"])
+        assertEquals("31", alarm["repeatDays"])
+        assertEquals(null, alarm["calendarEventAt"])
+    }
+
+    @Test
+    fun migration10To11KeepsTheJournalAndAddsAnEmptyActivityLog() = withDb { db ->
+        SchemaFile.read(10).create(db)
+        db.execSQL(
+            "INSERT INTO signal_event (id, source, sourceId, scheduledAt, firedAt, outcome, title) " +
+                "VALUES ('e', 'ALARM', 'a', 100, 130, 'DISMISSED', 'Подъём')",
+        )
+        MIGRATION_10_11.migrate(db)
+
+        val event = row(db, "SELECT * FROM signal_event")
+        assertEquals("130", event["firedAt"])
+        assertEquals("Подъём", event["title"])
+        assertEquals(null, event["endedAt"])
+        assertEquals(emptyList<Map<String, String?>>(), rows(db, "SELECT * FROM activity_event"))
+    }
+
+    @Test
+    fun migration12To13KeepsAppearanceAndAddsSceneDefaults() = withDb { db ->
+        SchemaFile.read(12).create(db)
+        db.execSQL(
+            "INSERT INTO settings (id, snoozeMinutes, autoStopMinutes, alarmOrder, xiaomiHintsDone, signalStyle, volumeButtons, holidaysRu, " +
+                "bedtimeMode, sleepMinutes, bedtimeHour, bedtimeMinute, bedtimeDays, bedtimeLeadMinutes, weatherMode, weatherPlace, " +
+                "theme, seedColor, clockStyle, clockFont, clockSize, nightNoise, background, highContrast, showAlarmCountdown) " +
+                "VALUES (0, 10, 10, 'TIME_OF_DAY', 0, 'FULL_SCREEN', 'SNOOZE', 0, 'OFF', 480, 23, 0, 127, 15, 'NOT_SET', '', " +
+                "'DARK', NULL, 'CIRCLE', 'REGULAR', 100, 'NONE', 'WAVES', 1, 1)",
+        )
+        MIGRATION_12_13.migrate(db)
+
+        val settings = row(db, "SELECT * FROM settings")
+        assertEquals("WAVES", settings["background"])
+        assertEquals("1", settings["highContrast"])
+        assertEquals("1", settings["showAlarmCountdown"])
+        assertEquals("NONE", settings["nightBackground"])
+        assertEquals("NONE", settings["appBackground"])
+        assertEquals("CONSTELLATION", settings["wallpaper"])
+    }
+
+    @Test
+    fun migration13To14KeepsAlarmsAndAddsEmptyRulesAndWarnings() = withDb { db ->
+        SchemaFile.read(13).create(db)
+        db.execSQL(
+            "INSERT INTO alarm (id, hour, minute, repeatDays, enabled, createdAt, label, sound, soundTitle, vibrate, rampSeconds, " +
+                "snoozeMinutes, skipDate, repeatDate, honorExceptions, groupId, cycleAnchor, cycleDays, workdays, wakeMethod, wakeLevel, " +
+                "wakeTasks, wakeReference, wakeSnooze, recheckMinutes, gentleMinutes, afterPresetId, afterReminder, afterReminderMinutes, " +
+                "afterApp, calendarEventAt) VALUES ('a', 7, 30, 31, 1, 5, 'Подъём', 'default', '', 1, 0, NULL, 20750, NULL, 1, NULL, " +
+                "NULL, NULL, 0, 'NONE', 'MEDIUM', 1, '', 1, 0, 0, NULL, '', 0, '', NULL)",
+        )
+        db.execSQL(
+            "INSERT INTO settings (id, snoozeMinutes, autoStopMinutes, alarmOrder, xiaomiHintsDone, signalStyle, volumeButtons, holidaysRu, " +
+                "bedtimeMode, sleepMinutes, bedtimeHour, bedtimeMinute, bedtimeDays, bedtimeLeadMinutes, weatherMode, weatherPlace, " +
+                "theme, seedColor, clockStyle, clockFont, clockSize, nightNoise, background, highContrast, showAlarmCountdown, " +
+                "nightBackground, appBackground, wallpaper) VALUES (0, 10, 10, 'TIME_OF_DAY', 0, 'FULL_SCREEN', 'SNOOZE', 0, 'OFF', 480, " +
+                "23, 0, 127, 15, 'NOT_SET', '', 'DARK', NULL, 'CIRCLE', 'REGULAR', 100, 'NONE', 'NONE', 0, 1, 'NONE', 'HYPERCUBE', 'MECHANISM')",
+        )
+        MIGRATION_13_14.migrate(db)
+
+        val alarm = row(db, "SELECT * FROM alarm")
+        assertEquals("Подъём", alarm["label"])
+        assertEquals("20750", alarm["skipDate"])
+        assertEquals(null, alarm["repeatRules"])
+        assertEquals(null, alarm["skipTime"])
+        assertEquals("", alarm["warnings"])
+        val settings = row(db, "SELECT * FROM settings")
+        assertEquals("HYPERCUBE", settings["appBackground"])
+        assertEquals("0", settings["showAlarmDate"])
+        assertEquals("", settings["defaultWarnings"])
+        assertEquals("", settings["chimes"])
+        assertEquals("", settings["pomodoro"])
     }
 
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)

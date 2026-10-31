@@ -82,6 +82,9 @@ fun TimersScreen(requestNotifications: () -> Unit, quick: QuickRequest? = null, 
     var editingPreset by remember { mutableStateOf<TimerPreset?>(null) }
     var newPreset by rememberSaveable { mutableStateOf(false) }
     var sleepOpen by rememberSaveable { mutableStateOf(false) }
+    var pomodoroOpen by rememberSaveable { mutableStateOf(false) }
+    var intervalOpen by rememberSaveable { mutableStateOf(false) }
+    val settings by repository.settings.collectAsStateWithLifecycle(null)
     val resources = LocalResources.current
     val now = rememberMoment(200L, active = runs.orEmpty().any { it.state == TimerState.RUNNING })
 
@@ -140,11 +143,16 @@ fun TimersScreen(requestNotifications: () -> Unit, quick: QuickRequest? = null, 
                 }
             }
         }
+        // Особые таймеры: засыпания (D-016), помидор и каждые N секунд (D-025).
         item(key = "sleep") {
-            OutlinedButton(onClick = { sleepOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                Icon(AppIcons.Moon, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.size(8.dp))
-                Text(stringResource(R.string.sleep_timer))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { sleepOpen = true }, modifier = Modifier.weight(1f)) {
+                    Icon(AppIcons.Moon, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.size(8.dp))
+                    Text(stringResource(R.string.sleep_timer))
+                }
+                OutlinedButton(onClick = { pomodoroOpen = true }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.pomodoro)) }
+                OutlinedButton(onClick = { intervalOpen = true }, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.interval_timer)) }
             }
         }
     }
@@ -208,6 +216,33 @@ fun TimersScreen(requestNotifications: () -> Unit, quick: QuickRequest? = null, 
             },
         )
     }
+    val pomodoroInitial = settings?.pomodoro
+    if (pomodoroOpen && pomodoroInitial != null) {
+        PomodoroDialog(
+            initial = pomodoroInitial,
+            onDismiss = { pomodoroOpen = false },
+            onStart = { pomodoro ->
+                pomodoroOpen = false
+                requestNotifications()
+                showInput = false
+                val program = pomodoro.program(
+                    resources.getString(R.string.pomodoro_step_work),
+                    resources.getString(R.string.pomodoro_step_short),
+                    resources.getString(R.string.pomodoro_step_long),
+                )
+                persistLater { repository.startPomodoro(pomodoro, program, resources.getString(R.string.pomodoro)) }
+            },
+        )
+    }
+    if (intervalOpen) {
+        IntervalDialog(
+            onDismiss = { intervalOpen = false },
+            onStart = { program, name ->
+                intervalOpen = false
+                start(program, name, null)
+            },
+        )
+    }
     if (newPreset) {
         PresetEditor(
             initial = null,
@@ -261,9 +296,21 @@ private fun TimerCard(run: TimerRun, remaining: Long) {
                 Text(stringResource(R.string.sleep_timer_note), style = MaterialTheme.typography.bodyMedium)
             }
             if (run.program.isChain) {
-                val step = run.step.name.ifBlank { stringResource(R.string.step_of, run.stepIndex + 1, run.program.steps.size) }
-                val cycle = if (run.program.cycles > 1) " · " + stringResource(R.string.cycle_of, run.cycleIndex + 1, run.program.cycles) else ""
-                Text(step + cycle, style = MaterialTheme.typography.bodyMedium)
+                val step = if (run.program.steps.size > 1 || run.step.name.isNotBlank()) {
+                    run.step.name.ifBlank { stringResource(R.string.step_of, run.stepIndex + 1, run.program.steps.size) }
+                } else {
+                    null
+                }
+                val cycle = when {
+                    run.program.forever -> stringResource(R.string.cycle_number, run.cycleIndex + 1)
+                    run.program.cycles > 1 -> stringResource(R.string.cycle_of, run.cycleIndex + 1, run.program.cycles)
+                    else -> null
+                }
+                Text(listOfNotNull(step, cycle).joinToString(" · "), style = MaterialTheme.typography.bodyMedium)
+            }
+            // Помидор ждёт «Дальше» (D-025, п. 1).
+            if (run.isWaiting) {
+                Text(stringResource(R.string.timer_waiting_card), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
             }
             FitText(
                 if (run.state == TimerState.RINGING) stringResource(R.string.ring_timer_finished) else TimeText.countdown(remaining),
@@ -271,15 +318,26 @@ private fun TimerCard(run: TimerRun, remaining: Long) {
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 textAlign = TextAlign.Center,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                when (run.state) {
-                    TimerState.RUNNING -> FilledIconButton(onClick = { persistLater { repository.pauseTimer(run.id) } }) {
+            // Крупным шрифтом кнопки переносятся, а не обрезаются (D-022, п. 4).
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                when {
+                    run.isWaiting -> Button(onClick = { persistLater { repository.resumeTimer(run.id) } }) {
+                        Text(stringResource(R.string.timer_next))
+                    }
+                    run.state == TimerState.RUNNING -> FilledIconButton(onClick = { persistLater { repository.pauseTimer(run.id) } }) {
                         Icon(AppIcons.Pause, contentDescription = stringResource(R.string.pause))
                     }
-                    TimerState.PAUSED -> FilledIconButton(onClick = { persistLater { repository.resumeTimer(run.id) } }) {
+                    run.state == TimerState.PAUSED -> FilledIconButton(onClick = { persistLater { repository.resumeTimer(run.id) } }) {
                         Icon(AppIcons.Play, contentDescription = stringResource(R.string.resume))
                     }
-                    TimerState.RINGING -> Unit
+                }
+                // «Дальше» у цепочки — следующий шаг сейчас.
+                if (run.program.steps.size > 1 && !run.isWaiting && run.state != TimerState.RINGING) {
+                    FilledTonalButton(onClick = { persistLater { repository.skipStep(run.id) } }) { Text(stringResource(R.string.timer_skip)) }
                 }
                 if (run.state != TimerState.RINGING) {
                     FilledTonalIconButton(onClick = { persistLater { repository.resetTimer(run.id) } }) {
@@ -336,6 +394,7 @@ private fun PresetRow(preset: TimerPreset, onStart: () -> Unit, onEdit: () -> Un
 @Composable
 private fun programSummary(program: TimerProgram): String {
     val total = TimeText.duration(program.totalMillis)
+    if (program.forever) return stringResource(R.string.interval_forever_summary, TimeText.duration(program.cycleMillis))
     if (!program.isChain) return total
     val steps = pluralStringResource(R.plurals.steps_count, program.steps.size, program.steps.size)
     val cycles = if (program.cycles > 1) " × " + program.cycles else ""

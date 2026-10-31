@@ -119,6 +119,10 @@ fun ClockBackdrop(kind: ClockBackground, active: Boolean, modifier: Modifier = M
         ClockBackground.WAVES -> WavesBackdrop(animate, modifier)
         ClockBackground.STARS -> StarsBackdrop(animate, modifier)
         ClockBackground.PARTICLES -> ParticlesBackdrop(animate, modifier)
+        // Эффекты-обои (D-024): тот же рисунок, что на обоях Android.
+        ClockBackground.CONSTELLATION, ClockBackground.HYPERCUBE, ClockBackground.POLAR_CLOCK,
+        ClockBackground.HOURGLASS, ClockBackground.MECHANISM, ClockBackground.DIGIT_RAIN,
+        -> SceneBackdrop(kind, animate, rememberScenePalette(SceneLook.CLOCK), modifier)
     }
 }
 
@@ -139,7 +143,7 @@ private fun ImageBackdrop(modifier: Modifier) {
 
 /** Время в секундах для анимации: идёт кадрами, только пока [animate]. */
 @Composable
-private fun rememberSeconds(animate: Boolean): androidx.compose.runtime.FloatState {
+internal fun rememberSeconds(animate: Boolean): androidx.compose.runtime.FloatState {
     val time = remember { mutableFloatStateOf(0f) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(animate) {
@@ -162,7 +166,7 @@ private fun rememberSeconds(animate: Boolean): androidx.compose.runtime.FloatSta
 
 /** Наклон телефона: x и y от −1 до 1, сглажено; датчик — только пока [active]. */
 @Composable
-private fun rememberTilt(active: Boolean): Pair<androidx.compose.runtime.FloatState, androidx.compose.runtime.FloatState> {
+internal fun rememberTilt(active: Boolean): Pair<androidx.compose.runtime.FloatState, androidx.compose.runtime.FloatState> {
     val context = LocalContext.current
     val x = remember { mutableFloatStateOf(0f) }
     val y = remember { mutableFloatStateOf(0f) }

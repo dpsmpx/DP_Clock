@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.camera.camera2.Camera2Config
 import androidx.camera.core.CameraXConfig
+import com.dpsmpx.dpclock.data.CalendarStore
 import com.dpsmpx.dpclock.data.ClockDatabase
 import com.dpsmpx.dpclock.data.ClockRepository
 import com.dpsmpx.dpclock.data.WeatherStore
@@ -24,7 +25,10 @@ enum class Section { ALARMS, TIMERS, STOPWATCH, CLOCK, WORLD }
 class AppGraph(context: Context) {
     val scheduler = Scheduler(context)
     val notifier = Notifier(context)
-    val repository = ClockRepository(context, ClockDatabase.open(context), scheduler, notifier) { Surfaces.changed(context) }
+
+    /** Календарь телефона (D-023): выбор календарей и даты исключений. */
+    val calendar = CalendarStore(context)
+    val repository = ClockRepository(context, ClockDatabase.open(context), scheduler, notifier, calendar) { Surfaces.changed(context) }
 
     /** Погода нужна только экрану «Мировые часы» (D-019). */
     val weather by lazy { WeatherStore(context, repository) }

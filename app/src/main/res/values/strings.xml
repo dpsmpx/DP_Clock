@@ -534,4 +534,267 @@
     <string name="high_contrast_text">Darker text and borders. Also follows the contrast setting of Android 14 and later</string>
     <string name="appearance_color_number">Color %1$d</string>
     <string name="appearance_hue_value">%1$d°</string>
+
+    <!-- Phone calendar (D-023) -->
+    <string name="settings_calendar">Phone calendar</string>
+    <string name="calendar_exceptions">Exceptions from the calendar</string>
+    <string name="calendar_exceptions_none">Not chosen. Days of events in these calendars silence alarms that skip exceptions: holidays, vacation</string>
+    <string name="calendar_events">Event calendars</string>
+    <string name="calendar_events_none">Not chosen. Work, personal: for early alarms, the next event and hints in the editor</string>
+    <string name="calendar_early">Wake before an early event</string>
+    <string name="calendar_early_off">Off</string>
+    <string name="calendar_early_value">%1$s before events that start before %2$s</string>
+    <string name="calendar_show_next">Next event on the clock</string>
+    <string name="calendar_show_next_text">In Clock, the night clock and the clock widget</string>
+    <string name="calendar_no_access">No access to the calendar</string>
+    <string name="calendar_no_access_text">Exceptions and events are not read. Allow the calendar in the app settings</string>
+    <string name="calendar_none_found">No calendars on the phone</string>
+    <string name="calendar_selected_count">Chosen: %1$d</string>
+    <string name="calendar_all_day">All day</string>
+    <string name="calendar_untitled">No title</string>
+    <string name="calendar_event_line">%1$s · %2$s</string>
+    <string name="calendar_event_hidden">Event at %1$s</string>
+    <string name="calendar_that_day">That day in the calendar: %1$s</string>
+    <plurals name="calendar_more">
+        <item quantity="one">and %1$d more event</item>
+        <item quantity="other">and %1$d more events</item>
+    </plurals>
+    <string name="calendar_alarm_label">Before the event at %1$s</string>
+    <string name="calendar_alarm_note">Set by the phone calendar</string>
+
+    <!-- Statistics (D-023) -->
+    <string name="stats">Statistics</string>
+    <string name="stats_week">Week</string>
+    <string name="stats_month">Month</string>
+    <string name="stats_year">Year</string>
+    <string name="stats_all">All time</string>
+    <string name="stats_clear">Clear history</string>
+    <string name="stats_clear_title">Clear history?</string>
+    <string name="stats_clear_text">The signal log and statistics will be deleted from the phone. Alarms and timers stay.</string>
+    <string name="stats_clear_confirm">Clear</string>
+    <string name="stats_wakes">Wake-ups</string>
+    <string name="stats_wakes_empty">No wake-ups in this period yet. They appear after a morning alarm (3:00–14:00) is dismissed.</string>
+    <string name="stats_wake_average">average wake-up: when the alarm was dismissed</string>
+    <string name="stats_weekdays">weekdays %1$s</string>
+    <string name="stats_weekends">weekends %1$s</string>
+    <string name="stats_snoozes">Snoozed: %1$d</string>
+    <string name="stats_ring_average">Rang on average for %1$s</string>
+    <string name="stats_overslept">Not dismissed, went quiet or missed: %1$d</string>
+    <string name="stats_sleep">Sleep</string>
+    <string name="stats_sleep_empty">No estimates yet. Sleep counts from “Time for bed”, the night clock or the sleep timer in the evening to the wake-up.</string>
+    <string name="stats_sleep_average">on average a night; goal %1$s</string>
+    <string name="stats_nights">Nights with an estimate: %1$d</string>
+    <string name="stats_night_detail">%1$s: %2$s, %3$s–%4$s</string>
+    <string name="stats_goal">goal</string>
+    <string name="stats_sleep_how">An estimate: from the latest of “Time for bed”, the night clock and the sleep timer to the wake-up.</string>
+    <string name="stats_timers">Timers and stopwatch</string>
+    <string name="stats_timers_empty">No timers or stopwatch runs in this period.</string>
+    <string name="stats_timers_total">timers, %1$s in total</string>
+    <string name="stats_timer_use">%1$s — %2$d</string>
+    <string name="stats_sleep_timers">Sleep timer: %1$d</string>
+    <string name="stats_stopwatch_sessions">Stopwatch runs: %1$d</string>
+    <string name="stats_stopwatch_total">Stopwatch in total: %1$s</string>
+    <string name="stats_laps">Laps: %1$d</string>
+    <string name="stats_reliability">Signal reliability</string>
+    <string name="stats_reliability_empty">No alarm or timer signals in this period.</string>
+    <string name="stats_on_time">signals on time, late by a minute at most</string>
+    <string name="stats_late_average">Average delay: %1$s</string>
+    <string name="stats_late_max">Largest delay: %1$s</string>
+    <string name="stats_missed">Missed: %1$d</string>
+    <string name="stats_late_detail">%1$s: largest delay %2$s</string>
+    <string name="stats_late_limit">1 minute; longer is in red</string>
+    <string name="duration_seconds">%1$d s</string>
+    <string name="duration_minutes_seconds">%1$d min %2$d s</string>
+
+    <string name="alarm_countdown">Show time until each alarm</string>
+    <string name="alarm_countdown_text">Small italic countdown below each enabled alarm</string>
+    <string name="countdown_in">In %1$s</string>
+    <plurals name="countdown_seconds">
+        <item quantity="one">%1$d s</item>
+        <item quantity="other">%1$d s</item>
+    </plurals>
+    <plurals name="countdown_minutes">
+        <item quantity="one">%1$d min</item>
+        <item quantity="other">%1$d min</item>
+    </plurals>
+    <plurals name="countdown_hours">
+        <item quantity="one">%1$d h</item>
+        <item quantity="other">%1$d h</item>
+    </plurals>
+    <plurals name="countdown_days">
+        <item quantity="one">%1$d d</item>
+        <item quantity="other">%1$d d</item>
+    </plurals>
+    <plurals name="countdown_months">
+        <item quantity="one">%1$d mo</item>
+        <item quantity="other">%1$d mo</item>
+    </plurals>
+    <plurals name="countdown_years">
+        <item quantity="one">%1$d yr</item>
+        <item quantity="other">%1$d yr</item>
+    </plurals>
+
+    <!-- Animated wallpapers (D-024) -->
+    <string name="background_constellation">Constellation — touch, tilt, second hand</string>
+    <string name="background_hypercube">Hypercube — turns in 4D, swipe and tilt</string>
+    <string name="background_polar_clock">Polar clock — rings of time</string>
+    <string name="background_hourglass">Hourglass — sand pours over an hour</string>
+    <string name="background_mechanism">Clock mechanism — gears and balance</string>
+    <string name="background_digit_rain">Digit rain — digits gather into the time</string>
+    <string name="night_background">Night clock background</string>
+    <string name="app_background">App background</string>
+    <string name="wallpaper">Live wallpaper</string>
+    <string name="wallpaper_set">Set</string>
+    <string name="wallpaper_name">DP Clock</string>
+    <string name="wallpaper_description">Animated effects of DP Clock. The effect is chosen in the app settings: Appearance → Live wallpaper.</string>
+
+    <!-- Помидор, сложные и интервальные повторы, предупреждения (D-025) -->
+    <string name="alarm_date">Alarm date and time</string>
+    <string name="alarm_date_text">Full date and time of the next alarm under each enabled alarm</string>
+    <string name="channel_warning">Upcoming alarm, silent</string>
+    <string name="channel_warning_sound">Upcoming alarm, with sound</string>
+    <string name="warnings">Remind before the alarm</string>
+    <string name="warnings_default">Reminders for new alarms</string>
+    <string name="warnings_none">None</string>
+    <string name="warnings_hint">A notification before the alarm rings: skip this time or turn it off right away.</string>
+    <string name="warnings_custom">Other time…</string>
+    <string name="warnings_add">Add</string>
+    <string name="warnings_days">Days</string>
+    <string name="warnings_hours">Hours</string>
+    <string name="warnings_minutes">Minutes</string>
+    <string name="warnings_too_far">At most a week before the alarm</string>
+    <string name="warning_before">%1$s before</string>
+    <string name="warning_title">%1$s in %2$s</string>
+    <string name="warning_skip">Skip this time</string>
+    <string name="warning_dismiss">Turn off now</string>
+    <string name="warning_sound">Reminder with sound</string>
+    <string name="warning_sound_text">Otherwise a silent notification</string>
+    <plurals name="lead_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <plurals name="lead_hours">
+        <item quantity="one">%1$d hr</item>
+        <item quantity="other">%1$d hr</item>
+    </plurals>
+    <plurals name="lead_minutes">
+        <item quantity="one">%1$d min</item>
+        <item quantity="other">%1$d min</item>
+    </plurals>
+    <string name="less_of">%1$s: less</string>
+    <string name="more_of">%1$s: more</string>
+
+    <string name="repeat_rules">Rules</string>
+    <string name="rules_add">Add a rule</string>
+    <string name="rules_new">New rule</string>
+    <string name="rules_edit">Rule</string>
+    <string name="rules_dates">Dates</string>
+    <string name="rules_dates_empty">Choose at least one day</string>
+    <string name="rules_kind_weeks">Weeks</string>
+    <string name="rules_kind_month_days">Days of month</string>
+    <string name="rules_kind_month_weekday">Weekday of month</string>
+    <string name="rules_kind_yearly">Every year</string>
+    <string name="rules_kind_shifts">Shifts</string>
+    <string name="rules_kind_dates">Dates</string>
+    <string name="rules_every_weeks_title">Every N weeks</string>
+    <string name="rules_first_week">First week: from %1$s</string>
+    <string name="rules_last_day">last</string>
+    <string name="rules_last_week">Last</string>
+    <string name="rules_week_n">Week %1$d</string>
+    <string name="rules_five_two">5/2</string>
+    <string name="rules_add_date">Add a date</string>
+    <string name="rules_workdays_text">Working days by the Russian production calendar, with holidays and transfers.</string>
+    <string name="rules_times">Time</string>
+    <string name="rules_times_at">At set times</string>
+    <string name="rules_times_every">Every N minutes</string>
+    <string name="rules_add_time">Add a time</string>
+    <string name="rules_window_from">From %1$s</string>
+    <string name="rules_window_to">To %1$s</string>
+    <string name="rules_window_wrong">The end is earlier than the start: the window must fit in one day</string>
+    <string name="rules_every_title">Every</string>
+    <plurals name="rules_times_count">
+        <item quantity="one">%1$d alarm a day</item>
+        <item quantity="other">%1$d alarms a day</item>
+    </plurals>
+    <string name="rules_only_days_title">Only on some weekdays</string>
+    <string name="rules_own_times">Own time on some weekdays</string>
+    <string name="rules_own_times_text">Instead of the rule\'s time — for example, a later shift on Saturday</string>
+    <string name="rules_as_usual">As usual</string>
+    <string name="rules_period">Period</string>
+    <string name="rules_from_title">From</string>
+    <string name="rules_until_title">Until</string>
+    <string name="rules_no_limit">No limit</string>
+    <string name="rules_period_wrong">The period ends before it starts</string>
+    <string name="rules_except">Except</string>
+    <string name="rules_except_none">No exceptions: the rules ring on all their dates.</string>
+    <string name="rules_except_add">Add an exception</string>
+    <string name="rules_except_text">On these dates the alarm does not ring, whatever the rules say.</string>
+    <string name="rules_except_short">except %1$s</string>
+    <plurals name="rules_every_weeks">
+        <item quantity="one">every %1$d week: %2$s</item>
+        <item quantity="other">every %1$d weeks: %2$s</item>
+    </plurals>
+    <string name="rules_month_days">on the %1$s of the month</string>
+    <string name="rules_nth_weekday">%1$s of week %2$d of the month</string>
+    <string name="rules_last_weekday">last %1$s of the month</string>
+    <string name="rules_yearly">every year on %1$s</string>
+    <plurals name="rules_shifts">
+        <item quantity="one">shifts: %1$d of %2$d day</item>
+        <item quantity="other">shifts: %1$d of %2$d days</item>
+    </plurals>
+    <plurals name="rules_dates_more">
+        <item quantity="one">%1$s and %2$d more</item>
+        <item quantity="other">%1$s and %2$d more</item>
+    </plurals>
+    <string name="rules_every">every %1$s, %2$s–%3$s</string>
+    <string name="rules_only_days">only %1$s</string>
+    <string name="rules_from">from %1$s</string>
+    <string name="rules_until">until %1$s</string>
+
+    <string name="settings_chimes">Chimes</string>
+    <string name="chimes">Chimes</string>
+    <string name="chimes_off">Off</string>
+    <string name="chimes_hour">Every hour</string>
+    <string name="chimes_half_hour">Every half hour</string>
+    <string name="chimes_quarter">Every 15 minutes</string>
+    <string name="chimes_vibrate">Vibrate instead of sound</string>
+    <string name="chimes_vibrate_text">Silent mode and Do not disturb mute the sound</string>
+    <string name="chimes_count">Strike the hour</string>
+    <string name="chimes_count_text">At the top of the hour as many strikes as hours; otherwise one</string>
+    <string name="chimes_quiet">Quiet hours</string>
+    <string name="chimes_quiet_text">No chimes from %1$s to %2$s</string>
+
+    <string name="pomodoro">Pomodoro</string>
+    <string name="pomodoro_work">Work</string>
+    <string name="pomodoro_short">Break</string>
+    <string name="pomodoro_long">Long break</string>
+    <string name="pomodoro_long_every">Pomodoros before a long break</string>
+    <string name="pomodoro_sets">Sets</string>
+    <string name="pomodoro_auto">Move on by itself</string>
+    <string name="pomodoro_auto_text">A short sound and the next stage starts; otherwise a signal and «Next»</string>
+    <string name="pomodoro_dnd">Do not disturb during work</string>
+    <string name="pomodoro_dnd_text">Turns on only if it was off, and turns off afterwards</string>
+    <string name="pomodoro_dnd_access">Allow DP Clock to change Do not disturb in Android settings</string>
+    <string name="pomodoro_total">Total %1$s</string>
+    <string name="pomodoro_step_work">Work</string>
+    <string name="pomodoro_step_short">Break</string>
+    <string name="pomodoro_step_long">Long break</string>
+    <string name="timer_next">Next</string>
+    <string name="timer_skip">Next step</string>
+    <string name="timer_waiting">Next: %1$s · %2$s</string>
+    <string name="timer_waiting_card">Waiting: press «Next»</string>
+    <string name="cycle_number">Round %1$d</string>
+    <string name="stats_pomodoros">Pomodoros: %1$d, work %2$s, %3$s</string>
+    <plurals name="stats_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+
+    <string name="interval_timer">Every N seconds</string>
+    <string name="interval_text">A short sound at equal intervals: exercises, breathing, rounds.</string>
+    <string name="interval_every">Every</string>
+    <string name="interval_forever">Until I stop it</string>
+    <string name="interval_count">How many times</string>
+    <string name="interval_name">Every %1$s</string>
+    <string name="interval_forever_summary">Every %1$s · until stopped</string>
 </resources>

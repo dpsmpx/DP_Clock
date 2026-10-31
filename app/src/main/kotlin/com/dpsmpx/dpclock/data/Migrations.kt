@@ -135,3 +135,56 @@ val MIGRATION_8_9 = SqlMigration(
     9,
     listOf("ALTER TABLE `settings` ADD COLUMN `highContrast` INTEGER NOT NULL DEFAULT 0"),
 )
+
+/** 0.12.0 (D-023, п. 3): будильник перед ранним событием календаря. */
+val MIGRATION_9_10 = SqlMigration(
+    9,
+    10,
+    listOf("ALTER TABLE `alarm` ADD COLUMN `calendarEventAt` INTEGER"),
+)
+
+/** 0.12.1 (D-023, п. 7): конец сигнала в журнале и действия для статистики. */
+val MIGRATION_10_11 = SqlMigration(
+    10,
+    11,
+    listOf(
+        "ALTER TABLE `signal_event` ADD COLUMN `endedAt` INTEGER",
+        "CREATE TABLE IF NOT EXISTS `activity_event` (`id` TEXT NOT NULL, `kind` TEXT NOT NULL, `startedAt` INTEGER NOT NULL, " +
+            "`endedAt` INTEGER NOT NULL, `title` TEXT NOT NULL, `refId` TEXT, `amountMillis` INTEGER NOT NULL, `count` INTEGER NOT NULL, " +
+            "PRIMARY KEY(`id`))",
+    ),
+)
+
+/** 0.12.2: необязательный обратный отсчёт в строках будильников; выключен после обновления. */
+val MIGRATION_11_12 = SqlMigration(
+    11,
+    12,
+    listOf("ALTER TABLE `settings` ADD COLUMN `showAlarmCountdown` INTEGER NOT NULL DEFAULT 0"),
+)
+
+/** 0.13.0 (D-024): фон ночных часов, фон приложения, эффект обоев Android. */
+val MIGRATION_12_13 = SqlMigration(
+    12,
+    13,
+    listOf(
+        "ALTER TABLE `settings` ADD COLUMN `nightBackground` TEXT NOT NULL DEFAULT 'NONE'",
+        "ALTER TABLE `settings` ADD COLUMN `appBackground` TEXT NOT NULL DEFAULT 'NONE'",
+        "ALTER TABLE `settings` ADD COLUMN `wallpaper` TEXT NOT NULL DEFAULT 'CONSTELLATION'",
+    ),
+)
+
+/** 0.14.0 (D-025): сложный повтор, точный пропуск, предупреждения; дата в строке, куранты, помидор. */
+val MIGRATION_13_14 = SqlMigration(
+    13,
+    14,
+    listOf(
+        "ALTER TABLE `alarm` ADD COLUMN `repeatRules` TEXT",
+        "ALTER TABLE `alarm` ADD COLUMN `skipTime` INTEGER",
+        "ALTER TABLE `alarm` ADD COLUMN `warnings` TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE `settings` ADD COLUMN `showAlarmDate` INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE `settings` ADD COLUMN `defaultWarnings` TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE `settings` ADD COLUMN `warningSound` INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE `settings` ADD COLUMN `chimes` TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE `settings` ADD COLUMN `pomodoro` TEXT NOT NULL DEFAULT ''",
+    ),
+)

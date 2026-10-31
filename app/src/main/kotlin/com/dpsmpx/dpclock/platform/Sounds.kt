@@ -43,6 +43,64 @@ object Sounds {
 
     private const val SHORT_SIGNAL_MILLIS = 2_500L
 
+    /**
+     * Бой курантов (D-025, п. 4): [strikes] ударов колокола или столько же коротких
+     * вибраций. Звук — как уведомление: тихий режим и «Не беспокоить» его глушат.
+     */
+    fun chime(context: Context, strikes: Int, vibrate: Boolean) {
+        val app = context.applicationContext
+        val millis = strikes * STRIKE_MILLIS + STRIKE_TAIL_MILLIS
+        val wakeLock = app.getSystemService(PowerManager::class.java)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "dpclock:chime")
+            .apply { acquire(millis + 1_000L) }
+        if (vibrate) {
+            val timings = LongArray(strikes * 2) { if (it % 2 == 0) if (it == 0) 0L else STRIKE_MILLIS - STRIKE_BUZZ_MILLIS else STRIKE_BUZZ_MILLIS }
+            val effect = VibrationEffect.createWaveform(timings, -1)
+            val vibrator = app.getSystemService(VibratorManager::class.java).defaultVibrator
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                vibrator.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_NOTIFICATION))
+            } else {
+                vibrator.vibrate(effect)
+            }
+            main.postDelayed({ if (wakeLock.isHeld) wakeLock.release() }, millis)
+            return
+        }
+        val samples = Synth.strikes(strikes, STRIKE_MILLIS / 1000.0, STRIKE_TAIL_MILLIS / 1000.0)
+        val track = runCatching {
+            AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build(),
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(Synth.SAMPLE_RATE)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build(),
+                )
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .setBufferSizeInBytes(samples.size * 2)
+                .build()
+        }.getOrNull()
+        if (track == null) {
+            wakeLock.release()
+            return
+        }
+        track.write(samples, 0, samples.size)
+        track.play()
+        main.postDelayed({
+            track.release()
+            if (wakeLock.isHeld) wakeLock.release()
+        }, millis)
+    }
+
+    private const val STRIKE_MILLIS = 1_400L
+    private const val STRIKE_TAIL_MILLIS = 1_600L
+    private const val STRIKE_BUZZ_MILLIS = 250L
+
     /** Короткий сигнал конца шага цепочки. */
     fun shortBeep() {
         val tone = runCatching { ToneGenerator(AudioManager.STREAM_ALARM, ToneGenerator.MAX_VOLUME) }.getOrNull() ?: return

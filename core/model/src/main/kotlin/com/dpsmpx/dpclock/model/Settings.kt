@@ -6,6 +6,10 @@ data class Settings(
     /** Через сколько минут сигнал стихает сам; null — никогда. */
     val autoStopMinutes: Int? = DEFAULT_AUTO_STOP,
     val alarmOrder: AlarmOrder = AlarmOrder.TIME_OF_DAY,
+    /** Показывать в строке включённых будильников время до следующего срабатывания. */
+    val showAlarmCountdown: Boolean = false,
+    /** Показывать в строке включённых будильников полную дату и время срабатывания (D-025, п. 2). */
+    val showAlarmDate: Boolean = false,
     /** Человек отметил, что настроил автозапуск и батарею на Xiaomi (SCREEN_MAP.md, п. 10). */
     val xiaomiHintsDone: Boolean = false,
     val signalStyle: SignalStyle = SignalStyle.FULL_SCREEN,
@@ -18,6 +22,14 @@ data class Settings(
     val weather: WeatherSettings = WeatherSettings(),
     /** Тема, цвет, стиль часов, фон, шум (D-021). */
     val appearance: Appearance = Appearance(),
+    /** Предупреждения до сигнала у новых будильников, минуты (D-025, п. 5). */
+    val defaultWarnings: List<Int> = emptyList(),
+    /** Предупреждение со звуком; иначе — тихое уведомление. */
+    val warningSound: Boolean = false,
+    /** Куранты (D-025, п. 4). */
+    val chimes: Chimes = Chimes(),
+    /** Последние настройки помидора (D-025, п. 1). */
+    val pomodoro: Pomodoro = Pomodoro(),
 ) {
     companion object {
         const val DEFAULT_SNOOZE = 10
@@ -58,8 +70,9 @@ enum class SignalSource { ALARM, TIMER }
 
 /**
  * Запись журнала срабатываний (DATA_MODEL.md, п. 7): когда сигнал ожидался
- * ([scheduledAt]) и когда зазвучал ([firedAt]), мс UTC. [title] — название
- * будильника или таймера на тот момент: запись переживает их удаление.
+ * ([scheduledAt]), когда зазвучал ([firedAt]) и когда кончился ([endedAt] — с
+ * 0.12.1, у записей раньше — null), мс UTC. [title] — название будильника или
+ * таймера на тот момент: запись переживает их удаление.
  */
 data class SignalEvent(
     val id: String,
@@ -69,6 +82,7 @@ data class SignalEvent(
     val scheduledAt: Long,
     val firedAt: Long,
     val outcome: SignalOutcome,
+    val endedAt: Long? = null,
 ) {
     /** Опоздание сигнала, мс; null — сигнал не звучал (пропущен или выключен заранее). */
     val lateMillis: Long?

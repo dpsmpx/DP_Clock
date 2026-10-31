@@ -66,6 +66,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -76,6 +77,9 @@ import com.dpsmpx.dpclock.QuickRequest
 import com.dpsmpx.dpclock.model.Alarm
 import com.dpsmpx.dpclock.model.AlarmGroup
 import com.dpsmpx.dpclock.model.AlarmRules
+import com.dpsmpx.dpclock.model.AlarmCountdown
+import com.dpsmpx.dpclock.model.CountdownPart
+import com.dpsmpx.dpclock.model.CountdownUnit
 import com.dpsmpx.dpclock.model.AlarmTemplate
 import com.dpsmpx.dpclock.model.BedtimeMode
 import com.dpsmpx.dpclock.model.Exceptions
@@ -129,7 +133,8 @@ fun AlarmsScreen(
     val settings by repository.settings.collectAsStateWithLifecycle(Settings())
     val snoozed by repository.snoozed.collectAsStateWithLifecycle(emptyMap())
     val reliability = rememberReliability()
-    val now = rememberNowMillis(15_000L)
+    // Секунды в строках обратного отсчёта требуют секундного тика; без него экран обновляется реже.
+    val now = rememberNowMillis(if (settings.showAlarmCountdown) 1_000L else 15_000L)
     val zone = ZoneId.systemDefault()
     val scope = rememberCoroutineScope()
 
@@ -190,6 +195,8 @@ fun AlarmsScreen(
                 alarm = alarm,
                 snoozedUntil = snoozed[alarm.id],
                 exceptions = exceptions,
+                showCountdown = settings.showAlarmCountdown,
+                showDate = settings.showAlarmDate,
                 now = nowInstant,
                 isSelected = layout.twoPane && alarm.id == editingId,
                 onClick = { editingId = alarm.id },
@@ -606,6 +613,8 @@ private fun AlarmRow(
     alarm: Alarm,
     snoozedUntil: Long?,
     exceptions: Exceptions,
+    showCountdown: Boolean,
+    showDate: Boolean,
     now: Instant,
     isSelected: Boolean,
     onClick: () -> Unit,
@@ -638,18 +647,41 @@ private fun AlarmRow(
                 if (alarm.label.isNotBlank()) {
                     Text(alarm.label, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                // У сменного графика своё время у каждого дня — крупно время ближайшего.
-                val shown = if (alarm.repeat is Repeat.Cycle && next != null) TimeText.time(context, next.toEpochMilli())
+                // У сменного графика и сложного повтора времён несколько — крупно время ближайшего.
+                val several = alarm.repeat is Repeat.Cycle || alarm.repeat is Repeat.Rules
+                val shown = if (several && next != null) TimeText.time(context, next.toEpochMilli())
                 else TimeText.time(context, alarm.hour, alarm.minute)
                 Text(
                     shown,
                     style = MaterialTheme.typography.displaySmall,
                     fontWeight = if (alarm.enabled) FontWeight.Medium else FontWeight.Normal,
                 )
-                Text(repeatText(context, alarm.repeat), style = MaterialTheme.typography.bodyMedium)
+                Text(repeatText(context, alarm.repeat), style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                // Полная дата и время срабатывания (D-025, п. 2).
+                if (showDate && next != null) {
+                    Text(
+                        TimeText.fullDateTime(context, next.toEpochMilli()),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (showCountdown && next != null) {
+                    val parts = AlarmCountdown.parts(now, next, zone)
+                    if (parts.isNotEmpty()) {
+                        Text(
+                            alarmCountdownText(context, parts),
+                            style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                // Поставил календарь (D-023, п. 3): изменить — станет обычным, удалить — в этот день не вернётся.
+                if (alarm.calendarEventAt != null) Note(stringResource(R.string.calendar_alarm_note))
                 val skipDate = alarm.skipDate
                 if (alarm.enabled && skipDate != null && alarm.repeat.isRepeating) {
-                    Note(stringResource(R.string.skipped_on, TimeText.date(context, skipDate)))
+                    val skipTime = alarm.skipTime
+                    val day = TimeText.date(context, skipDate)
+                    Note(stringResource(R.string.skipped_on, if (skipTime == null) day else day + " " + TimeText.time(context, skipTime.hour, skipTime.minute)))
                 }
                 if (alarm.enabled && alarm.repeat.isRepeating && alarm.honorExceptions) {
                     val plain = AlarmRules.nextTrigger(alarm, now, zone)
@@ -677,6 +709,23 @@ private fun AlarmRow(
     }
 }
 
+/** Локализует части обратного отсчёта без потери календарной точности модели. */
+private fun alarmCountdownText(context: Context, parts: List<CountdownPart>): String {
+    val body = parts.joinToString(" ") { part ->
+        val plural = when (part.unit) {
+            CountdownUnit.YEARS -> R.plurals.countdown_years
+            CountdownUnit.MONTHS -> R.plurals.countdown_months
+            CountdownUnit.DAYS -> R.plurals.countdown_days
+            CountdownUnit.HOURS -> R.plurals.countdown_hours
+            CountdownUnit.MINUTES -> R.plurals.countdown_minutes
+            CountdownUnit.SECONDS -> R.plurals.countdown_seconds
+        }
+        val value = part.value.toInt()
+        context.resources.getQuantityString(plural, value, value)
+    }
+    return context.getString(R.string.countdown_in, body)
+}
+
 @Composable
 private fun Note(text: String) {
     Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary)
@@ -700,6 +749,7 @@ fun repeatText(context: Context, repeat: Repeat): String {
         RepeatKind.DATE -> TimeText.date(context, (repeat as Repeat.OnDate).date)
         RepeatKind.CYCLE -> resources.getString(R.string.repeat_cycle_days, (repeat as Repeat.Cycle).days.size)
         RepeatKind.WORKDAYS -> resources.getString(R.string.repeat_workdays)
+        RepeatKind.RULES -> rulesText(context, repeat as Repeat.Rules)
     }
 }
 

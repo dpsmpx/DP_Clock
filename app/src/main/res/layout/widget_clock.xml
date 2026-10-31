@@ -41,4 +41,16 @@
         android:text="@string/widget_no_alarms"
         android:textColor="@color/widget_accent"
         android:textSize="14sp" />
+
+    <!-- Ближайшее событие календаря телефона (D-023, п. 4); нет — строки нет. -->
+    <TextView
+        android:id="@+id/widget_event"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/widget_text_secondary"
+        android:textSize="13sp"
+        android:visibility="gone" />
 </LinearLayout>

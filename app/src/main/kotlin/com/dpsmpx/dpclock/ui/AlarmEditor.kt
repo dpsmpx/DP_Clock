@@ -83,11 +83,14 @@ import java.time.format.TextStyle
 
 private const val DAY_MILLIS = 86_400_000L
 
+/** Сколько событий дня показать в редакторе. */
+private const val DAY_EVENTS_SHOWN = 3
+
 /** Время подъёма перед ночной сменой по умолчанию — правится в редакторе. */
 private val NIGHT_DEFAULT: LocalTime = LocalTime.of(17, 0)
 
-/** Вид повтора в редакторе (D-013, D-014). */
-private enum class RepeatMode { DAYS, WORKDAYS, CYCLE, DATE }
+/** Вид повтора в редакторе (D-013, D-014, D-025). */
+private enum class RepeatMode { DAYS, WORKDAYS, CYCLE, DATE, RULES }
 
 /**
  * Редактор будильника (SCREEN_MAP.md, п. 2; D-013, D-014): время, название,
@@ -123,6 +126,7 @@ fun AlarmEditor(
                 is Repeat.OnDate -> RepeatMode.DATE
                 is Repeat.Cycle -> RepeatMode.CYCLE
                 Repeat.Workdays -> RepeatMode.WORKDAYS
+                is Repeat.Rules -> RepeatMode.RULES
                 Repeat.Once, is Repeat.Weekly -> RepeatMode.DAYS
             },
         )
@@ -131,6 +135,8 @@ fun AlarmEditor(
     var dateDay by rememberSaveable { mutableStateOf((alarm.repeat as? Repeat.OnDate)?.date?.toEpochDay()) }
     var anchorDay by rememberSaveable { mutableLongStateOf(initialCycle?.anchor?.toEpochDay() ?: LocalDate.now(zone).toEpochDay()) }
     var cycleDays by remember { mutableStateOf(initialCycle?.days ?: emptyList()) }
+    var rules by remember { mutableStateOf(alarm.repeat as? Repeat.Rules) }
+    var warnings by remember { mutableStateOf(alarm.warnings) }
     var label by rememberSaveable { mutableStateOf(alarm.label) }
     var sound by remember { mutableStateOf(alarm.sound) }
     var vibrate by rememberSaveable { mutableStateOf(alarm.vibrate) }
@@ -156,13 +162,10 @@ fun AlarmEditor(
         RepeatMode.DATE -> dateDay?.let { Repeat.OnDate(LocalDate.ofEpochDay(it)) }
         RepeatMode.CYCLE -> cycleDays.takeIf { list -> list.size >= 2 && list.any { it != null } }
             ?.let { Repeat.Cycle(LocalDate.ofEpochDay(anchorDay), it) }
+        RepeatMode.RULES -> rules
     }
     val draft = repeat?.let { r ->
-        val time = (r as? Repeat.Cycle)?.firstTime ?: LocalTime.of(hour, minute)
-        val base = alarm.copy(
-            hour = time.hour,
-            minute = time.minute,
-            repeat = r,
+        val base = AlarmRules.normalized(alarm.copy(hour = hour, minute = minute, repeat = r)).copy(
             label = label.trim(),
             sound = sound,
             vibrate = vibrate,
@@ -174,11 +177,13 @@ fun AlarmEditor(
             wakeCheck = wakeCheck,
             gentleMinutes = gentleMinutes,
             after = after,
+            warnings = warnings,
+            skipTime = null,
         )
         val now = Instant.now()
-        // Пропуск — дата ближайшего срабатывания по новым правилам (D-013, п. 3).
-        val skip = if (skipNext && r.isRepeating) AlarmRules.nextIgnoringSkip(base, now, zone, exceptions)?.atZone(zone)?.toLocalDate() else null
-        base.copy(skipDate = skip)
+        // Пропуск — ближайшее срабатывание по новым правилам (D-013, п. 3); у сложного повтора — и его время (D-025).
+        val skipAt = if (skipNext && r.isRepeating) AlarmRules.nextIgnoringSkip(base, now, zone, exceptions) else null
+        if (skipAt != null) AlarmRules.skipping(base, skipAt, zone) else base
     }
     val next = draft?.let { AlarmRules.nextTrigger(it, Instant.now(), zone, exceptions) }
 
@@ -209,7 +214,8 @@ fun AlarmEditor(
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                if (mode != RepeatMode.CYCLE) {
+                // У графика и правил время — у каждого дня или правила своё.
+                if (mode != RepeatMode.CYCLE && mode != RepeatMode.RULES) {
                     TextButton(onClick = { dialog = "time" }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                         FitText(TimeText.time(context, hour, minute), style = MaterialTheme.typography.displayLarge)
                     }
@@ -231,6 +237,7 @@ fun AlarmEditor(
                                 mode = option
                                 if (option == RepeatMode.DATE && dateDay == null) dialog = "date"
                                 if (option == RepeatMode.CYCLE && cycleDays.isEmpty()) startCycle(CyclePreset.TWO_BY_TWO)
+                                if (option == RepeatMode.RULES && rules == null) rules = startRules(days, LocalTime.of(hour, minute))
                             },
                             label = { Text(stringResource(modeTitle(option))) },
                         )
@@ -267,6 +274,9 @@ fun AlarmEditor(
                         onTime = { index -> dialog = "cycleTime:$index" },
                         onChange = { cycleDays = it },
                     )
+                    RepeatMode.RULES -> rules?.let { current ->
+                        RulesEditor(current, defaultTime = LocalTime.of(hour, minute), onChange = { rules = it })
+                    }
                 }
                 Text(
                     when {
@@ -279,7 +289,8 @@ fun AlarmEditor(
                     color = if (repeat != null && next == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (draft != null && draft.repeat.isRepeating && next != null) {
-                    val upcoming = AlarmRules.upcoming(draft, Instant.now(), zone, exceptions, 4)
+                    // У сложного повтора срабатываний в день бывает несколько — показать больше.
+                    val upcoming = AlarmRules.upcoming(draft, Instant.now(), zone, exceptions, if (draft.repeat is Repeat.Rules) 6 else 4)
                     Text(
                         stringResource(R.string.upcoming) + " " + upcoming.joinToString(" · ") {
                             TimeText.date(context, it.atZone(zone).toLocalDate()) + " " + TimeText.time(context, it.toEpochMilli())
@@ -288,7 +299,24 @@ fun AlarmEditor(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                // В день ближайшего срабатывания — события календаря (D-023, п. 5): видно, что вставать раньше.
+                val dayEvents = rememberDayEvents(next?.atZone(zone)?.toLocalDate())
+                if (dayEvents.isNotEmpty()) {
+                    val shown = dayEvents.take(DAY_EVENTS_SHOWN).joinToString(" · ") { eventText(context, it) }
+                    val more = dayEvents.size - DAY_EVENTS_SHOWN
+                    Text(
+                        stringResource(R.string.calendar_that_day, shown) + if (more > 0) " " + pluralStringResource(R.plurals.calendar_more, more, more) else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
 
+                // Предупреждения до сигнала (D-025, п. 5) — на виду: их ставят часто.
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.warnings)) },
+                    supportingContent = { Text(warningsText(context, warnings)) },
+                    modifier = Modifier.clickable { dialog = "warnings" },
+                )
                 HorizontalDivider()
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.advanced)) },
@@ -317,10 +345,12 @@ fun AlarmEditor(
                         modifier = Modifier.clickable { dialog = "snooze" },
                     )
                     if (repeat?.isRepeating == true) {
-                        val skippable = draft?.let { AlarmRules.nextIgnoringSkip(it, Instant.now(), zone, exceptions) }?.atZone(zone)?.toLocalDate()
+                        val skippable = draft?.let { AlarmRules.nextIgnoringSkip(it, Instant.now(), zone, exceptions) }
                         ListItem(
                             headlineContent = { Text(stringResource(R.string.skip_next)) },
-                            supportingContent = skippable?.let { { Text(TimeText.date(context, it)) } },
+                            supportingContent = skippable?.let { at ->
+                                { Text(TimeText.date(context, at.atZone(zone).toLocalDate()) + " " + TimeText.time(context, at.toEpochMilli())) }
+                            },
                             trailingContent = { Switch(checked = skipNext, onCheckedChange = null) },
                             modifier = Modifier.toggleable(value = skipNext, role = Role.Switch) { skipNext = it },
                         )
@@ -472,6 +502,15 @@ fun AlarmEditor(
             onDismiss = { dialog = null },
             onSelect = { snoozeMinutes = it },
         )
+        current == "warnings" -> WarningsDialog(
+            title = stringResource(R.string.warnings),
+            initial = warnings,
+            onDismiss = { dialog = null },
+            onDone = {
+                warnings = it
+                dialog = null
+            },
+        )
         current == "group" -> {
             val noGroup = stringResource(R.string.no_group)
             ChoiceDialog(
@@ -554,7 +593,7 @@ private fun CycleEditor(
 /** Выбор дня; [minDay] — раньше нельзя (null — можно любой). Дни — от эпохи. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DayPickerDialog(initialDay: Long, minDay: Long?, onDismiss: () -> Unit, onPick: (Long) -> Unit) {
+internal fun DayPickerDialog(initialDay: Long, minDay: Long?, onDismiss: () -> Unit, onPick: (Long) -> Unit) {
     val state = rememberDatePickerState(
         initialSelectedDateMillis = initialDay * DAY_MILLIS,
         selectableDates = object : SelectableDates {
@@ -578,6 +617,7 @@ private fun modeTitle(mode: RepeatMode): Int = when (mode) {
     RepeatMode.WORKDAYS -> R.string.repeat_workdays
     RepeatMode.CYCLE -> R.string.repeat_cycle
     RepeatMode.DATE -> R.string.repeat_on_date
+    RepeatMode.RULES -> R.string.repeat_rules
 }
 
 private fun presetTitle(preset: CyclePreset): Int = when (preset) {

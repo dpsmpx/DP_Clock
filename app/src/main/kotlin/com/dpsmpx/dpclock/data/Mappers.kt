@@ -28,6 +28,10 @@ import com.dpsmpx.dpclock.model.SignalSource
 import com.dpsmpx.dpclock.model.SignalStyle
 import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
+import com.dpsmpx.dpclock.model.Task
+import com.dpsmpx.dpclock.model.TaskLevel
+import com.dpsmpx.dpclock.model.TaskMark
+import com.dpsmpx.dpclock.model.TaskRepeat
 import com.dpsmpx.dpclock.model.ThemeMode
 import com.dpsmpx.dpclock.model.TimerPreset
 import com.dpsmpx.dpclock.model.TimerProgram
@@ -133,6 +137,54 @@ fun AlarmTemplate.toEntity() = TemplateEntity(id, name, encodeAlarms(), createdA
 fun ExceptionEntity.toModel() = ExceptionPeriod(id, name, LocalDate.ofEpochDay(startDay), LocalDate.ofEpochDay(endDay))
 
 fun ExceptionPeriod.toEntity() = ExceptionEntity(id, name, start.toEpochDay(), end.toEpochDay())
+
+fun TaskEntity.toModel() = Task(
+    id = id,
+    title = title,
+    note = note,
+    date = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
+    time = minute?.let { LocalTime.of(it / 60 % 24, it % 60) },
+    reminder = reminder,
+    repeat = TaskRepeat.decode(repeat),
+    done = done,
+    doneAt = doneAt,
+    createdAt = createdAt,
+    permanent = permanent,
+    parentId = parentId,
+    difficulty = TaskLevel.entries.firstOrNull { it.name == difficulty } ?: TaskLevel.NONE,
+    urgency = TaskLevel.entries.firstOrNull { it.name == urgency } ?: TaskLevel.NONE,
+    remindLate = remindLate,
+    remindAfterDays = remindAfterDays,
+    inCalendar = inCalendar,
+    eventId = eventId,
+    nudged = nudged,
+)
+
+fun Task.toEntity() = TaskEntity(
+    id = id,
+    title = title,
+    note = note,
+    date = date?.toString(),
+    minute = time?.let { it.hour * 60 + it.minute },
+    reminder = reminder,
+    repeat = repeat.code,
+    done = done,
+    doneAt = doneAt,
+    createdAt = createdAt,
+    inCalendar = inCalendar,
+    eventId = eventId,
+    permanent = permanent,
+    parentId = parentId,
+    difficulty = difficulty.name,
+    urgency = urgency.name,
+    remindLate = remindLate,
+    remindAfterDays = remindAfterDays,
+    nudged = nudged,
+)
+
+fun TaskMarkEntity.toModel() = TaskMark(id, taskId, at)
+
+fun TaskMark.toEntity() = TaskMarkEntity(id, taskId, at)
 
 fun PresetEntity.toModel() = TimerPreset(id, name, TimerProgram.decode(program), createdAt)
 

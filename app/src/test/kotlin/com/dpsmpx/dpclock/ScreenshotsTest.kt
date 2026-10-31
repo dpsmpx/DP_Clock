@@ -13,10 +13,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withTranslation
+import com.dpsmpx.dpclock.model.Alarm
+import com.dpsmpx.dpclock.model.Backup
 import com.dpsmpx.dpclock.model.Repeat
+import com.dpsmpx.dpclock.model.Settings
+import com.dpsmpx.dpclock.model.SyncConflict
+import com.dpsmpx.dpclock.model.SyncItems
+import com.dpsmpx.dpclock.model.Task
+import com.dpsmpx.dpclock.model.TaskLevel
+import com.dpsmpx.dpclock.model.TaskPrefs
+import com.dpsmpx.dpclock.model.TaskRepeat
 import com.dpsmpx.dpclock.model.TimerPreset
 import com.dpsmpx.dpclock.model.TimerProgram
 import com.dpsmpx.dpclock.model.TimerStep
@@ -27,6 +37,9 @@ import com.dpsmpx.dpclock.ui.FullScreenTime
 import com.dpsmpx.dpclock.ui.NewAlarmDialog
 import com.dpsmpx.dpclock.ui.OnboardingContent
 import com.dpsmpx.dpclock.ui.SettingsScreen
+import com.dpsmpx.dpclock.ui.SyncConflictsDialog
+import com.dpsmpx.dpclock.ui.TaskEditor
+import com.dpsmpx.dpclock.ui.TasksScreen
 import kotlinx.coroutines.runBlocking
 import org.junit.Assume
 import org.junit.Before
@@ -47,6 +60,8 @@ import org.robolectric.shadows.ShadowNotificationManager
 import java.io.File
 import java.time.DayOfWeek
 import java.time.Duration
+import java.time.LocalDate
+import java.time.LocalTime
 
 /**
  * Снимки экранов на JVM (D-029): настоящие экраны приложения с примерными данными —
@@ -64,6 +79,7 @@ class ScreenshotsTest {
     @Before
     fun setUp() {
         Assume.assumeTrue(System.getProperty("dpclock.screenshots") == "true")
+        DpClockApp.resetGraph()
         // Кадр — каждые 16 мс, как на телефоне: иначе анимации крутятся без остановки.
         ShadowChoreographer.setFrameDelay(Duration.ofMillis(16))
         // Разрешения выданы, громкость будильника на месте — плашки надёжности нет, как на настроенном телефоне.
@@ -78,6 +94,53 @@ class ScreenshotsTest {
                 it.copy(xiaomiHintsDone = true, onboardingDone = true, weather = WeatherSettings(WeatherMode.OFF))
             }
         }
+        // Задачи (D-031) — только в своём снимке.
+        DpClockApp.graph(app).tasks.preview(TaskPrefs())
+    }
+
+    /** Задачи (D-032): в «Часах», «Все задачи», редактор и раздел настроек. */
+    @Test
+    fun tasks() {
+        val today = LocalDate.now()
+        val repository = DpClockApp.graph(app).repository
+        val weekly = Task("t3", "Созвон с командой", date = today, time = LocalTime.of(11, 0), reminder = 15, repeat = TaskRepeat.Weekly(setOf(today.dayOfWeek)), createdAt = 3L)
+        val own = listOf(
+            Task("t1", "Купить хлеб", date = today, createdAt = 1L),
+            Task("t2", "Отчёт за октябрь", date = today.minusDays(2), reminder = 60, createdAt = 2L),
+            weekly,
+            Task("t4", "Подарок маме", note = "Цветы и открытка", date = today.plusDays(5), createdAt = 4L),
+            Task("t5", "Прочитать книгу", createdAt = 5L),
+        )
+        runBlocking { own.forEach { repository.saveTask(it) } }
+        val controller = Robolectric.buildActivity(MainActivity::class.java, MainActivity.intent(app, Section.CLOCK)).setup()
+        save(controller.get(), "section-clock-tasks")
+        controller.pause().stop().destroy()
+        shoot("tasks-all") { DpClockTheme { TasksScreen(SnackbarHostState()) } }
+        shoot("tasks-editor") { DpClockTheme { TaskEditor(weekly, today, onDismiss = {}) } }
+        shoot("settings-tasks") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_tasks) } }
+
+        // Постоянные (D-033): дерево, «прошло», «дольше обычного», доска.
+        val now = System.currentTimeMillis()
+        val day = 86_400_000L
+        val flowers = Task("p1", "Полить цветы", permanent = true, parentId = "p0", urgency = TaskLevel.HIGH, difficulty = TaskLevel.LOW, remindLate = true, createdAt = 10L)
+        val permanent = listOf(
+            Task("p0", "Квартира", permanent = true, createdAt = 9L),
+            flowers,
+            Task("p2", "Поменять фильтр воды", permanent = true, parentId = "p0", urgency = TaskLevel.MEDIUM, difficulty = TaskLevel.HIGH, remindAfterDays = 90, createdAt = 11L),
+            Task("p3", "Резервная копия ноутбука", permanent = true, urgency = TaskLevel.HIGH, difficulty = TaskLevel.HIGH, createdAt = 12L),
+            Task("p4", "Проверить огнетушитель", permanent = true, urgency = TaskLevel.LOW, createdAt = 13L),
+        )
+        runBlocking {
+            permanent.forEach { repository.saveTask(it) }
+            for (ago in listOf(17 * day, 12 * day, 7 * day, 2 * day + 3 * 3_600_000L)) repository.addMark("p1", now - ago)
+            repository.addMark("p2", now - 95 * day)
+            for (ago in listOf(30 * day, 19 * day)) repository.addMark("p3", now - ago)
+        }
+        shoot("tasks-permanent") { DpClockTheme { TasksScreen(SnackbarHostState(), initialTab = 1) } }
+        shoot("tasks-board") { DpClockTheme { TasksScreen(SnackbarHostState(), initialTab = 2) } }
+        shoot("tasks-editor-permanent") { DpClockTheme { TaskEditor(flowers, today, onDismiss = {}) } }
+        runBlocking { (own + permanent).forEach { repository.deleteTask(it.id) } }
+        DpClockApp.graph(app).tasks.preview(TaskPrefs())
     }
 
     @Test
@@ -94,6 +157,20 @@ class ScreenshotsTest {
     fun settings() {
         shoot("settings") { DpClockTheme { SettingsScreen(onBack = {}) } }
         shoot("settings-appearance") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_appearance) } }
+        shoot("settings-sync") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_sync) } }
+    }
+
+    /** Синхронизация (D-030): окно расхождений с будильником и настройками. */
+    @Test
+    fun syncConflicts() {
+        val alarm = Alarm("1", 7, 0, Repeat.Weekly(DayOfWeek.entries.take(5).toSet()), enabled = true, createdAt = 1L, label = "Подъём")
+        val mine = SyncItems.snapshot(Backup(alarms = listOf(alarm), settings = Settings()))
+        val theirs = SyncItems.snapshot(Backup(alarms = listOf(alarm.copy(hour = 6, minute = 30)), settings = Settings(snoozeMinutes = 5)))
+        val at = 1_793_430_000_000L
+        val conflicts = listOf("alarm:1", SyncItems.SETTINGS).map { key ->
+            SyncConflict(key, mine.getValue(key), at, theirs.getValue(key), at + 600_000L, "Redmi Pad")
+        }
+        shoot("sync-conflicts") { DpClockTheme { SyncConflictsDialog(conflicts) {} } }
     }
 
     /** Окна 0.16.0 (D-029): новый будильник, первый запуск, таймер во весь экран. */
@@ -115,6 +192,8 @@ class ScreenshotsTest {
     private fun shoot(name: String, content: @Composable () -> Unit) {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).setup()
         controller.get().setContent(content = content)
+        // Как при запуске MainActivity: запись в базу будит потоки Room в Robolectric.
+        persistLater { DpClockApp.graph(app).repository.rescheduleAll() }
         save(controller.get(), name)
         controller.pause().stop().destroy()
     }

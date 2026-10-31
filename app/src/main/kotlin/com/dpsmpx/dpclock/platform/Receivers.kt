@@ -53,6 +53,22 @@ class AlarmReceiver : BroadcastReceiver() {
                 }
                 return
             }
+            ACTION_TASK -> {
+                val id = intent.getStringExtra(EXTRA_ID) ?: return
+                runAsync {
+                    val graph = DpClockApp.graph(context)
+                    graph.repository.task(id)?.takeIf { !it.done }?.let { graph.notifier.taskReminder(it) }
+                }
+                return
+            }
+            ACTION_TASK_NUDGE -> {
+                val id = intent.getStringExtra(EXTRA_ID) ?: return
+                runAsync {
+                    val graph = DpClockApp.graph(context)
+                    graph.repository.onTaskNudge(id)?.let { (task, stats) -> graph.notifier.taskNudge(task, stats) }
+                }
+                return
+            }
             ACTION_WARNING -> {
                 val id = intent.getStringExtra(EXTRA_ID) ?: return
                 val alarmAt = intent.getLongExtra(EXTRA_ALARM_AT, 0L)
@@ -99,6 +115,8 @@ class AlarmReceiver : BroadcastReceiver() {
         const val ACTION_CALENDAR = "com.dpsmpx.dpclock.action.CALENDAR"
         const val ACTION_WARNING = "com.dpsmpx.dpclock.action.WARNING"
         const val ACTION_CHIME = "com.dpsmpx.dpclock.action.CHIME"
+        const val ACTION_TASK = "com.dpsmpx.dpclock.action.TASK"
+        const val ACTION_TASK_NUDGE = "com.dpsmpx.dpclock.action.TASK_NUDGE"
 
         /** Бой опоздал больше этого (телефон был выключен) — не звонить. */
         private const val CHIME_LATE_MILLIS = 2 * 60_000L
@@ -143,7 +161,10 @@ class ActionReceiver : BroadcastReceiver() {
         val id = intent.getStringExtra(EXTRA_ID).orEmpty()
         runAsync {
             when (intent.action) {
-                ACTION_DISMISS_SNOOZED -> repository.stopAlarm(id, SignalOutcome.DISMISSED)
+                ACTION_DISMISS_SNOOZED -> {
+                    repository.stopAlarm(id, SignalOutcome.DISMISSED)
+                    DpClockApp.graph(context).tasks.afterAlarm()
+                }
                 // Предупреждение до сигнала (D-025, п. 5).
                 ACTION_WARNING_SKIP -> repository.skipOccurrence(id)
                 ACTION_WARNING_DISMISS -> repository.dismissEarly(id)
@@ -158,6 +179,11 @@ class ActionReceiver : BroadcastReceiver() {
                 // Виджеты (D-020): переключатель будильника, пресет одним нажатием.
                 ACTION_ALARM_TOGGLE -> repository.setAlarmEnabled(id, intent.getBooleanExtra(RemoteViews.EXTRA_CHECKED, false))
                 ACTION_PRESET_START -> repository.startPreset(id)
+                // Напоминание задачи (D-032): «Сделано» из уведомления.
+                ACTION_TASK_DONE -> {
+                    repository.completeTask(id)
+                    DpClockApp.graph(context).notifier.cancelTaskReminder(id)
+                }
             }
         }
     }
@@ -178,6 +204,7 @@ class ActionReceiver : BroadcastReceiver() {
         const val ACTION_STOPWATCH_RESET = "com.dpsmpx.dpclock.action.STOPWATCH_RESET"
         const val ACTION_ALARM_TOGGLE = "com.dpsmpx.dpclock.action.ALARM_TOGGLE"
         const val ACTION_PRESET_START = "com.dpsmpx.dpclock.action.PRESET_START"
+        const val ACTION_TASK_DONE = "com.dpsmpx.dpclock.action.TASK_DONE"
         const val EXTRA_ID = "id"
     }
 }

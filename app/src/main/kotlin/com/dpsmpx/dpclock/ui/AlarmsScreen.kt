@@ -135,6 +135,7 @@ fun AlarmsScreen(
     val settings by repository.settings.collectAsStateWithLifecycle(Settings())
     val snoozed by repository.snoozed.collectAsStateWithLifecycle(emptyMap())
     val reliability = rememberReliability()
+    val syncStatus by DpClockApp.graph(context).cloud.status.collectAsStateWithLifecycle()
     // Секунды в строках обратного отсчёта требуют секундного тика; без него экран обновляется реже.
     val now = rememberNowMillis(if (settings.showAlarmCountdown) 1_000L else 15_000L)
     val zone = ZoneId.systemDefault()
@@ -265,6 +266,10 @@ fun AlarmsScreen(
                 val issues = reliability.issues(settings.xiaomiHintsDone)
                 if (issues.isNotEmpty()) {
                     item(key = "issues") { ReliabilityBanner(issues, openSettings) }
+                }
+                // Расхождения синхронизации (D-030) — выбрать версию.
+                if (syncStatus.conflicts.isNotEmpty()) {
+                    item(key = "sync") { SyncConflictsBanner() }
                 }
                 item(key = "next") {
                     val nearest = AlarmRules.nearest(list, nowInstant, zone, exceptions)

@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
+import com.dpsmpx.dpclock.model.ElapsedUnit
+import com.dpsmpx.dpclock.model.TaskHistory
 import kotlinx.coroutines.flow.map
 import java.time.DayOfWeek
 import java.time.format.TextStyle
@@ -106,6 +108,20 @@ fun leadText(context: Context, minutes: Int): String {
         hours.takeIf { it > 0 }?.let { resources.getQuantityString(R.plurals.lead_hours, it, it) },
         mins.takeIf { it > 0 }?.let { resources.getQuantityString(R.plurals.lead_minutes, it, it) },
     ).joinToString(" ")
+}
+
+/** «2 д 3 ч», «3 мес 5 д», «1 г 2 мес» — сколько прошло (D-033). */
+fun elapsedText(context: Context, millis: Long): String {
+    val resources = context.resources
+    return TaskHistory.elapsed(millis).joinToString(" ") { (unit, n) ->
+        when (unit) {
+            ElapsedUnit.YEAR -> resources.getQuantityString(R.plurals.elapsed_years, n, n)
+            ElapsedUnit.MONTH -> resources.getQuantityString(R.plurals.elapsed_months, n, n)
+            ElapsedUnit.DAY -> resources.getQuantityString(R.plurals.lead_days, n, n)
+            ElapsedUnit.HOUR -> resources.getQuantityString(R.plurals.lead_hours, n, n)
+            ElapsedUnit.MINUTE -> resources.getQuantityString(R.plurals.lead_minutes, n, n)
+        }
+    }
 }
 
 /** «за 1 д, за 5 мин» или «нет». */

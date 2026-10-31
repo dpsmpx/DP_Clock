@@ -19,13 +19,17 @@ data class Backup(
     val worldCities: List<String> = emptyList(),
     /** null — в файле настроек нет. Отметки про Xiaomi и первый запуск относятся к телефону и не переносятся. */
     val settings: Settings? = null,
+    /** Свои задачи (D-032) — без флажка календаря и события: они от этого телефона. */
+    val tasks: List<Task> = emptyList(),
+    /** Отметки «сделано» (D-033). */
+    val marks: List<TaskMark> = emptyList(),
     /** Когда и какой версией приложения сохранён файл; не указано — null и пусто. */
     val exportedAt: Instant? = null,
     val appVersion: String = "",
 ) {
     val isEmpty: Boolean
         get() = alarms.isEmpty() && groups.isEmpty() && templates.isEmpty() && exceptions.isEmpty() && presets.isEmpty() &&
-            worldCities.isEmpty() && settings == null
+            worldCities.isEmpty() && settings == null && tasks.isEmpty() && marks.isEmpty()
 }
 
 /** Файл не загружается (D-018, п. 5); в базе ничего не меняется. */
@@ -68,25 +72,17 @@ object BackupFormat {
             "format" to if (rules) VERSION else 1,
             "appVersion" to appVersion,
             "exportedAt" to exportedAt.toString(),
-            "alarms" to backup.alarms.map { alarm(it, blueprint = false) },
-            "groups" to backup.groups.map { mapOf("id" to it.id, "name" to it.name, "createdAt" to it.createdAt) },
-            "templates" to backup.templates.map { template ->
-                mapOf(
-                    "id" to template.id,
-                    "name" to template.name,
-                    "createdAt" to template.createdAt,
-                    "alarms" to template.alarms.map { alarm(it, blueprint = true) },
-                )
-            },
-            "exceptions" to backup.exceptions.map {
-                mapOf("id" to it.id, "name" to it.name, "start" to it.start.toString(), "end" to it.end.toString())
-            },
-            "presets" to backup.presets.map {
-                mapOf("id" to it.id, "name" to it.name, "createdAt" to it.createdAt, "program" to program(it.program))
-            },
+            "alarms" to backup.alarms.map(::alarmMap),
+            "groups" to backup.groups.map(::groupMap),
+            "templates" to backup.templates.map(::templateMap),
+            "exceptions" to backup.exceptions.map(::exceptionMap),
+            "presets" to backup.presets.map(::presetMap),
             "worldCities" to backup.worldCities,
         )
         backup.settings?.let { root["settings"] = settings(it) }
+        // Задачи (0.19.0) — новым полем: прежние версии его пропускают, формат тот же.
+        if (backup.tasks.isNotEmpty()) root["tasks"] = backup.tasks.map(::taskMap)
+        if (backup.marks.isNotEmpty()) root["taskMarks"] = backup.marks.map(::markMap)
         return Json.write(root)
     }
 
@@ -105,30 +101,14 @@ object BackupFormat {
             val o = Obj(root, "")
             Backup(
                 alarms = o.objs("alarms").map { alarm(it, blueprint = false) },
-                groups = o.objs("groups").map {
-                    AlarmGroup(it.string("id"), it.string("name", "").take(AlarmGroup.MAX_NAME), it.long("createdAt", 0L))
-                },
-                templates = o.objs("templates").map {
-                    AlarmTemplate(
-                        id = it.string("id"),
-                        name = it.string("name", "").take(AlarmGroup.MAX_NAME),
-                        alarms = it.objs("alarms").map { blueprint -> alarm(blueprint, blueprint = true) },
-                        createdAt = it.long("createdAt", 0L),
-                    )
-                },
-                exceptions = o.objs("exceptions").map {
-                    ExceptionPeriod(
-                        id = it.string("id"),
-                        name = it.string("name", "").take(ExceptionPeriod.MAX_NAME),
-                        start = LocalDate.parse(it.string("start")),
-                        end = LocalDate.parse(it.string("end")),
-                    )
-                },
-                presets = o.objs("presets").map {
-                    TimerPreset(it.string("id"), it.string("name", ""), program(it.obj("program") ?: it.missing("program")), it.long("createdAt", 0L))
-                },
+                groups = o.objs("groups").map(::group),
+                templates = o.objs("templates").map(::template),
+                exceptions = o.objs("exceptions").map(::exception),
+                presets = o.objs("presets").map(::preset),
                 worldCities = o.list("worldCities").map { it as String }.distinct(),
                 settings = o.obj("settings")?.let(::settings),
+                tasks = o.objs("tasks").map(::task),
+                marks = o.objs("taskMarks").map { TaskMark(it.string("id"), it.string("taskId"), it.long("at")) },
                 exportedAt = o.stringOrNull("exportedAt")?.let { runCatching { Instant.parse(it) }.getOrNull() },
                 appVersion = o.string("appVersion", ""),
             )
@@ -139,6 +119,111 @@ object BackupFormat {
             throw BackupException(BackupException.Reason.BROKEN, e.message ?: e::class.simpleName.orEmpty(), e)
         }
     }
+
+    // Части файла — и для синхронизации (D-030): тот же вид, что в файле переноса.
+
+    internal fun alarmMap(alarm: Alarm): Map<String, Any?> = alarm(alarm, blueprint = false)
+
+    internal fun groupMap(group: AlarmGroup): Map<String, Any?> = mapOf("id" to group.id, "name" to group.name, "createdAt" to group.createdAt)
+
+    internal fun templateMap(template: AlarmTemplate): Map<String, Any?> = mapOf(
+        "id" to template.id,
+        "name" to template.name,
+        "createdAt" to template.createdAt,
+        "alarms" to template.alarms.map { alarm(it, blueprint = true) },
+    )
+
+    internal fun exceptionMap(period: ExceptionPeriod): Map<String, Any?> =
+        mapOf("id" to period.id, "name" to period.name, "start" to period.start.toString(), "end" to period.end.toString())
+
+    internal fun presetMap(preset: TimerPreset): Map<String, Any?> =
+        mapOf("id" to preset.id, "name" to preset.name, "createdAt" to preset.createdAt, "program" to program(preset.program))
+
+    internal fun settingsMap(settings: Settings): Map<String, Any?> = settings(settings)
+
+    /** Своя задача без того, что относится к телефону: флажка календаря и события. */
+    internal fun taskMap(task: Task): Map<String, Any?> = linkedMapOf(
+        "id" to task.id,
+        "title" to task.title,
+        "note" to task.note,
+        "date" to task.date?.toString(),
+        "time" to task.time?.let { two(it.hour) + ":" + two(it.minute) },
+        "reminder" to task.reminder,
+        "repeat" to task.repeat.code,
+        "done" to task.done,
+        "doneAt" to task.doneAt,
+        "createdAt" to task.createdAt,
+        "permanent" to task.permanent,
+        "parentId" to task.parentId,
+        "difficulty" to task.difficulty.name,
+        "urgency" to task.urgency.name,
+        "remindLate" to task.remindLate,
+        "remindAfterDays" to task.remindAfterDays,
+    )
+
+    internal fun markMap(mark: TaskMark): Map<String, Any?> = linkedMapOf("id" to mark.id, "taskId" to mark.taskId, "at" to mark.at)
+
+    internal fun markFrom(map: Map<*, *>): TaskMark = parse { Obj(map, "mark").let { TaskMark(it.string("id"), it.string("taskId"), it.long("at")) } }
+
+    internal fun taskFrom(map: Map<*, *>): Task = parse { task(Obj(map, "task")) }
+
+    internal fun alarmFrom(map: Map<*, *>): Alarm = parse { alarm(Obj(map, "alarm"), blueprint = false) }
+
+    internal fun groupFrom(map: Map<*, *>): AlarmGroup = parse { group(Obj(map, "group")) }
+
+    internal fun templateFrom(map: Map<*, *>): AlarmTemplate = parse { template(Obj(map, "template")) }
+
+    internal fun exceptionFrom(map: Map<*, *>): ExceptionPeriod = parse { exception(Obj(map, "exception")) }
+
+    internal fun presetFrom(map: Map<*, *>): TimerPreset = parse { preset(Obj(map, "preset")) }
+
+    internal fun settingsFrom(map: Map<*, *>): Settings = parse { settings(Obj(map, "settings")) }
+
+    /** Ошибка в данных — [BackupException] «повреждён», как у файла переноса. */
+    private fun <T> parse(block: () -> T): T = try {
+        block()
+    } catch (e: BackupException) {
+        throw e
+    } catch (e: RuntimeException) {
+        throw BackupException(BackupException.Reason.BROKEN, e.message ?: e::class.simpleName.orEmpty(), e)
+    }
+
+    private fun task(o: Obj) = Task(
+        id = o.string("id"),
+        title = o.string("title", "").take(Task.MAX_TITLE),
+        note = o.string("note", "").take(Task.MAX_NOTE),
+        date = o.stringOrNull("date")?.let { LocalDate.parse(it) },
+        time = o.stringOrNull("time")?.let { LocalTime.parse(it) },
+        reminder = o.intOrNull("reminder")?.coerceIn(0, 7 * 24 * 60),
+        repeat = TaskRepeat.decode(o.string("repeat", "")),
+        done = o.bool("done", false),
+        doneAt = if (o.has("doneAt")) o.long("doneAt") else null,
+        createdAt = o.long("createdAt", 0L),
+        permanent = o.bool("permanent", false),
+        parentId = o.stringOrNull("parentId"),
+        difficulty = o.enum("difficulty", TaskLevel.NONE),
+        urgency = o.enum("urgency", TaskLevel.NONE),
+        remindLate = o.bool("remindLate", false),
+        remindAfterDays = o.intOrNull("remindAfterDays")?.coerceIn(1, 3650),
+    )
+
+    private fun group(o: Obj) = AlarmGroup(o.string("id"), o.string("name", "").take(AlarmGroup.MAX_NAME), o.long("createdAt", 0L))
+
+    private fun template(o: Obj) = AlarmTemplate(
+        id = o.string("id"),
+        name = o.string("name", "").take(AlarmGroup.MAX_NAME),
+        alarms = o.objs("alarms").map { blueprint -> alarm(blueprint, blueprint = true) },
+        createdAt = o.long("createdAt", 0L),
+    )
+
+    private fun exception(o: Obj) = ExceptionPeriod(
+        id = o.string("id"),
+        name = o.string("name", "").take(ExceptionPeriod.MAX_NAME),
+        start = LocalDate.parse(o.string("start")),
+        end = LocalDate.parse(o.string("end")),
+    )
+
+    private fun preset(o: Obj) = TimerPreset(o.string("id"), o.string("name", ""), program(o.obj("program") ?: o.missing("program")), o.long("createdAt", 0L))
 
     // Запись
 
@@ -474,6 +559,7 @@ object BackupRules {
     fun forImport(backup: Backup, newId: () -> String): Backup {
         val groups = backup.groups.associate { it.id to newId() }
         val presets = backup.presets.associate { it.id to newId() }
+        val tasks = backup.tasks.associate { it.id to newId() }
         fun after(after: AfterAlarm) = after.copy(presetId = after.presetId?.let(presets::get))
         return backup.copy(
             alarms = backup.alarms.map { it.copy(id = newId(), groupId = it.groupId?.let(groups::get), after = after(it.after)) },
@@ -483,6 +569,8 @@ object BackupRules {
             },
             exceptions = backup.exceptions.map { it.copy(id = newId()) },
             presets = backup.presets.map { it.copy(id = presets.getValue(it.id)) },
+            tasks = backup.tasks.map { it.copy(id = tasks.getValue(it.id), parentId = it.parentId?.let(tasks::get), inCalendar = false, eventId = null, nudged = null) },
+            marks = backup.marks.mapNotNull { mark -> tasks[mark.taskId]?.let { mark.copy(id = newId(), taskId = it) } },
         )
     }
 }

@@ -32,6 +32,8 @@ class CalendarStore(context: Context) {
             putString(EVENT_CALENDARS, new.eventCalendars.joinToString(","))
             putInt(EARLY_LEAD, new.earlyLeadMinutes)
             putBoolean(SHOW_NEXT, new.showNext)
+            val task = new.taskCalendar
+            if (task != null) putLong(TASK_CALENDAR, task) else remove(TASK_CALENDAR)
         }
         settingsFlow.value = new
         return new
@@ -69,6 +71,7 @@ class CalendarStore(context: Context) {
         eventCalendars = readIds(EVENT_CALENDARS),
         earlyLeadMinutes = prefs.getInt(EARLY_LEAD, 0).coerceAtLeast(0),
         showNext = prefs.getBoolean(SHOW_NEXT, true),
+        taskCalendar = if (prefs.contains(TASK_CALENDAR)) prefs.getLong(TASK_CALENDAR, 0L) else null,
     )
 
     private fun readIds(key: String): Set<Long> =
@@ -86,6 +89,7 @@ class CalendarStore(context: Context) {
         const val EVENT_CALENDARS = "eventCalendars"
         const val EARLY_LEAD = "earlyLead"
         const val SHOW_NEXT = "showNext"
+        const val TASK_CALENDAR = "taskCalendar"
         const val EXCEPTION_DATES = "exceptionDates"
         const val CANCELLED = "cancelled"
     }

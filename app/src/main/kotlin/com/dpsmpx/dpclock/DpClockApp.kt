@@ -9,17 +9,22 @@ import com.dpsmpx.dpclock.data.ClockDatabase
 import com.dpsmpx.dpclock.data.ClockRepository
 import com.dpsmpx.dpclock.data.WeatherStore
 import com.dpsmpx.dpclock.platform.Clocks
+import com.dpsmpx.dpclock.platform.CloudSync
 import com.dpsmpx.dpclock.platform.Notifier
 import com.dpsmpx.dpclock.platform.Scheduler
 import com.dpsmpx.dpclock.platform.Surfaces
+import com.dpsmpx.dpclock.platform.TaskStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
-/** Разделы нижней панели слева направо (D-010, п. 2). */
-enum class Section { ALARMS, TIMERS, STOPWATCH, CLOCK, WORLD }
+/**
+ * Разделы нижней панели слева направо (D-010, п. 2). С 0.20.0 (D-033) секундомер —
+ * вкладка «Таймеров», на его месте — «Задачи».
+ */
+enum class Section { ALARMS, TIMERS, TASKS, CLOCK, WORLD }
 
 /** Общие объекты процесса. Работают и до первой разблокировки: база — в хранилище устройства. */
 class AppGraph(context: Context) {
@@ -28,7 +33,16 @@ class AppGraph(context: Context) {
 
     /** Календарь телефона (D-023): выбор календарей и даты исключений. */
     val calendar = CalendarStore(context)
-    val repository = ClockRepository(context, ClockDatabase.open(context), scheduler, notifier, calendar) { Surfaces.changed(context) }
+    val repository: ClockRepository = ClockRepository(context, ClockDatabase.open(context), scheduler, notifier, calendar) {
+        Surfaces.changed(context)
+        cloud.changed()
+    }
+
+    /** Синхронизация общим файлом (D-030). */
+    val cloud: CloudSync by lazy { CloudSync(context, repository, notifier) }
+
+    /** Задачи Google и показ задач (D-032); свои задачи — в [repository]. */
+    val tasks: TaskStore by lazy { TaskStore(context, notifier, repository) }
 
     /** Погода нужна только экрану «Мировые часы» (D-019). */
     val weather by lazy { WeatherStore(context, repository) }
@@ -53,6 +67,11 @@ class DpClockApp : Application(), CameraXConfig.Provider {
 
         fun graph(context: Context): AppGraph =
             graph ?: synchronized(this) { graph ?: AppGraph(context.applicationContext).also { graph = it } }
+
+        /** Тесты на Robolectric: у каждого теста своё приложение и свои файлы — и свой граф. */
+        internal fun resetGraph() {
+            graph = null
+        }
     }
 }
 

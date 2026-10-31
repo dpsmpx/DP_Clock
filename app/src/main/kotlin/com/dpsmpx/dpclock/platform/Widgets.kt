@@ -23,8 +23,10 @@ import com.dpsmpx.dpclock.ui.offsetText
 import com.dpsmpx.dpclock.ui.repeatText
 import com.dpsmpx.dpclock.ui.temperatureText
 import com.dpsmpx.dpclock.ui.weatherText
+import com.dpsmpx.dpclock.ui.widgetTasksText
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.TextStyle
 
@@ -123,6 +125,9 @@ object Widgets {
             val event = PhoneCalendar.nextEvent(context)
             setViewVisibility(R.id.widget_event, if (event == null) View.GONE else View.VISIBLE)
             if (event != null) setTextViewText(R.id.widget_event, eventText(context, event))
+            val tasks = widgetTasksText(context, data.tasks, DpClockApp.graph(context).tasks.current(), LocalDate.now())
+            setViewVisibility(R.id.widget_tasks, if (tasks == null) View.GONE else View.VISIBLE)
+            if (tasks != null) setTextViewText(R.id.widget_tasks, tasks)
             setOnClickPendingIntent(android.R.id.background, open(context, Section.CLOCK))
             setOnClickPendingIntent(R.id.widget_alarm, open(context, Section.ALARMS))
         }

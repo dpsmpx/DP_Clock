@@ -3,7 +3,14 @@ package com.dpsmpx.dpclock
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -32,6 +39,7 @@ import com.dpsmpx.dpclock.model.Settings
 import com.dpsmpx.dpclock.ui.AppIcons
 import com.dpsmpx.dpclock.ui.ClockBackdrop
 import com.dpsmpx.dpclock.ui.ClockFace
+import com.dpsmpx.dpclock.ui.TasksPanel
 import com.dpsmpx.dpclock.ui.clockSide
 import com.dpsmpx.dpclock.ui.eventText
 import com.dpsmpx.dpclock.ui.rememberNextEvent
@@ -40,13 +48,23 @@ import com.dpsmpx.dpclock.ui.isShown
 /** Сторона часов — доля меньшей стороны окна. */
 private const val FACE_FRACTION = 0.7f
 
+/** С задачами на широком окне часам — эта доля ширины, задачам — остальное (D-031). */
+private const val WIDE_CLOCK_SHARE = 0.55f
+
+/** Место под часами: задачи, кнопка ночных часов и событие. */
+private val TASKS_ROOM = 300.dp
+private val BOTTOM_PLAIN = 64.dp
+private val BOTTOM_WITH_EVENT = 112.dp
+private val MIN_FACE = 140.dp
+private val TASKS_WIDTH = 480.dp
+
 /**
  * Раздел «Часы»: текущее время по центру в выбранном стиле (D-004; D-021, п. 4),
- * под ним — фон (D-021, п. 6); внизу — ближайшее событие календаря (D-023, п. 4)
- * и «Ночные часы» (D-017, п. 4).
+ * под ним — фон (D-021, п. 6); под часами — задачи на сегодня (D-032); внизу —
+ * ближайшее событие календаря (D-023, п. 4) и «Ночные часы» (D-017, п. 4).
  */
 @Composable
-fun ClockScreen(modifier: Modifier = Modifier, visible: Boolean = true) {
+fun ClockScreen(modifier: Modifier = Modifier, visible: Boolean = true, openTasks: () -> Unit = {}) {
     val context = LocalContext.current
     val repository = DpClockApp.graph(context).repository
     val settings by repository.settings.collectAsStateWithLifecycle(Settings())
@@ -63,33 +81,64 @@ fun ClockScreen(modifier: Modifier = Modifier, visible: Boolean = true) {
                 .safeDrawingPadding(),
             contentAlignment = Alignment.Center,
         ) {
-            val side = clockSide(maxWidth, maxHeight, FACE_FRACTION)
-            // Касание по часам — ночные часы, долгое — следующий стиль часов (D-029, п. 9).
-            Box(
-                Modifier.combinedClickable(
-                    interactionSource = null,
-                    indication = null,
-                    onClickLabel = stringResource(R.string.clock_tap_night),
-                    onLongClickLabel = stringResource(R.string.clock_long_style),
-                    onClick = { context.startActivity(Intent(context, NightClockActivity::class.java)) },
-                    onLongClick = {
-                        val styles = ClockStyle.entries
-                        val next = styles[(styles.indexOf(settings.appearance.clockStyle) + 1) % styles.size]
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        persistLater { repository.updateSettings { it.copy(appearance = it.appearance.copy(clockStyle = next)) } }
-                    },
-                ),
-            ) {
-                ClockFace(
-                    settings.appearance,
-                    night = false,
-                    size = side,
-                    active = visible,
-                    onBackdrop = backdrop,
-                )
+            // Задачи на сегодня (D-032): под часами, на широком окне — справа от них.
+            val taskPrefs by DpClockApp.graph(context).tasks.state.collectAsStateWithLifecycle()
+            val withTasks = taskPrefs.showClock
+            val wide = maxWidth > maxHeight
+            val event = rememberNextEvent(active = visible)
+            val bottom = if (event != null) BOTTOM_WITH_EVENT else BOTTOM_PLAIN
+            val side = when {
+                !withTasks -> clockSide(maxWidth, maxHeight, FACE_FRACTION)
+                wide -> clockSide(maxWidth * WIDE_CLOCK_SHARE, maxHeight - bottom, FACE_FRACTION)
+                else -> minOf(maxWidth * FACE_FRACTION, maxHeight - bottom - TASKS_ROOM).coerceAtLeast(MIN_FACE)
+            }
+            val face: @Composable () -> Unit = {
+                // Касание по часам — ночные часы, долгое — следующий стиль часов (D-029, п. 9).
+                Box(
+                    Modifier.combinedClickable(
+                        interactionSource = null,
+                        indication = null,
+                        onClickLabel = stringResource(R.string.clock_tap_night),
+                        onLongClickLabel = stringResource(R.string.clock_long_style),
+                        onClick = { context.startActivity(Intent(context, NightClockActivity::class.java)) },
+                        onLongClick = {
+                            val styles = ClockStyle.entries
+                            val next = styles[(styles.indexOf(settings.appearance.clockStyle) + 1) % styles.size]
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            persistLater { repository.updateSettings { it.copy(appearance = it.appearance.copy(clockStyle = next)) } }
+                        },
+                    ),
+                ) {
+                    ClockFace(
+                        settings.appearance,
+                        night = false,
+                        size = side,
+                        active = visible,
+                        onBackdrop = backdrop,
+                    )
+                }
+            }
+            when {
+                !withTasks -> face()
+                wide -> Row(
+                    Modifier.fillMaxSize().padding(bottom = bottom),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    face()
+                    TasksPanel(backdrop, openTasks, Modifier.widthIn(max = TASKS_WIDTH).weight(1f, fill = false))
+                }
+                else -> Column(
+                    Modifier.fillMaxSize().padding(bottom = bottom),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    face()
+                    Spacer(Modifier.height(16.dp))
+                    TasksPanel(backdrop, openTasks, Modifier.widthIn(max = TASKS_WIDTH).fillMaxWidth().padding(horizontal = 24.dp))
+                }
             }
             // Ближайшее событие сегодня (D-023, п. 4) — над кнопкой ночных часов.
-            val event = rememberNextEvent(active = visible)
             if (event != null) {
                 Text(
                     eventText(context, event),

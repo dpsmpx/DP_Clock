@@ -495,6 +495,12 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
                     modifier = Modifier.clickable { dialog = "journal" },
                 )
             },
+            SettingsSection(R.string.settings_tasks, listOf(R.string.tasks_calendar, R.string.tasks_show_clock, R.string.tasks_show_after_alarm, R.string.tasks_show_widget)) {
+                TaskSettings()
+            },
+            SettingsSection(R.string.settings_sync, listOf(R.string.sync_create, R.string.sync_choose, R.string.sync_now, R.string.sync_off)) {
+                SyncSettings(snackbar)
+            },
             SettingsSection(R.string.settings_transfer, listOf(R.string.backup_save, R.string.backup_load)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.backup_save)) },

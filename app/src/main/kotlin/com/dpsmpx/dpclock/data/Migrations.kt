@@ -203,3 +203,16 @@ val MIGRATION_14_15 = SqlMigration(
             "ELSE `background` END, `appBackground` = 'NONE', `nightBackground` = 'NONE'",
     ),
 )
+
+/**
+ * 0.16.0 (D-029): вибро-отклик кнопок — включён; первый запуск у тех, кто уже пользуется
+ * приложением, считается пройденным — подсказки им не нужны.
+ */
+val MIGRATION_15_16 = SqlMigration(
+    15,
+    16,
+    listOf(
+        "ALTER TABLE `settings` ADD COLUMN `onboardingDone` INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE `settings` ADD COLUMN `haptics` INTEGER NOT NULL DEFAULT 1",
+    ),
+)

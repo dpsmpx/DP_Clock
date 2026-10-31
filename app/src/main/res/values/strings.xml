@@ -796,4 +796,39 @@
     <string name="interval_count">How many times</string>
     <string name="interval_name">Every %1$s</string>
     <string name="interval_forever_summary">Every %1$s · until stopped</string>
+
+    <!-- Улучшения интерфейса (D-029) -->
+    <string name="new_alarm_once">No days — rings once</string>
+    <string name="new_alarm_repeat">Repeats on the chosen days</string>
+    <string name="nap">Nap</string>
+    <string name="nap_in">In %1$d min</string>
+    <string name="copy">Copy</string>
+    <string name="full_screen">Full screen</string>
+    <string name="close_full_screen">Close full screen</string>
+    <string name="recent_timer_start">Start a %1$s timer</string>
+    <plurals name="laps_count">
+        <item quantity="one">%1$d lap</item>
+        <item quantity="other">%1$d laps</item>
+    </plurals>
+    <string name="settings_search">Search settings</string>
+    <string name="settings_search_none">Nothing found</string>
+    <string name="haptics">Button vibration</string>
+    <string name="haptics_text">A short tap on timer and stopwatch buttons</string>
+    <string name="clock_tap_night">Night clock</string>
+    <string name="clock_long_style">Change clock style</string>
+    <string name="onboarding_step">Step %1$d of %2$d</string>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_allow">Allow notifications</string>
+    <string name="onboarding_ok">All set</string>
+    <string name="onboarding_notifications_title">Notifications</string>
+    <string name="onboarding_notifications_text">A ringing or snoozed alarm and running timers are shown as notifications. Without permission the signal may not appear.</string>
+    <string name="onboarding_signal_title">Over the lock screen and on time</string>
+    <string name="onboarding_signal_text">The alarm screen appears over the lock screen, and the alarm rings exactly on time.</string>
+    <string name="onboarding_volume_title">Alarm volume</string>
+    <string name="onboarding_volume_text">Alarms ring at the alarm volume of the phone; Do not disturb should let alarms through.</string>
+    <string name="onboarding_item_notifications">Notifications</string>
+    <string name="onboarding_item_full_screen">Alarm over the lock screen</string>
+    <string name="onboarding_item_exact">Exact alarms</string>
+    <string name="onboarding_item_dnd">Do not disturb lets alarms through</string>
 </resources>

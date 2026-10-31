@@ -24,6 +24,8 @@ object AppIcons {
     val Chart = icon("Chart", "M4 20h16 M7 16v-4 M12 16V7 M17 16v-7")
     val Add = icon("Add", "M12 5v14 M5 12h14")
     val Remove = icon("Remove", "M5 12h14")
+    val Check = icon("Check", "M5 12.5l4.5 4.5L19 7")
+    val FullScreen = icon("FullScreen", "M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5")
     val Play = icon("Play", "M8 5l11 7l-11 7z", filled = true)
     val Pause = icon("Pause", "M9 5v14 M15 5v14", width = 3f)
     val Stop = icon("Stop", "M6.5 6.5h11v11h-11z", filled = true)

@@ -2,7 +2,6 @@ package com.dpsmpx.dpclock.ui
 
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
@@ -16,31 +15,42 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
+import kotlinx.coroutines.flow.map
 import java.time.DayOfWeek
 import java.time.format.TextStyle
 
-/** Дни недели флажками в порядке языка; TalkBack читает день целиком (D-022, п. 3). */
+/**
+ * Дни недели флажками в порядке языка — равной ширины в одну строку: помещаются
+ * и в окно, и в строку будильника. TalkBack читает день целиком (D-022, п. 3).
+ */
 @Composable
 fun DayChips(selected: Set<DayOfWeek>, onToggle: (DayOfWeek) -> Unit) {
     val locale = LocalConfiguration.current.locales[0]
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         for (day in orderedDays(locale)) {
             FilterChip(
                 selected = day in selected,
                 onClick = { onToggle(day) },
-                label = { Text(day.getDisplayName(TextStyle.NARROW_STANDALONE, locale)) },
-                modifier = Modifier.semantics { contentDescription = day.getDisplayName(TextStyle.FULL_STANDALONE, locale) },
+                label = { Text(day.getDisplayName(TextStyle.NARROW_STANDALONE, locale), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+                modifier = Modifier.weight(1f).semantics { contentDescription = day.getDisplayName(TextStyle.FULL_STANDALONE, locale) },
             )
         }
     }
@@ -102,3 +112,15 @@ fun leadText(context: Context, minutes: Int): String {
 fun warningsText(context: Context, minutes: List<Int>): String =
     if (minutes.isEmpty()) context.getString(R.string.warnings_none)
     else minutes.joinToString(", ") { context.getString(R.string.warning_before, leadText(context, it)) }
+
+/**
+ * Вибро-отклик кнопки (D-029, п. 7): короткий щелчок, если он не выключен в настройках.
+ * Системная настройка «Отклик на касание» тоже действует.
+ */
+@Composable
+fun rememberHaptic(): () -> Unit {
+    val haptic = LocalHapticFeedback.current
+    val repository = DpClockApp.graph(LocalContext.current).repository
+    val enabled by remember(repository) { repository.settings.map { it.haptics } }.collectAsStateWithLifecycle(true)
+    return { if (enabled) haptic.performHapticFeedback(HapticFeedbackType.ContextClick) }
+}

@@ -20,6 +20,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 
 /**
@@ -60,6 +61,7 @@ fun FitText(
     modifier: Modifier = Modifier,
     color: Color = Color.Unspecified,
     textAlign: TextAlign = TextAlign.Unspecified,
+    minFontSize: TextUnit = 12.sp,
 ) {
     val content = LocalContentColor.current
     BasicText(
@@ -67,7 +69,7 @@ fun FitText(
         modifier,
         style = style.copy(color = color.takeOrElse { style.color.takeOrElse { content } }, textAlign = textAlign),
         maxLines = 1,
-        autoSize = TextAutoSize.StepBased(minFontSize = 12.sp, maxFontSize = style.fontSize),
+        autoSize = TextAutoSize.StepBased(minFontSize = minFontSize, maxFontSize = style.fontSize),
     )
 }
 

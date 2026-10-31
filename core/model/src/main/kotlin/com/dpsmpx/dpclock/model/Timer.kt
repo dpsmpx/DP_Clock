@@ -226,6 +226,16 @@ data class TimerAdvance(
 object TimerRules {
     const val ADD_MILLIS: Long = 60_000L
 
+    /** Сколько недавних длительностей помнить (D-029, п. 5). */
+    const val RECENT = 5
+
+    /** Недавние длительности: новая — первой, без повторов, не больше [RECENT]. */
+    fun recent(list: List<Long>, millis: Long): List<Long> = (listOf(millis) + list.filter { it != millis }).take(RECENT)
+
+    /** Простой таймер с клавиатуры — для недавних: один шаг без названия, не пресет и не засыпания. */
+    fun isPlain(program: TimerProgram, name: String, presetId: String?): Boolean =
+        presetId == null && name.isBlank() && !program.sleep && !program.isChain && program.steps.single().name.isBlank()
+
     fun start(id: String, presetId: String?, name: String, program: TimerProgram, now: Moment): TimerRun =
         TimerRun(
             id = id,

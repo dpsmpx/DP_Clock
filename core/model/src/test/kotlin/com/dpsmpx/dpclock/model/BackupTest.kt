@@ -80,7 +80,7 @@ class BackupTest {
             bedtime = Bedtime(BedtimeMode.SCHEDULE, 450, 22, 30, setOf(DayOfWeek.SUNDAY, DayOfWeek.MONDAY), 30),
             weather = WeatherSettings(WeatherMode.CITY, WeatherPlace("Тула", 54.1931, 37.6177)),
             appearance = Appearance(ThemeMode.BLACK, 0xFF3F5AA9.toInt(), ClockStyle.DIGITS, ClockFont.SEGMENT, 80, NoiseKind.PINK, ClockBackground.STARS, highContrast = true, wallpaper = ClockBackground.HYPERCUBE),
-            showAlarmDate = true, defaultWarnings = listOf(60, 5), warningSound = true,
+            showAlarmDate = true, defaultWarnings = listOf(60, 5), warningSound = true, haptics = false,
             chimes = Chimes(ChimeEvery.HALF_HOUR, vibrate = true, countHours = false, quiet = true, LocalTime.of(23, 30), LocalTime.of(7, 15), setOf(DayOfWeek.SATURDAY)),
             pomodoro = Pomodoro(50, 10, 30, 3, 2, autoAdvance = true, dnd = true),
         ),

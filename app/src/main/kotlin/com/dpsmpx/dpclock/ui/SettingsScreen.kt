@@ -1,5 +1,14 @@
 package com.dpsmpx.dpclock.ui
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TextField
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.activity.compose.BackHandler
 import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Context
@@ -18,8 +27,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -87,7 +94,7 @@ import java.time.format.TextStyle
 /** Настройки MVP (SCREEN_MAP.md, п. 9). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
     val context = LocalContext.current
     val repository = DpClockApp.graph(context).repository
     val settings by repository.settings.collectAsStateWithLifecycle(Settings())
@@ -125,12 +132,54 @@ fun SettingsScreen(onBack: () -> Unit) {
         }
     }
 
+    // Разделы — своими экранами, сверху поиск (D-029, п. 8).
+    var open by rememberSaveable { mutableStateOf(initialSection) }
+    var searching by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+    val twoPane = rememberWindowLayout().twoPane
+    BackHandler(enabled = searching || (open != null && !twoPane)) {
+        if (searching) {
+            searching = false
+            query = ""
+        } else {
+            open = null
+        }
+    }
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { TitleText(stringResource(R.string.settings)) },
+                title = {
+                    if (searching) {
+                        val focus = remember { FocusRequester() }
+                        LaunchedEffect(Unit) { focus.requestFocus() }
+                        TextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            placeholder = { Text(stringResource(R.string.settings_search)) },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent),
+                            modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                        )
+                    } else {
+                        TitleText(stringResource(open?.takeIf { !twoPane } ?: R.string.settings))
+                    }
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(AppIcons.Back, contentDescription = stringResource(R.string.back)) }
+                    IconButton(onClick = {
+                        when {
+                            searching -> {
+                                searching = false
+                                query = ""
+                            }
+                            open != null && !twoPane -> open = null
+                            else -> onBack()
+                        }
+                    }) { Icon(AppIcons.Back, contentDescription = stringResource(R.string.back)) }
+                },
+                actions = {
+                    if (!searching) {
+                        IconButton(onClick = { searching = true }) { Icon(AppIcons.Search, contentDescription = stringResource(R.string.settings_search)) }
+                    }
                 },
             )
         },
@@ -138,7 +187,7 @@ fun SettingsScreen(onBack: () -> Unit) {
     ) { padding ->
         // Разделы настроек; на широком окне — в две колонки (D-022, п. 2).
         val sections = listOf(
-            SettingsSection(R.string.settings_alarms) {
+            SettingsSection(R.string.settings_alarms, listOf(R.string.snooze_interval, R.string.auto_stop, R.string.alarm_order, R.string.alarm_countdown, R.string.alarm_date, R.string.warnings_default, R.string.warning_sound)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.snooze_interval)) },
                     supportingContent = { Text(stringResource(R.string.minutes_value, settings.snoozeMinutes)) },
@@ -185,7 +234,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     },
                 )
             },
-            SettingsSection(R.string.settings_chimes) {
+            SettingsSection(R.string.settings_chimes, listOf(R.string.chimes, R.string.chimes_vibrate, R.string.chimes_count, R.string.chimes_quiet)) {
                 val chimes = settings.chimes
                 fun updateChimes(change: (Chimes) -> Chimes) = update { it.copy(chimes = change(it.chimes)) }
                 ListItem(
@@ -235,7 +284,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     }
                 }
             },
-            SettingsSection(R.string.settings_calendar) {
+            SettingsSection(R.string.settings_calendar, listOf(R.string.calendar_exceptions, R.string.calendar_events, R.string.calendar_early, R.string.calendar_show_next)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.calendar_exceptions)) },
                     supportingContent = {
@@ -274,7 +323,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     )
                 }
             },
-            SettingsSection(R.string.settings_signal) {
+            SettingsSection(R.string.settings_signal, listOf(R.string.signal_style, R.string.volume_buttons)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.signal_style)) },
                     supportingContent = { Text(stringResource(styleTitle(settings.signalStyle))) },
@@ -286,7 +335,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     modifier = Modifier.clickable { dialog = "volume" },
                 )
             },
-            SettingsSection(R.string.settings_sleep) {
+            SettingsSection(R.string.settings_sleep, listOf(R.string.bedtime_reminder, R.string.sleep_goal, R.string.bedtime_at, R.string.bedtime_lead, R.string.night_dream)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.bedtime_reminder)) },
                     supportingContent = { Text(stringResource(bedtimeModeTitle(settings.bedtime.mode))) },
@@ -331,7 +380,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     },
                 )
             },
-            SettingsSection(R.string.settings_appearance) {
+            SettingsSection(R.string.settings_appearance, listOf(R.string.appearance_theme, R.string.appearance_color, R.string.high_contrast, R.string.clock_style, R.string.clock_font, R.string.clock_size, R.string.app_background, R.string.wallpaper, R.string.night_noise, R.string.haptics)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.appearance_theme)) },
                     supportingContent = { Text(stringResource(themeTitle(settings.appearance.theme))) },
@@ -391,15 +440,22 @@ fun SettingsScreen(onBack: () -> Unit) {
                     supportingContent = { Text(stringResource(noiseTitle(settings.appearance.nightNoise))) },
                     modifier = Modifier.clickable { dialog = "noise" },
                 )
+                // Вибро-отклик кнопок таймеров и секундомера (D-029, п. 7).
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.haptics)) },
+                    supportingContent = { Text(stringResource(R.string.haptics_text)) },
+                    trailingContent = { Switch(checked = settings.haptics, onCheckedChange = null) },
+                    modifier = Modifier.toggleable(value = settings.haptics, role = Role.Switch) { on -> update { it.copy(haptics = on) } },
+                )
             },
-            SettingsSection(R.string.settings_world) {
+            SettingsSection(R.string.settings_world, listOf(R.string.weather_title)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.weather_title)) },
                     supportingContent = { Text(weatherModeText(settings.weather.mode, settings.weather.place)) },
                     modifier = Modifier.clickable { weatherChoice.openOptions() },
                 )
             },
-            SettingsSection(R.string.settings_reliability) {
+            SettingsSection(R.string.settings_reliability, listOf(R.string.alarm_volume, R.string.journal, R.string.xiaomi_title)) {
                 PermissionRow(Issue.NOTIFICATIONS, reliability.notifications)
                 PermissionRow(Issue.FULL_SCREEN, reliability.fullScreen)
                 PermissionRow(Issue.EXACT_ALARMS, reliability.exactAlarms)
@@ -439,7 +495,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     modifier = Modifier.clickable { dialog = "journal" },
                 )
             },
-            SettingsSection(R.string.settings_transfer) {
+            SettingsSection(R.string.settings_transfer, listOf(R.string.backup_save, R.string.backup_load)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.backup_save)) },
                     supportingContent = { Text(stringResource(R.string.backup_save_text)) },
@@ -451,7 +507,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     modifier = Modifier.clickable { backup.load() },
                 )
             },
-            SettingsSection(R.string.about) {
+            SettingsSection(R.string.about, listOf(R.string.licenses)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.app_name)) },
                     supportingContent = { Text(stringResource(R.string.version_value, BuildConfig.VERSION_NAME)) },
@@ -462,18 +518,34 @@ fun SettingsScreen(onBack: () -> Unit) {
                 )
             },
         )
-        if (rememberWindowLayout().twoPane) {
-            LazyVerticalStaggeredGrid(
-                columns = StaggeredGridCells.Fixed(2),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = padding,
-            ) {
-                items(sections.size) { index -> sections[index].Show() }
+        fun openSection(title: Int) {
+            open = title
+            searching = false
+            query = ""
+        }
+
+        @Composable
+        fun Section(title: Int, modifier: Modifier) {
+            val section = sections.first { it.title == title }
+            LazyColumn(modifier) { item { section.content() } }
+        }
+
+        @Composable
+        fun Menu(modifier: Modifier) {
+            if (searching) SearchResults(sections, query, ::openSection, modifier)
+            else SectionList(sections, open.takeIf { twoPane }, ::openSection, modifier)
+        }
+        val current = open
+        if (twoPane) {
+            // На широком окне — разделы слева, выбранный — справа (D-022, п. 2).
+            Row(Modifier.fillMaxSize().padding(padding)) {
+                Menu(Modifier.weight(1f).fillMaxHeight())
+                Section(current ?: sections.first().title, Modifier.weight(1.4f).fillMaxHeight())
             }
+        } else if (current != null && !searching) {
+            Section(current, Modifier.fillMaxSize().padding(padding))
         } else {
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
-                items(sections.size) { index -> sections[index].Show() }
-            }
+            Menu(Modifier.fillMaxSize().padding(padding))
         }
     }
 
@@ -686,17 +758,44 @@ fun SettingsScreen(onBack: () -> Unit) {
 }
 
 /** Раздел настроек: заголовок — для TalkBack заголовок (D-022, п. 3), под ним строки. */
-private class SettingsSection(val title: Int, val content: @Composable () -> Unit) {
-    @Composable
-    fun Show() {
-        Column {
-            Text(
-                stringResource(title),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp).semantics { heading() },
+/** Раздел настроек: название, пункты для поиска (D-029, п. 8) и содержимое. */
+private class SettingsSection(val title: Int, val keys: List<Int>, val content: @Composable () -> Unit)
+
+/** Главный экран настроек: разделы с первыми пунктами под названием. */
+@Composable
+private fun SectionList(sections: List<SettingsSection>, selected: Int?, onOpen: (Int) -> Unit, modifier: Modifier = Modifier) {
+    LazyColumn(modifier) {
+        items(sections.size) { index ->
+            val section = sections[index]
+            ListItem(
+                headlineContent = { Text(stringResource(section.title)) },
+                supportingContent = { Text(section.keys.take(3).map { stringResource(it) }.joinToString(", "), maxLines = 2) },
+                colors = if (section.title == selected) ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.secondaryContainer) else ListItemDefaults.colors(),
+                modifier = Modifier.clickable { onOpen(section.title) },
             )
-            content()
+        }
+    }
+}
+
+/** Поиск по настройкам: пункт и его раздел; касание — открыть раздел. */
+@Composable
+private fun SearchResults(sections: List<SettingsSection>, query: String, onOpen: (Int) -> Unit, modifier: Modifier = Modifier) {
+    val words = query.trim().lowercase().split(' ').filter { it.isNotEmpty() }
+    val found = sections.flatMap { section ->
+        val sectionTitle = stringResource(section.title)
+        section.keys.map { key -> Triple(section.title, sectionTitle, stringResource(key)) }
+    }.filter { (_, sectionTitle, item) -> words.all { word -> (item + " " + sectionTitle).lowercase().contains(word) } }
+    LazyColumn(modifier) {
+        if (words.isNotEmpty() && found.isEmpty()) {
+            item { Text(stringResource(R.string.settings_search_none), modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        items(found.size) { index ->
+            val (title, sectionTitle, item) = found[index]
+            ListItem(
+                headlineContent = { Text(item) },
+                supportingContent = { Text(sectionTitle) },
+                modifier = Modifier.clickable { onOpen(title) },
+            )
         }
     }
 }

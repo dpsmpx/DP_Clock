@@ -1,5 +1,9 @@
 package com.dpsmpx.dpclock.ui
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.clickable
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -58,16 +63,27 @@ fun StopwatchScreen() {
     val elapsed = stopwatch.elapsedAt(now)
     val rows = stopwatch.lapRows()
 
-    fun update(change: (Stopwatch) -> Stopwatch) = persistLater { repository.updateStopwatch(change) }
+    val haptic = rememberHaptic()
+    var fullScreen by rememberSaveable { mutableStateOf(false) }
+
+    // Каждая кнопка — с вибро-откликом (D-029, п. 7).
+    fun update(change: (Stopwatch) -> Stopwatch) {
+        haptic()
+        persistLater { repository.updateStopwatch(change) }
+    }
 
     @Composable
     fun Time(modifier: Modifier) {
         Box(modifier, contentAlignment = Alignment.Center) {
+            // Касание по цифрам — во весь экран (D-029, п. 6).
             FitText(
                 TimeText.stopwatch(elapsed, locale),
                 style = MaterialTheme.typography.displayMedium.copy(fontFeatureSettings = "tnum"),
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClickLabel = stringResource(R.string.full_screen)) { fullScreen = true }
+                    .padding(vertical = 24.dp),
             )
         }
     }
@@ -159,6 +175,14 @@ fun StopwatchScreen() {
                 Spacer(Modifier.size(8.dp))
             }
         }
+    }
+    if (fullScreen) {
+        FullScreenTime(
+            title = stringResource(R.string.section_stopwatch),
+            time = TimeText.stopwatch(elapsed, locale),
+            subtitle = rows.size.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.laps_count, it, it) },
+            onClose = { fullScreen = false },
+        ) { Controls() }
     }
 }
 

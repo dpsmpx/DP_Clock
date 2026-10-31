@@ -108,6 +108,18 @@ class PomodoroTest {
     }
 
     @Test
+    fun recentTimersKeepTheLastFiveWithoutRepeats() {
+        var list = emptyList<Long>()
+        for (m in listOf(5L, 10L, 5L, 3L, 1L, 25L, 45L)) list = TimerRules.recent(list, m * minute)
+        assertEquals(listOf(45L, 25L, 1L, 3L, 5L).map { it * minute }, list)
+        assertTrue(TimerRules.isPlain(TimerProgram.single(minute), "", null))
+        assertFalse(TimerRules.isPlain(TimerProgram.single(minute), "Чай", null))
+        assertFalse(TimerRules.isPlain(TimerProgram.single(minute), "", "p1"))
+        assertFalse(TimerRules.isPlain(TimerProgram.sleep(minute), "", null))
+        assertFalse(TimerRules.isPlain(TimerProgram.interval(10_000L, null), "", null))
+    }
+
+    @Test
     fun settingsCodecFallsBackToClassic() {
         val custom = Pomodoro(50, 10, 30, 3, 2, autoAdvance = true, dnd = true)
         assertEquals(custom, Pomodoro.decode(custom.encode()))

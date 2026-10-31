@@ -216,3 +216,14 @@ val MIGRATION_15_16 = SqlMigration(
         "ALTER TABLE `settings` ADD COLUMN `haptics` INTEGER NOT NULL DEFAULT 1",
     ),
 )
+
+/** 0.19.0 (D-032): свои задачи — новая пустая таблица. */
+val MIGRATION_16_17 = SqlMigration(
+    16,
+    17,
+    listOf(
+        "CREATE TABLE IF NOT EXISTS `task` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `note` TEXT NOT NULL, `date` TEXT, " +
+            "`minute` INTEGER, `reminder` INTEGER, `repeat` TEXT NOT NULL, `done` INTEGER NOT NULL, `doneAt` INTEGER, " +
+            "`createdAt` INTEGER NOT NULL, `inCalendar` INTEGER NOT NULL, `eventId` INTEGER, PRIMARY KEY(`id`))",
+    ),
+)

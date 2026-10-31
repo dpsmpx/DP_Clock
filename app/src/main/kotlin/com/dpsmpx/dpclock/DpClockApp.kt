@@ -38,8 +38,8 @@ class AppGraph(context: Context) {
     /** Синхронизация общим файлом (D-030). */
     val cloud: CloudSync by lazy { CloudSync(context, repository, notifier) }
 
-    /** Задачи из таск-менеджеров (D-031). */
-    val tasks: TaskStore by lazy { TaskStore(context, notifier) }
+    /** Задачи Google и показ задач (D-032); свои задачи — в [repository]. */
+    val tasks: TaskStore by lazy { TaskStore(context, notifier, repository) }
 
     /** Погода нужна только экрану «Мировые часы» (D-019). */
     val weather by lazy { WeatherStore(context, repository) }

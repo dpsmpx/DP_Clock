@@ -17,6 +17,7 @@ import com.dpsmpx.dpclock.model.DayTask
 import com.dpsmpx.dpclock.model.Moment
 import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
+import com.dpsmpx.dpclock.model.Task
 import com.dpsmpx.dpclock.model.TimerRun
 import com.dpsmpx.dpclock.model.TimerState
 import com.dpsmpx.dpclock.ui.leadText
@@ -41,6 +42,7 @@ class Notifier(private val context: Context) {
                 NotificationChannel(CHANNEL_WARNING_SOUND, text(R.string.channel_warning_sound), NotificationManager.IMPORTANCE_DEFAULT),
                 NotificationChannel(CHANNEL_SYNC, text(R.string.channel_sync), NotificationManager.IMPORTANCE_LOW),
                 NotificationChannel(CHANNEL_TASKS, text(R.string.channel_tasks), NotificationManager.IMPORTANCE_LOW),
+                NotificationChannel(CHANNEL_TASK_REMINDERS, text(R.string.channel_task_reminders), NotificationManager.IMPORTANCE_HIGH),
             ),
         )
     }
@@ -212,7 +214,30 @@ class Notifier(private val context: Context) {
 
     fun cancelSyncConflicts() = manager.cancel(ID_SYNC)
 
-    // Задачи из таск-менеджеров (D-031)
+    // Задачи (D-031, D-032)
+
+    /** Напоминание своей задачи: название, срок, «Сделано». */
+    fun taskReminder(task: Task) {
+        val due = listOfNotNull(
+            task.date?.let { TimeText.date(context, it) },
+            task.time?.let { TimeText.time(context, it.hour, it.minute) },
+        ).joinToString(", ")
+        show(
+            ID_TASK,
+            Notification.Builder(context, CHANNEL_TASK_REMINDERS)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(task.title)
+                .setContentText(listOf(due, task.note.lineSequence().firstOrNull().orEmpty()).filter { it.isNotBlank() }.joinToString(" · "))
+                .setCategory(Notification.CATEGORY_REMINDER)
+                .setContentIntent(openApp(Section.CLOCK))
+                .addAction(action(text(R.string.tasks_done), broadcast(ActionReceiver.ACTION_TASK_DONE, task.id)))
+                .setAutoCancel(true)
+                .build(),
+            tag = "task:${task.id}",
+        )
+    }
+
+    fun cancelTaskReminder(taskId: String) = manager.cancel("task:$taskId", ID_TASK)
 
     /**
      * «Задачи на сегодня» после утреннего будильника: первые задачи строками. На экране
@@ -433,6 +458,8 @@ class Notifier(private val context: Context) {
         private const val CHANNEL_SYNC = "sync"
         private const val ID_TASKS = 8
         private const val CHANNEL_TASKS = "tasks"
+        private const val ID_TASK = 9
+        private const val CHANNEL_TASK_REMINDERS = "task-reminders"
         private const val TASK_LINES = 5
         private const val CHANNEL_WARNING = "warning"
         private const val CHANNEL_WARNING_SOUND = "warning-sound"

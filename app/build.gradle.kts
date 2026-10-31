@@ -25,8 +25,8 @@ android {
         applicationId = "com.dpsmpx.dpclock"
         minSdk = 31
         targetSdk = 37
-        versionCode = 24
-        versionName = "0.18.0"
+        versionCode = 25
+        versionName = "0.19.0"
     }
 
     signingConfigs {
@@ -114,9 +114,6 @@ dependencies {
     implementation(libs.camera.lifecycle)
     implementation(libs.camera.view)
     implementation(libs.zxing.core)
-    // Задачи из таск-менеджеров (D-031): вход Google для Google Tasks.
-    implementation(libs.play.services.auth)
-    implementation(libs.coroutines.play.services)
 
     testImplementation(libs.junit)
     testImplementation(libs.sqlite.bundled.jvm)

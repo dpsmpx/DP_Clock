@@ -246,6 +246,27 @@ data class SignalEventEntity(
     val endedAt: Long? = null,
 )
 
+/**
+ * Свои задачи (D-032). [date] — день срока «2026-10-31», null — без срока; [minute] —
+ * минута суток срока, null — без времени; [repeat] — `TaskRepeat.code`. [inCalendar]
+ * и [eventId] — свои у телефона: флажок «В календарь» и событие в календаре телефона.
+ */
+@Entity(tableName = "task")
+data class TaskEntity(
+    @PrimaryKey val id: String,
+    val title: String,
+    val note: String,
+    val date: String?,
+    val minute: Int?,
+    val reminder: Int?,
+    val repeat: String,
+    val done: Boolean,
+    val doneAt: Long?,
+    val createdAt: Long,
+    val inCalendar: Boolean,
+    val eventId: Long?,
+)
+
 /** Действия для статистики (D-023, п. 7): ночные часы, таймер засыпания, «пора спать», таймеры, секундомер. */
 @Entity(tableName = "activity_event")
 data class ActivityEventEntity(
@@ -444,6 +465,23 @@ interface ClockDao {
 
     @Query("DELETE FROM timer_preset")
     suspend fun clearPresets()
+
+    // Свои задачи (D-032)
+
+    @Query("SELECT * FROM task ORDER BY createdAt")
+    fun tasks(): Flow<List<TaskEntity>>
+
+    @Query("SELECT * FROM task ORDER BY createdAt")
+    suspend fun allTasks(): List<TaskEntity>
+
+    @Query("SELECT * FROM task WHERE id = :id")
+    suspend fun task(id: String): TaskEntity?
+
+    @Upsert
+    suspend fun upsertTask(task: TaskEntity)
+
+    @Query("DELETE FROM task WHERE id = :id")
+    suspend fun deleteTask(id: String)
 }
 
 @Database(
@@ -460,6 +498,7 @@ interface ClockDao {
         ExceptionEntity::class,
         WorldCityEntity::class,
         ActivityEventEntity::class,
+        TaskEntity::class,
     ],
     version = ClockDatabase.VERSION,
     exportSchema = true,
@@ -471,10 +510,10 @@ abstract class ClockDatabase : RoomDatabase() {
         const val NAME = "dpclock.db"
 
         /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
-        const val VERSION = 16
+        const val VERSION = 17
 
         /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
-        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки

@@ -25,6 +25,8 @@ data class CalendarSettings(
     val earlyLeadMinutes: Int = 0,
     /** Ближайшее событие в «Часах», ночных часах и виджете. */
     val showNext: Boolean = true,
+    /** Календарь для своих задач с флажком «В календарь» (D-032, п. 6); null — не выбран. */
+    val taskCalendar: Long? = null,
 ) {
     val isEnabled: Boolean get() = exceptionCalendars.isNotEmpty() || eventCalendars.isNotEmpty()
 

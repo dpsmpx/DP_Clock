@@ -13,8 +13,6 @@
 | Room (runtime; compiler — только сборка) | Google Maven, `androidx.room` | Apache 2.0 | в APK |
 | CameraX (core, camera2, lifecycle, view) | Google Maven, `androidx.camera` | Apache 2.0; внутри — libyuv, BSD 3-Clause | в APK (D-015) |
 | ZXing core | Maven Central, `com.google.zxing:core` | Apache 2.0 | в APK (D-015) |
-| Google Play services Auth 22.0.0 (с ним — `play-services-base`, `-basement`, `-tasks`, `-auth-base`, `-auth-api-phone`, `-fido`) | Google Maven, `com.google.android.gms` | закрытая, условия Android SDK (developer.android.com/studio/terms) | в APK: вход Google для Google Tasks (D-031); первая закрытая библиотека |
-| kotlinx-coroutines-play-services 1.9.0 | Maven Central, `org.jetbrains.kotlinx` | Apache 2.0 | в APK (D-031) |
 | Стандартная библиотека Kotlin, корутины | Maven Central, `org.jetbrains.kotlin`, `org.jetbrains.kotlinx` | Apache 2.0 | в APK |
 | Android Gradle Plugin, плагины Kotlin Compose и Kotlin JVM | Google Maven, Maven Central | Apache 2.0 | только сборка |
 | KSP | Maven Central, `com.google.devtools.ksp` | Apache 2.0 | только сборка |

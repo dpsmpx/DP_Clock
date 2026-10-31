@@ -10,6 +10,8 @@ import com.dpsmpx.dpclock.model.SyncItems
 import com.dpsmpx.dpclock.model.SyncResult
 import com.dpsmpx.dpclock.model.SyncRules
 import com.dpsmpx.dpclock.model.SyncState
+import com.dpsmpx.dpclock.model.Task
+import com.dpsmpx.dpclock.model.TaskRepeat
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -22,6 +24,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import java.time.LocalDate
 
 /**
  * Синхронизация в базе (D-030): пришедшее с другого телефона применяется, включение
@@ -51,6 +54,31 @@ class SyncRepositoryTest {
     private fun edit(base: SyncItem?, key: String, data: Map<String, Any?>?, now: Long): SyncItem {
         val json = data?.let { Json.parse(Json.write(it)) as Map<String, Any?> }
         return SyncItem(key, json, json?.let { SyncRules.hash(it) } ?: SyncRules.DELETED, base?.hash, now, from = "Другой")
+    }
+
+    /** Свои задачи (D-032): «сделано» двигает повтор; правка с другого телефона не трогает флажок «В календарь». */
+    @Test
+    fun tasksRepeatAndKeepTheCalendarFlag() = runBlocking {
+        val today = LocalDate.now()
+        repository.saveTask(Task("t", "  Зарядка  ", date = today, repeat = TaskRepeat.Daily, reminder = 0, inCalendar = true))
+        val saved = repository.task("t")!!
+        assertEquals("Зарядка", saved.title)
+        assertTrue(saved.createdAt > 0)
+        repository.completeTask("t")
+        val moved = repository.task("t")!!
+        assertFalse(moved.done)
+        assertEquals(today.plusDays(1), moved.date)
+
+        val first = pass(remote = SyncFile(), now = 1_000L)
+        val key = SyncItems.TASK + "t"
+        val renamed = SyncItems.snapshot(Backup(tasks = listOf(moved.copy(title = "Зарядка 15 минут")))).getValue(key)
+        pass(SyncFile("Другой", 2_000L, first.file.items + (key to edit(first.file.items[key], key, renamed, 2_000L))), now = 3_000L)
+        val after = repository.task("t")!!
+        assertEquals("Зарядка 15 минут", after.title)
+        assertTrue("флажок — свой у телефона", after.inCalendar)
+        assertFalse(SyncRules.hasLocalChanges(SyncItems.snapshot(repository.exportBackup()), state))
+        repository.deleteTask("t")
+        assertNull(repository.task("t"))
     }
 
     @Test

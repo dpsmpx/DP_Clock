@@ -15,11 +15,6 @@ sqlite = "2.6.2"
 camerax = "1.6.2"
 zxing = "3.5.4"
 junit = "4.13.2"
-# Вход Google для Google Tasks (D-031; выбор автора — Google Play services). Закрытая
-# библиотека Google по условиям Android SDK: строка в docs/PROVENANCE.md.
-play-services-auth = "22.0.0"
-# Задачи Google Play services как корутины; та же версия, что kotlinx-coroutines-core в сборке.
-coroutines-play-services = "1.9.0"
 # Снимки экранов на JVM (D-029): только тесты, в APK не входит.
 robolectric = "4.17"
 # Образ Android 16 (API 36) для Robolectric 4.17 — его качает Gradle, а не Robolectric в тесте.
@@ -40,8 +35,6 @@ camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = 
 camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 junit = { module = "junit:junit", version.ref = "junit" }
-play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "play-services-auth" }
-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutines-play-services" }
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 robolectric-android-all = { module = "org.robolectric:android-all-instrumented", version.ref = "robolectric-sdk" }
 

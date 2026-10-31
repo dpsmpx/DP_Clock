@@ -23,6 +23,7 @@ import com.dpsmpx.dpclock.ui.offsetText
 import com.dpsmpx.dpclock.ui.repeatText
 import com.dpsmpx.dpclock.ui.temperatureText
 import com.dpsmpx.dpclock.ui.weatherText
+import com.dpsmpx.dpclock.ui.widgetTasksText
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -124,21 +125,12 @@ object Widgets {
             val event = PhoneCalendar.nextEvent(context)
             setViewVisibility(R.id.widget_event, if (event == null) View.GONE else View.VISIBLE)
             if (event != null) setTextViewText(R.id.widget_event, eventText(context, event))
-            val tasks = tasksText(context)
+            val tasks = widgetTasksText(context, data.tasks, DpClockApp.graph(context).tasks.current().cache, LocalDate.now())
             setViewVisibility(R.id.widget_tasks, if (tasks == null) View.GONE else View.VISIBLE)
             if (tasks != null) setTextViewText(R.id.widget_tasks, tasks)
             setOnClickPendingIntent(android.R.id.background, open(context, Section.CLOCK))
             setOnClickPendingIntent(R.id.widget_alarm, open(context, Section.ALARMS))
         }
-
-    /** «Задачи: 3 · Купить хлеб» (D-031) — из кэша, без сети; выключено или не подключено — null. */
-    private fun tasksText(context: Context): String? {
-        val state = DpClockApp.graph(context).tasks.current()
-        if (state.cache.connected.isEmpty() || !state.cache.showWidget) return null
-        val tasks = state.today(LocalDate.now())
-        if (tasks.isEmpty()) return context.getString(R.string.tasks_none)
-        return context.resources.getQuantityString(R.plurals.tasks_count, tasks.size, tasks.size) + " · " + tasks.first().title
-    }
 
     private fun alarms(context: Context, data: SurfaceData): RemoteViews {
         val now = Instant.now()

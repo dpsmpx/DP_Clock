@@ -60,11 +60,11 @@ private val TASKS_WIDTH = 480.dp
 
 /**
  * Раздел «Часы»: текущее время по центру в выбранном стиле (D-004; D-021, п. 4),
- * под ним — фон (D-021, п. 6); под часами — задачи на сегодня (D-031); внизу —
+ * под ним — фон (D-021, п. 6); под часами — задачи на сегодня (D-032); внизу —
  * ближайшее событие календаря (D-023, п. 4) и «Ночные часы» (D-017, п. 4).
  */
 @Composable
-fun ClockScreen(modifier: Modifier = Modifier, visible: Boolean = true) {
+fun ClockScreen(modifier: Modifier = Modifier, visible: Boolean = true, openTasks: () -> Unit = {}) {
     val context = LocalContext.current
     val repository = DpClockApp.graph(context).repository
     val settings by repository.settings.collectAsStateWithLifecycle(Settings())
@@ -81,9 +81,9 @@ fun ClockScreen(modifier: Modifier = Modifier, visible: Boolean = true) {
                 .safeDrawingPadding(),
             contentAlignment = Alignment.Center,
         ) {
-            // Задачи на сегодня (D-031): под часами, на широком окне — справа от них.
+            // Задачи на сегодня (D-032): под часами, на широком окне — справа от них.
             val tasks by DpClockApp.graph(context).tasks.state.collectAsStateWithLifecycle()
-            val withTasks = tasks.cache.connected.isNotEmpty() && tasks.cache.showClock
+            val withTasks = tasks.cache.showClock
             val wide = maxWidth > maxHeight
             val event = rememberNextEvent(active = visible)
             val bottom = if (event != null) BOTTOM_WITH_EVENT else BOTTOM_PLAIN
@@ -126,7 +126,7 @@ fun ClockScreen(modifier: Modifier = Modifier, visible: Boolean = true) {
                     horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
                     face()
-                    TasksPanel(visible, backdrop, Modifier.widthIn(max = TASKS_WIDTH).weight(1f, fill = false))
+                    TasksPanel(visible, backdrop, openTasks, Modifier.widthIn(max = TASKS_WIDTH).weight(1f, fill = false))
                 }
                 else -> Column(
                     Modifier.fillMaxSize().padding(bottom = bottom),
@@ -135,7 +135,7 @@ fun ClockScreen(modifier: Modifier = Modifier, visible: Boolean = true) {
                 ) {
                     face()
                     Spacer(Modifier.height(16.dp))
-                    TasksPanel(visible, backdrop, Modifier.widthIn(max = TASKS_WIDTH).fillMaxWidth().padding(horizontal = 24.dp))
+                    TasksPanel(visible, backdrop, openTasks, Modifier.widthIn(max = TASKS_WIDTH).fillMaxWidth().padding(horizontal = 24.dp))
                 }
             }
             // Ближайшее событие сегодня (D-023, п. 4) — над кнопкой ночных часов.

@@ -52,6 +52,18 @@ class Scheduler(private val context: Context) {
             .putExtra(AlarmReceiver.EXTRA_ALARM_AT, alarmAt),
     )
 
+    /** Напоминание своей задачи (D-032) в [at]. Точное: «за 5 минут» — значит за 5. */
+    fun setTaskReminder(taskId: String, at: Long) = setExact(at, taskIntent(taskId))
+
+    fun cancelTaskReminder(taskId: String) = alarmManager.cancel(taskIntent(taskId))
+
+    private fun taskIntent(taskId: String): PendingIntent = broadcast(
+        Intent(context, AlarmReceiver::class.java)
+            .setAction(AlarmReceiver.ACTION_TASK)
+            .setData("dpclock://task/$taskId".toUri())
+            .putExtra(AlarmReceiver.EXTRA_ID, taskId),
+    )
+
     /** Бой курантов в [at] (D-025, п. 4); один на приложение. Точный: бой в начале часа, а не когда-нибудь. */
     fun setChime(at: Long) = setExact(at, chimeIntent(at))
 

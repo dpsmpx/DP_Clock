@@ -25,6 +25,8 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Календарь телефона (D-023): только чтение, спрашивается, когда выбирают календари. События не покидают телефон. -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- Свои задачи с флажком «В календарь» (D-032): спрашивается, только когда флажок ставят. -->
+    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <!-- «Не беспокоить» на работу помидора (D-025): доступ даёт человек в настройках Android, когда включает флажок. -->
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <!-- Живые обои (D-024) — по желанию: без них приложение ставится. -->

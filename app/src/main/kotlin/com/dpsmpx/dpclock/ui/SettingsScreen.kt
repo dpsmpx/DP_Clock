@@ -495,7 +495,7 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
                     modifier = Modifier.clickable { dialog = "journal" },
                 )
             },
-            SettingsSection(R.string.settings_tasks, listOf(R.string.tasks_todoist, R.string.tasks_ticktick, R.string.tasks_google, R.string.tasks_show_after_alarm)) {
+            SettingsSection(R.string.settings_tasks, listOf(R.string.tasks_calendar, R.string.tasks_google, R.string.tasks_show_clock, R.string.tasks_show_after_alarm)) {
                 TaskSettings(snackbar)
             },
             SettingsSection(R.string.settings_sync, listOf(R.string.sync_create, R.string.sync_choose, R.string.sync_now, R.string.sync_off)) {

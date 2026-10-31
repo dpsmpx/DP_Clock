@@ -1,6 +1,7 @@
 package com.dpsmpx.dpclock.data
 
 import android.content.Context
+import android.os.UserManager
 import com.dpsmpx.dpclock.model.ActivityEvent
 import com.dpsmpx.dpclock.model.ActivityKind
 import com.dpsmpx.dpclock.model.Alarm
@@ -29,6 +30,9 @@ import com.dpsmpx.dpclock.model.SyncItems
 import com.dpsmpx.dpclock.model.SyncResult
 import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
+import com.dpsmpx.dpclock.model.Task
+import com.dpsmpx.dpclock.model.TaskRepeat
+import com.dpsmpx.dpclock.model.TaskRules
 import com.dpsmpx.dpclock.model.TimerPreset
 import com.dpsmpx.dpclock.model.TimerProgram
 import com.dpsmpx.dpclock.model.TimerRules
@@ -37,12 +41,14 @@ import com.dpsmpx.dpclock.model.TimerState
 import com.dpsmpx.dpclock.model.Warnings
 import com.dpsmpx.dpclock.model.isRepeating
 import com.dpsmpx.dpclock.platform.Appearances
+import com.dpsmpx.dpclock.platform.CalendarWrite
 import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.platform.FocusMode
 import com.dpsmpx.dpclock.platform.Notifier
 import com.dpsmpx.dpclock.platform.Ringing
 import com.dpsmpx.dpclock.platform.Scheduler
 import com.dpsmpx.dpclock.platform.Surfaces
+import com.dpsmpx.dpclock.platform.TaskCalendar
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -83,6 +89,8 @@ data class SurfaceData(
     val stopwatch: Stopwatch,
     val worldCities: List<String>,
     val settings: Settings,
+    /** Свои задачи (D-032) — для виджета «Часы». */
+    val tasks: List<Task> = emptyList(),
 )
 
 /**
@@ -126,6 +134,9 @@ class ClockRepository(
 
     /** Города мировых часов — пояса tz по порядку (D-019). */
     val worldCities: Flow<List<String>> = dao.worldCities()
+
+    /** Свои задачи (D-032). */
+    val tasks: Flow<List<Task>> = dao.tasks().map { list -> list.map { it.toModel() } }
 
     /** Журнал срабатываний, новые сверху. */
     val events: Flow<List<SignalEvent>> = dao.events().map { list -> list.map { it.toModel() } }
@@ -179,6 +190,7 @@ class ClockRepository(
             stopwatch = dao.currentStopwatch().toModel(),
             worldCities = dao.allWorldCities().map { it.zoneId },
             settings = settings,
+            tasks = dao.allTasks().map { it.toModel() },
         )
     }
 
@@ -703,6 +715,7 @@ class ClockRepository(
         syncTimers()
         notifier.stopwatch(dao.currentStopwatch().toModel())
         syncChimes(dao.currentSettings().toModel())
+        rescheduleTasksLocked()
     }
 
     // Куранты (D-025, п. 4)
@@ -807,6 +820,7 @@ class ClockRepository(
             presets = dao.allPresets().map { it.toModel() },
             worldCities = dao.allWorldCities().map { it.zoneId },
             settings = dao.currentSettings().toModel(),
+            tasks = dao.allTasks().map { it.toModel() },
         )
 
     /**
@@ -822,6 +836,7 @@ class ClockRepository(
         prepared.exceptions.forEach { dao.upsertException(it.toEntity()) }
         prepared.presets.forEach { dao.upsertPreset(it.toEntity()) }
         prepared.alarms.forEach { dao.upsertAlarm(normalized(it).toEntity()) }
+        prepared.tasks.forEach { saveTaskLocked(it) }
         // Города — пояса: тот же город второй раз не добавляется.
         val cities = dao.allWorldCities().map { it.zoneId }.toMutableList()
         for (zoneId in prepared.worldCities.filter { it !in cities }) {
@@ -854,6 +869,102 @@ class ClockRepository(
         dao.clearExceptions()
         dao.clearPresets()
         dao.clearWorldCities()
+        for (task in dao.allTasks()) removeTaskLocked(task.id)
+    }
+
+    // Свои задачи (D-032)
+
+    suspend fun task(id: String): Task? = locked(quiet = true) { dao.task(id)?.toModel() }
+
+    suspend fun currentTasks(): List<Task> = locked(quiet = true) { dao.allTasks().map { it.toModel() } }
+
+    /**
+     * Сохранить задачу из редактора: название без пробелов по краям, повтор месяца и
+     * года — от числа срока, без срока — без времени и повтора. Потом — напоминание и
+     * событие календаря по флажку.
+     */
+    suspend fun saveTask(task: Task) = locked {
+        val date = task.date
+        saveTaskLocked(
+            task.copy(
+                title = task.title.trim().take(Task.MAX_TITLE),
+                note = task.note.trimEnd().take(Task.MAX_NOTE),
+                time = if (date == null) null else task.time,
+                repeat = if (date == null) TaskRepeat.None else TaskRepeat.of(task.repeat, date),
+                createdAt = task.createdAt.takeIf { it > 0 } ?: now(),
+            ),
+        )
+    }
+
+    /** «Сделано» (D-032): повторяющаяся — на следующий срок, прежнее событие календаря — с «✓». */
+    suspend fun completeTask(id: String) = locked {
+        val task = dao.task(id)?.toModel()?.takeIf { !it.done } ?: return@locked
+        val next = TaskRules.complete(task, LocalDate.now(), now())
+        if (!next.done && task.eventId != null) withCalendar(task.copy(done = true))
+        saveTaskLocked(next)
+        notifier.cancelTaskReminder(id)
+    }
+
+    /** Вернуть сделанную задачу в работу. */
+    suspend fun reopenTask(id: String) = locked {
+        val task = dao.task(id)?.toModel()?.takeIf { it.done } ?: return@locked
+        saveTaskLocked(task.copy(done = false, doneAt = null))
+    }
+
+    /** Удалить задачу и её событие; возвращает удалённую — для «Отменить». */
+    suspend fun deleteTask(id: String): Task? = locked {
+        val task = dao.task(id)?.toModel() ?: return@locked null
+        removeTaskLocked(id)
+        task.copy(eventId = null)
+    }
+
+    private suspend fun saveTaskLocked(task: Task) {
+        val stored = withCalendar(task)
+        dao.upsertTask(stored.toEntity())
+        scheduleTaskReminder(stored)
+    }
+
+    private suspend fun removeTaskLocked(id: String) {
+        dao.task(id)?.eventId?.let { TaskCalendar.delete(context, it) }
+        dao.deleteTask(id)
+        scheduler.cancelTaskReminder(id)
+        notifier.cancelTaskReminder(id)
+    }
+
+    /**
+     * Событие календаря по флажку «В календарь» (D-032, п. 6): записать, поправить или
+     * удалить. Событие удалили в календаре — флажок снимается. Не вышло (нет разрешения,
+     * календарь не выбран, телефон ещё не разблокирован) — попробует [rescheduleAll].
+     */
+    private fun withCalendar(task: Task): Task {
+        val eventId = task.eventId
+        if (!task.inCalendar || task.date == null) {
+            if (eventId != null) TaskCalendar.delete(context, eventId)
+            return task.copy(eventId = null)
+        }
+        if (context.getSystemService(UserManager::class.java)?.isUserUnlocked == false) return task
+        val calendarId = calendar.settings.value.taskCalendar ?: return task
+        return when (val write = TaskCalendar.write(context, calendarId, task)) {
+            is CalendarWrite.Written -> task.copy(eventId = write.eventId)
+            CalendarWrite.Gone -> task.copy(inCalendar = false, eventId = null)
+            CalendarWrite.Failed -> task
+        }
+    }
+
+    private fun scheduleTaskReminder(task: Task) {
+        val at = TaskRules.reminderAt(task, ZoneId.systemDefault(), Instant.ofEpochMilli(now()))
+        if (at != null) scheduler.setTaskReminder(task.id, at.toEpochMilli()) else scheduler.cancelTaskReminder(task.id)
+    }
+
+    /** Напоминания всех задач и события, которые не записались раньше. */
+    private suspend fun rescheduleTasksLocked() {
+        for (task in dao.allTasks().map { it.toModel() }) {
+            scheduleTaskReminder(task)
+            if (task.inCalendar && task.eventId == null && task.date != null) {
+                val fixed = withCalendar(task)
+                if (fixed != task) dao.upsertTask(fixed.toEntity())
+            }
+        }
     }
 
     // Синхронизация (D-030)
@@ -887,7 +998,16 @@ class ClockRepository(
      * группа — последней, её будильники остаются без группы.
      */
     private suspend fun applySyncLocked(changes: List<SyncChange>) {
-        val order = listOf(SyncItems.GROUP, SyncItems.TEMPLATE, SyncItems.EXCEPTION, SyncItems.PRESET, SyncItems.ALARM, SyncItems.SETTINGS, SyncItems.WORLD_CITIES)
+        val order = listOf(
+            SyncItems.GROUP,
+            SyncItems.TEMPLATE,
+            SyncItems.EXCEPTION,
+            SyncItems.PRESET,
+            SyncItems.ALARM,
+            SyncItems.TASK,
+            SyncItems.SETTINGS,
+            SyncItems.WORLD_CITIES,
+        )
         val sorted = changes.sortedWith(
             compareBy<SyncChange>({ it is SyncChange.Remove && it.key.startsWith(SyncItems.GROUP) }, { change -> order.indexOfFirst { change.key.startsWith(it) } }),
         )
@@ -902,6 +1022,12 @@ class ClockRepository(
                         key.startsWith(SyncItems.TEMPLATE) -> dao.upsertTemplate(SyncItems.template(data).toEntity())
                         key.startsWith(SyncItems.EXCEPTION) -> dao.upsertException(SyncItems.exception(data).toEntity())
                         key.startsWith(SyncItems.PRESET) -> dao.upsertPreset(SyncItems.preset(data).toEntity())
+                        key.startsWith(SyncItems.TASK) -> {
+                            // Флажок «В календарь» и событие — свои у телефона (D-032).
+                            val incoming = SyncItems.task(data)
+                            val phone = dao.task(incoming.id)?.toModel()
+                            saveTaskLocked(incoming.copy(inCalendar = phone?.inCalendar ?: false, eventId = phone?.eventId))
+                        }
                         key.startsWith(SyncItems.ALARM) -> {
                             val incoming = SyncItems.alarm(data)
                             val phone = dao.alarm(incoming.id)?.toModel()
@@ -933,6 +1059,7 @@ class ClockRepository(
                     key.startsWith(SyncItems.TEMPLATE) -> dao.deleteTemplate(id)
                     key.startsWith(SyncItems.EXCEPTION) -> dao.deleteException(id)
                     key.startsWith(SyncItems.PRESET) -> dao.deletePreset(id)
+                    key.startsWith(SyncItems.TASK) -> removeTaskLocked(id)
                     key.startsWith(SyncItems.ALARM) -> if (dao.alarm(id) != null) removeAlarmLocked(id)
                 }
             }

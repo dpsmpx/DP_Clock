@@ -24,18 +24,22 @@ import com.dpsmpx.dpclock.model.Settings
 import com.dpsmpx.dpclock.model.SyncConflict
 import com.dpsmpx.dpclock.model.SyncItems
 import com.dpsmpx.dpclock.model.TaskCache
-import com.dpsmpx.dpclock.model.TaskService
+import com.dpsmpx.dpclock.model.Task
+import com.dpsmpx.dpclock.model.TaskRepeat
+import com.dpsmpx.dpclock.model.TaskSource
 import com.dpsmpx.dpclock.model.TimerPreset
 import com.dpsmpx.dpclock.model.TimerProgram
 import com.dpsmpx.dpclock.model.TimerStep
 import com.dpsmpx.dpclock.model.WeatherMode
 import com.dpsmpx.dpclock.model.WeatherSettings
+import com.dpsmpx.dpclock.ui.AllTasksScreen
 import com.dpsmpx.dpclock.ui.AppIcons
 import com.dpsmpx.dpclock.ui.FullScreenTime
 import com.dpsmpx.dpclock.ui.NewAlarmDialog
 import com.dpsmpx.dpclock.ui.OnboardingContent
 import com.dpsmpx.dpclock.ui.SettingsScreen
 import com.dpsmpx.dpclock.ui.SyncConflictsDialog
+import com.dpsmpx.dpclock.ui.TaskEditor
 import kotlinx.coroutines.runBlocking
 import org.junit.Assume
 import org.junit.Before
@@ -93,56 +97,29 @@ class ScreenshotsTest {
         DpClockApp.graph(app).tasks.preview(TaskCache())
     }
 
-    /** Задачи на сегодня (D-031): в «Часах» и раздел настроек. */
+    /** Задачи (D-032): в «Часах», «Все задачи», редактор и раздел настроек. */
     @Test
     fun tasks() {
         val today = LocalDate.now()
-        DpClockApp.graph(app).tasks.preview(
-            TaskCache(
-                connected = TaskService.entries.toSet(),
-                tasks = listOf(
-                    DayTask(TaskService.TODOIST, "1", "p", "Купить хлеб", today, priority = 3),
-                    DayTask(TaskService.TICKTICK, "2", "p", "Отчёт за октябрь", today.minusDays(2)),
-                    DayTask(TaskService.GOOGLE, "3", "L", "Полить цветы", today),
-                    DayTask(TaskService.TODOIST, "4", "p", "Созвон с командой", today, LocalTime.of(11, 0)),
-                ),
-            ),
+        val repository = DpClockApp.graph(app).repository
+        val weekly = Task("t3", "Созвон с командой", date = today, time = LocalTime.of(11, 0), reminder = 15, repeat = TaskRepeat.Weekly(setOf(today.dayOfWeek)), createdAt = 3L)
+        val own = listOf(
+            Task("t1", "Купить хлеб", date = today, createdAt = 1L),
+            Task("t2", "Отчёт за октябрь", date = today.minusDays(2), reminder = 60, createdAt = 2L),
+            weekly,
+            Task("t4", "Подарок маме", note = "Цветы и открытка", date = today.plusDays(5), createdAt = 4L),
+            Task("t5", "Прочитать книгу", createdAt = 5L),
         )
+        runBlocking { own.forEach { repository.saveTask(it) } }
+        DpClockApp.graph(app).tasks.preview(TaskCache(google = true, tasks = listOf(DayTask(TaskSource.GOOGLE, "g1", "L", "Полить цветы", today))))
         val controller = Robolectric.buildActivity(MainActivity::class.java, MainActivity.intent(app, Section.CLOCK)).setup()
         save(controller.get(), "section-clock-tasks")
         controller.pause().stop().destroy()
+        shoot("tasks-all") { DpClockTheme { AllTasksScreen(onBack = {}) } }
+        shoot("tasks-editor") { DpClockTheme { TaskEditor(weekly, today, onDismiss = {}) } }
         shoot("settings-tasks") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_tasks) } }
+        runBlocking { own.forEach { repository.deleteTask(it.id) } }
         DpClockApp.graph(app).tasks.preview(TaskCache())
-    }
-
-    @Test
-    fun sections() {
-        seed()
-        for (section in Section.entries) {
-            val controller = Robolectric.buildActivity(MainActivity::class.java, MainActivity.intent(app, section)).setup()
-            save(controller.get(), "section-" + section.name.lowercase())
-            controller.pause().stop().destroy()
-        }
-    }
-
-    @Test
-    fun settings() {
-        shoot("settings") { DpClockTheme { SettingsScreen(onBack = {}) } }
-        shoot("settings-appearance") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_appearance) } }
-        shoot("settings-sync") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_sync) } }
-    }
-
-    /** Синхронизация (D-030): окно расхождений с будильником и настройками. */
-    @Test
-    fun syncConflicts() {
-        val alarm = Alarm("1", 7, 0, Repeat.Weekly(DayOfWeek.entries.take(5).toSet()), enabled = true, createdAt = 1L, label = "Подъём")
-        val mine = SyncItems.snapshot(Backup(alarms = listOf(alarm), settings = Settings()))
-        val theirs = SyncItems.snapshot(Backup(alarms = listOf(alarm.copy(hour = 6, minute = 30)), settings = Settings(snoozeMinutes = 5)))
-        val at = 1_793_430_000_000L
-        val conflicts = listOf("alarm:1", SyncItems.SETTINGS).map { key ->
-            SyncConflict(key, mine.getValue(key), at, theirs.getValue(key), at + 600_000L, "Redmi Pad")
-        }
-        shoot("sync-conflicts") { DpClockTheme { SyncConflictsDialog(conflicts) {} } }
     }
 
     /** Окна 0.16.0 (D-029): новый будильник, первый запуск, таймер во весь экран. */

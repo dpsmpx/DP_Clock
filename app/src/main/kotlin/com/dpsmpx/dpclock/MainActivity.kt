@@ -60,6 +60,7 @@ import com.dpsmpx.dpclock.platform.Appearances
 import com.dpsmpx.dpclock.platform.CalendarSync
 import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.ui.AlarmsDialog
+import com.dpsmpx.dpclock.ui.AllTasksScreen
 import com.dpsmpx.dpclock.ui.AlarmsMenu
 import com.dpsmpx.dpclock.ui.AlarmsScreen
 import com.dpsmpx.dpclock.ui.AppBackdrop
@@ -218,6 +219,7 @@ private fun AppRoot(request: SectionRequest) {
     var settingsSection by rememberSaveable { mutableStateOf<Int?>(null) }
     var exceptionsOpen by rememberSaveable { mutableStateOf(false) }
     var statsOpen by rememberSaveable { mutableStateOf(false) }
+    var tasksOpen by rememberSaveable { mutableStateOf(false) }
     var alarmsDialog by rememberSaveable { mutableStateOf<AlarmsDialog?>(null) }
     val pager = rememberPagerState(initialPage = request.section.ordinal) { Section.entries.size }
     val scope = rememberCoroutineScope()
@@ -232,6 +234,7 @@ private fun AppRoot(request: SectionRequest) {
         settingsOpen = false
         exceptionsOpen = false
         statsOpen = false
+        tasksOpen = false
         pager.scrollToPage(request.section.ordinal)
     }
 
@@ -258,6 +261,11 @@ private fun AppRoot(request: SectionRequest) {
     if (statsOpen) {
         BackHandler { statsOpen = false }
         StatsScreen(onBack = { statsOpen = false })
+        return
+    }
+    if (tasksOpen) {
+        BackHandler { tasksOpen = false }
+        AllTasksScreen(onBack = { tasksOpen = false })
         return
     }
 
@@ -359,7 +367,7 @@ private fun AppRoot(request: SectionRequest) {
                             onQuickHandled = { handledQuick = it },
                         )
                         Section.STOPWATCH -> StopwatchScreen()
-                        Section.CLOCK -> ClockScreen(visible = pager.currentPage == Section.CLOCK.ordinal)
+                        Section.CLOCK -> ClockScreen(visible = pager.currentPage == Section.CLOCK.ordinal, openTasks = { tasksOpen = true })
                         Section.WORLD -> WorldClockScreen(visible = pager.currentPage == Section.WORLD.ordinal && !pager.isScrollInProgress)
                     }
                 }

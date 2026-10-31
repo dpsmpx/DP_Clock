@@ -1,6 +1,6 @@
 # D-031 — Задачи из Todoist, TickTick и Google Tasks — версия 0.18.0
 
-- **Статус:** Accepted — выбор автора 31 октября 2026; на телефоне ещё не проверено (З1–З7 в [плане](../docs/QUALITY/DEVICE_TEST_PLAN.md)); Google Tasks заработает после проекта Google Cloud автора ([инструкция](../docs/PLATFORM/GOOGLE_TASKS.md))
+- **Статус:** Superseded частично [D-032](D-032-OWN-TASKS.md) (31 октября 2026): Todoist и TickTick убраны, вход Google — в браузере вместо Google Play services (вход через Play services у автора срывался); показ задач (п. 1–3) и хранение ключей (п. 5) остаются
 - **Дата:** 2026-10-31
 - **Область:** P4 [ROADMAP](../ROADMAP/ROADMAP.md) — таск-менеджеры; уточняет [D-028](D-028-SYNC-AND-TASKS-DIRECTION.md), п. 2; экраны — [SCREEN_MAP](../docs/PRODUCT_CONCEPTS/SCREEN_MAP.md), раздел 19.
 

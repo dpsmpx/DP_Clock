@@ -85,7 +85,14 @@ sealed interface TaskRepeat {
  *
  * [inCalendar] и [eventId] — свои у телефона (как включение будильника, D-030):
  * событие пишет в календарь только тот телефон, где стоит флажок, — иначе два
- * телефона с одним аккаунтом Google сделали бы два события.
+ * телефона с одним аккаунтом Google сделали бы два события. [nudged] — тоже своё:
+ * для какой последней отметки уже было тихое напоминание (D-033).
+ *
+ * Постоянная задача ([permanent], D-033; идея — DP_Repeated_Tasks автора) не
+ * закрывается: «сделано» ставит отметку ([TaskMark]), и видно, сколько прошло с
+ * прошлого раза. [parentId] — чья это подзадача. [remindLate] и [remindAfterDays] —
+ * тихое напоминание постоянной: когда прошло дольше обычного и через столько дней
+ * после последней отметки.
  */
 data class Task(
     val id: String,
@@ -98,13 +105,177 @@ data class Task(
     val done: Boolean = false,
     val doneAt: Long? = null,
     val createdAt: Long = 0L,
+    val permanent: Boolean = false,
+    val parentId: String? = null,
+    val difficulty: TaskLevel = TaskLevel.NONE,
+    val urgency: TaskLevel = TaskLevel.NONE,
+    val remindLate: Boolean = false,
+    val remindAfterDays: Int? = null,
     val inCalendar: Boolean = false,
     val eventId: Long? = null,
+    val nudged: Long? = null,
 ) {
     companion object {
         const val MAX_TITLE = 300
         const val MAX_NOTE = 4000
     }
+}
+
+/** Сложность и срочность задачи (D-033): не указана, низкая, средняя, высокая. */
+enum class TaskLevel { NONE, LOW, MEDIUM, HIGH }
+
+/** Отметка «сделано» (D-033): когда, мс UTC. Отметки не меняются — добавляются и удаляются. */
+data class TaskMark(val id: String, val taskId: String, val at: Long)
+
+/** Что было на самом деле: сколько раз, когда последний, обычный, самый короткий и самый длинный промежуток. */
+data class TaskStats(val count: Int, val last: Long?, val average: Long?, val shortest: Long?, val longest: Long?)
+
+/** Единицы «прошло»: годы и месяцы — по 365 и 30 дней, как в DP_Repeated_Tasks. */
+enum class ElapsedUnit { YEAR, MONTH, DAY, HOUR, MINUTE }
+
+/** Сортировка списков задач (D-033). */
+enum class TaskSort { DUE, ELAPSED, NAME, URGENCY, DIFFICULTY }
+
+/**
+ * История отметок (D-033): «прошло с прошлого раза», «обычно раз в …», «дольше
+ * обычного» и тихое напоминание постоянной задачи. Обычный промежуток — среднее
+ * между соседними отметками: это описание того, что было, а не расписание.
+ */
+object TaskHistory {
+    /** Тихие напоминания — не ночью: с 21 до 9 часов ждут утра. */
+    const val QUIET_FROM = 21
+    const val QUIET_TO = 9
+
+    /** «Напомнить через»: 1, 2, 3 дня, неделю, 2 недели, месяц, 2, 3, 6 месяцев, год. */
+    val AFTER_DAYS = listOf(1, 2, 3, 7, 14, 30, 60, 90, 180, 365)
+
+    fun stats(marks: List<Long>): TaskStats {
+        val sorted = marks.sorted()
+        val gaps = sorted.zipWithNext { a, b -> b - a }
+        return TaskStats(
+            count = sorted.size,
+            last = sorted.lastOrNull(),
+            average = if (gaps.isEmpty()) null else gaps.sum() / gaps.size,
+            shortest = gaps.minOrNull(),
+            longest = gaps.maxOrNull(),
+        )
+    }
+
+    /** Прошло дольше обычного: нужна хотя бы пара отметок. */
+    fun late(stats: TaskStats, now: Long): Boolean {
+        val last = stats.last ?: return false
+        val average = stats.average ?: return false
+        return now - last > average
+    }
+
+    /** «2 д 3 ч»: две старшие единицы; меньше минуты — ноль минут. */
+    fun elapsed(millis: Long): List<Pair<ElapsedUnit, Int>> {
+        val minutes = (millis.coerceAtLeast(0L) / 60_000L).toInt()
+        val hours = minutes / 60
+        val days = hours / 24
+        val years = days / 365
+        val months = days % 365 / 30
+        return when {
+            hours == 0 -> listOf(ElapsedUnit.MINUTE to minutes)
+            days == 0 -> listOf(ElapsedUnit.HOUR to hours)
+            days < 30 -> listOf(ElapsedUnit.DAY to days, ElapsedUnit.HOUR to hours % 24).filter { it.second > 0 || it.first == ElapsedUnit.DAY }
+            years == 0 -> listOf(ElapsedUnit.MONTH to months, ElapsedUnit.DAY to days % 365 % 30).filter { it.second > 0 || it.first == ElapsedUnit.MONTH }
+            else -> listOf(ElapsedUnit.YEAR to years, ElapsedUnit.MONTH to months).filter { it.second > 0 || it.first == ElapsedUnit.YEAR }
+        }
+    }
+
+    /**
+     * Когда тихо напомнить о постоянной задаче (выбор автора — когда дольше обычного и
+     * через заданное время): что наступит раньше, один раз на последнюю отметку
+     * ([Task.nudged]). Прошло, а напоминания не было, — через минуту. Ночью — утром.
+     */
+    fun nudgeAt(task: Task, marks: List<Long>, now: Instant, zone: ZoneId): Instant? {
+        if (!task.permanent || task.done) return null
+        val stats = stats(marks)
+        val base = stats.last ?: task.createdAt
+        if (task.nudged == base) return null
+        val late = if (task.remindLate && stats.last != null) stats.average?.let { stats.last + it } else null
+        val after = task.remindAfterDays?.let { base + it * 86_400_000L }
+        val at = listOfNotNull(late, after).minOrNull() ?: return null
+        return awake(maxOf(Instant.ofEpochMilli(at), now.plusSeconds(60)), zone)
+    }
+
+    /** Момент вне тихих часов: ночью — в [QUIET_TO] утра. */
+    fun awake(at: Instant, zone: ZoneId): Instant {
+        val local = at.atZone(zone)
+        return when {
+            local.hour >= QUIET_FROM -> local.toLocalDate().plusDays(1).atTime(QUIET_TO, 0).atZone(zone).toInstant()
+            local.hour < QUIET_TO -> local.toLocalDate().atTime(QUIET_TO, 0).atZone(zone).toInstant()
+            else -> at
+        }
+    }
+
+    /** Основа напоминания: последняя отметка или создание. */
+    fun base(task: Task, marks: List<Long>): Long = marks.maxOrNull() ?: task.createdAt
+}
+
+/** Подзадачи, сортировка и поиск (D-033). */
+object TaskTree {
+    /** Глубже не бывает; защита от петли в повреждённых данных. */
+    const val MAX_DEPTH = 16
+
+    /**
+     * Деревом: верхние — по [order], под каждой — её подзадачи тем же порядком.
+     * Свёрнутые ([collapsed]) — без подзадач. Подзадача, чьей родительской нет в
+     * списке, — наверх. Возвращает задачу и глубину.
+     */
+    fun flatten(tasks: List<Task>, collapsed: Set<String>, order: Comparator<Task>): List<Pair<Task, Int>> {
+        val ids = tasks.map { it.id }.toSet()
+        val children = tasks.filter { it.parentId != null && it.parentId in ids }.groupBy { it.parentId }
+        val out = mutableListOf<Pair<Task, Int>>()
+        val seen = mutableSetOf<String>()
+        fun add(task: Task, depth: Int) {
+            if (!seen.add(task.id) || depth > MAX_DEPTH) return
+            out += task to depth
+            if (task.id !in collapsed) children[task.id].orEmpty().sortedWith(order).forEach { add(it, depth + 1) }
+        }
+        tasks.filter { it.parentId == null || it.parentId !in ids }.sortedWith(order).forEach { add(it, 0) }
+        return out
+    }
+
+    /** Все подзадачи [id] на любой глубине. */
+    fun descendants(tasks: List<Task>, id: String): Set<String> {
+        val children = tasks.groupBy { it.parentId }
+        val out = mutableSetOf<String>()
+        fun walk(parent: String, depth: Int) {
+            if (depth > MAX_DEPTH) return
+            for (child in children[parent].orEmpty()) if (out.add(child.id)) walk(child.id, depth + 1)
+        }
+        walk(id, 0)
+        return out
+    }
+
+    /** Есть ли подзадачи. */
+    fun hasChildren(tasks: List<Task>, id: String): Boolean = tasks.any { it.parentId == id }
+
+    /**
+     * Порядок: по сроку (без срока — в конце), «давно не делал» (ни разу — первыми,
+     * потом самые давние), по названию, по срочности и сложности (высокая — первой).
+     * [last] — последняя отметка задачи.
+     */
+    fun order(sort: TaskSort, last: Map<String, Long>): Comparator<Task> {
+        val byName = compareBy<Task> { it.title.lowercase() }
+        return when (sort) {
+            TaskSort.DUE -> compareBy<Task, LocalDate?>(nullsLast()) { it.date }.thenBy(nullsLast()) { it.time }.then(byName)
+            TaskSort.ELAPSED -> compareBy<Task> { last[it.id] ?: Long.MIN_VALUE }.then(byName)
+            TaskSort.NAME -> byName
+            TaskSort.URGENCY -> compareByDescending<Task> { it.urgency.ordinal }.then(byName)
+            TaskSort.DIFFICULTY -> compareByDescending<Task> { it.difficulty.ordinal }.then(byName)
+        }
+    }
+
+    /** Поиск по названию и заметке без учёта регистра и «ё». */
+    fun matches(task: Task, query: String): Boolean {
+        val q = normalize(query.trim())
+        return q.isEmpty() || normalize(task.title).contains(q) || normalize(task.note).contains(q)
+    }
+
+    private fun normalize(text: String) = text.lowercase().replace('ё', 'е')
 }
 
 /** Задачи дня и правила своих задач (выбор автора — сегодня и просроченные). */
@@ -137,9 +308,9 @@ object TaskRules {
 
     fun isMorning(time: LocalTime): Boolean = time.hour in MORNING_FROM until MORNING_TO
 
-    /** Своя задача для списков дня: несделанная и со сроком. */
+    /** Своя задача для списков дня: несделанная, не постоянная и со сроком. */
     fun day(task: Task): DayTask? =
-        if (task.done || task.date == null) null else DayTask(TaskSource.OWN, task.id, "", task.title, task.date, task.time)
+        if (task.done || task.permanent || task.date == null) null else DayTask(TaskSource.OWN, task.id, "", task.title, task.date, task.time)
 
     /** Момент срока: дата и время, у задачи без времени — [DAY_HOUR] часов. */
     fun dueAt(task: Task, zone: ZoneId): Instant? = task.date?.atTime(task.time ?: LocalTime.of(DAY_HOUR, 0))?.atZone(zone)?.toInstant()
@@ -187,6 +358,8 @@ object TaskRules {
      * остальные отмечаются сделанными.
      */
     fun complete(task: Task, today: LocalDate, now: Long): Task {
+        // Постоянная не закрывается: отметку ставит хранилище (D-033).
+        if (task.permanent) return task
         val date = task.date
         val next = date?.let { next(task.repeat, it, maxOf(it, today)) }
         return if (next != null) task.copy(date = next, eventId = null) else task.copy(done = true, doneAt = now)

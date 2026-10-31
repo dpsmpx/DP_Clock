@@ -174,6 +174,7 @@ object SyncItems {
     const val EXCEPTION = "exception:"
     const val PRESET = "preset:"
     const val TASK = "task:"
+    const val MARK = "mark:"
     const val SETTINGS = "settings"
     const val WORLD_CITIES = "worldCities"
 
@@ -187,6 +188,8 @@ object SyncItems {
         for (period in backup.exceptions) put(EXCEPTION + period.id, BackupFormat.exceptionMap(period))
         for (preset in backup.presets) put(PRESET + preset.id, BackupFormat.presetMap(preset))
         for (task in backup.tasks) put(TASK + task.id, BackupFormat.taskMap(task))
+        // Отметки — каждая своей записью: две отметки на двух телефонах сливаются без вопроса (D-033).
+        for (mark in backup.marks) put(MARK + mark.id, BackupFormat.markMap(mark))
         backup.settings?.let { put(SETTINGS, BackupFormat.settingsMap(it)) }
         put(WORLD_CITIES, mapOf("cities" to backup.worldCities))
     }
@@ -203,6 +206,8 @@ object SyncItems {
 
     /** Своя задача (D-032) — без флажка календаря и события: их ставит этот телефон. */
     fun task(data: Map<*, *>): Task = BackupFormat.taskFrom(json(data))
+
+    fun mark(data: Map<*, *>): TaskMark = BackupFormat.markFrom(json(data))
 
     /**
      * Настройки. Своя картинка фона — файл этого телефона: «картинка» доходит до

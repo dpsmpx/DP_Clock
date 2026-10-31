@@ -21,13 +21,15 @@ data class Backup(
     val settings: Settings? = null,
     /** Свои задачи (D-032) — без флажка календаря и события: они от этого телефона. */
     val tasks: List<Task> = emptyList(),
+    /** Отметки «сделано» (D-033). */
+    val marks: List<TaskMark> = emptyList(),
     /** Когда и какой версией приложения сохранён файл; не указано — null и пусто. */
     val exportedAt: Instant? = null,
     val appVersion: String = "",
 ) {
     val isEmpty: Boolean
         get() = alarms.isEmpty() && groups.isEmpty() && templates.isEmpty() && exceptions.isEmpty() && presets.isEmpty() &&
-            worldCities.isEmpty() && settings == null && tasks.isEmpty()
+            worldCities.isEmpty() && settings == null && tasks.isEmpty() && marks.isEmpty()
 }
 
 /** Файл не загружается (D-018, п. 5); в базе ничего не меняется. */
@@ -80,6 +82,7 @@ object BackupFormat {
         backup.settings?.let { root["settings"] = settings(it) }
         // Задачи (0.19.0) — новым полем: прежние версии его пропускают, формат тот же.
         if (backup.tasks.isNotEmpty()) root["tasks"] = backup.tasks.map(::taskMap)
+        if (backup.marks.isNotEmpty()) root["taskMarks"] = backup.marks.map(::markMap)
         return Json.write(root)
     }
 
@@ -105,6 +108,7 @@ object BackupFormat {
                 worldCities = o.list("worldCities").map { it as String }.distinct(),
                 settings = o.obj("settings")?.let(::settings),
                 tasks = o.objs("tasks").map(::task),
+                marks = o.objs("taskMarks").map { TaskMark(it.string("id"), it.string("taskId"), it.long("at")) },
                 exportedAt = o.stringOrNull("exportedAt")?.let { runCatching { Instant.parse(it) }.getOrNull() },
                 appVersion = o.string("appVersion", ""),
             )
@@ -149,7 +153,17 @@ object BackupFormat {
         "done" to task.done,
         "doneAt" to task.doneAt,
         "createdAt" to task.createdAt,
+        "permanent" to task.permanent,
+        "parentId" to task.parentId,
+        "difficulty" to task.difficulty.name,
+        "urgency" to task.urgency.name,
+        "remindLate" to task.remindLate,
+        "remindAfterDays" to task.remindAfterDays,
     )
+
+    internal fun markMap(mark: TaskMark): Map<String, Any?> = linkedMapOf("id" to mark.id, "taskId" to mark.taskId, "at" to mark.at)
+
+    internal fun markFrom(map: Map<*, *>): TaskMark = parse { Obj(map, "mark").let { TaskMark(it.string("id"), it.string("taskId"), it.long("at")) } }
 
     internal fun taskFrom(map: Map<*, *>): Task = parse { task(Obj(map, "task")) }
 
@@ -185,6 +199,12 @@ object BackupFormat {
         done = o.bool("done", false),
         doneAt = if (o.has("doneAt")) o.long("doneAt") else null,
         createdAt = o.long("createdAt", 0L),
+        permanent = o.bool("permanent", false),
+        parentId = o.stringOrNull("parentId"),
+        difficulty = o.enum("difficulty", TaskLevel.NONE),
+        urgency = o.enum("urgency", TaskLevel.NONE),
+        remindLate = o.bool("remindLate", false),
+        remindAfterDays = o.intOrNull("remindAfterDays")?.coerceIn(1, 3650),
     )
 
     private fun group(o: Obj) = AlarmGroup(o.string("id"), o.string("name", "").take(AlarmGroup.MAX_NAME), o.long("createdAt", 0L))
@@ -539,6 +559,7 @@ object BackupRules {
     fun forImport(backup: Backup, newId: () -> String): Backup {
         val groups = backup.groups.associate { it.id to newId() }
         val presets = backup.presets.associate { it.id to newId() }
+        val tasks = backup.tasks.associate { it.id to newId() }
         fun after(after: AfterAlarm) = after.copy(presetId = after.presetId?.let(presets::get))
         return backup.copy(
             alarms = backup.alarms.map { it.copy(id = newId(), groupId = it.groupId?.let(groups::get), after = after(it.after)) },
@@ -548,7 +569,8 @@ object BackupRules {
             },
             exceptions = backup.exceptions.map { it.copy(id = newId()) },
             presets = backup.presets.map { it.copy(id = presets.getValue(it.id)) },
-            tasks = backup.tasks.map { it.copy(id = newId(), inCalendar = false, eventId = null) },
+            tasks = backup.tasks.map { it.copy(id = tasks.getValue(it.id), parentId = it.parentId?.let(tasks::get), inCalendar = false, eventId = null, nudged = null) },
+            marks = backup.marks.mapNotNull { mark -> tasks[mark.taskId]?.let { mark.copy(id = newId(), taskId = it) } },
         )
     }
 }

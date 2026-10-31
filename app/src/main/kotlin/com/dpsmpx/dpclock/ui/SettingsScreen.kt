@@ -367,20 +367,16 @@ fun SettingsScreen(onBack: () -> Unit) {
                         modifier = Modifier.clickable { dialog = "clockSize" },
                     )
                 }
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.clock_background)) },
-                    supportingContent = { Text(stringResource(backgroundTitle(settings.appearance.background))) },
-                    modifier = Modifier.clickable { dialog = "background" },
-                )
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.night_background)) },
-                    supportingContent = { Text(stringResource(backgroundTitle(settings.appearance.nightBackground))) },
-                    modifier = Modifier.clickable { dialog = "nightBackground" },
-                )
+                // Один фон на всё приложение (D-027).
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.app_background)) },
-                    supportingContent = { Text(stringResource(backgroundTitle(settings.appearance.appBackground))) },
-                    modifier = Modifier.clickable { dialog = "appBackground" },
+                    supportingContent = {
+                        Column {
+                            Text(stringResource(backgroundTitle(settings.appearance.background)))
+                            Text(stringResource(R.string.app_background_text), style = MaterialTheme.typography.bodySmall)
+                        }
+                    },
+                    modifier = Modifier.clickable { dialog = "background" },
                 )
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.wallpaper)) },
@@ -648,7 +644,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             onSelect = { value -> update { it.copy(appearance = it.appearance.copy(clockSize = value)) } },
         )
         "background" -> ChoiceDialog(
-            title = stringResource(R.string.clock_background),
+            title = stringResource(R.string.app_background),
             choices = ClockBackground.entries,
             selected = settings.appearance.background,
             label = { stringResource(backgroundTitle(it)) },
@@ -661,22 +657,6 @@ fun SettingsScreen(onBack: () -> Unit) {
                     update { it.copy(appearance = it.appearance.copy(background = value)) }
                 }
             },
-        )
-        "nightBackground" -> ChoiceDialog(
-            title = stringResource(R.string.night_background),
-            choices = listOf(ClockBackground.NONE) + Scenes.WALLPAPERS,
-            selected = settings.appearance.nightBackground,
-            label = { stringResource(backgroundTitle(it)) },
-            onDismiss = { dialog = null },
-            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(nightBackground = value)) } },
-        )
-        "appBackground" -> ChoiceDialog(
-            title = stringResource(R.string.app_background),
-            choices = listOf(ClockBackground.NONE) + Scenes.WALLPAPERS,
-            selected = settings.appearance.appBackground,
-            label = { stringResource(backgroundTitle(it)) },
-            onDismiss = { dialog = null },
-            onSelect = { value -> update { it.copy(appearance = it.appearance.copy(appBackground = value)) } },
         )
         "wallpaper" -> ChoiceDialog(
             title = stringResource(R.string.wallpaper),

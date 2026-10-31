@@ -61,19 +61,18 @@ import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.ui.AlarmsDialog
 import com.dpsmpx.dpclock.ui.AlarmsMenu
 import com.dpsmpx.dpclock.ui.AlarmsScreen
+import com.dpsmpx.dpclock.ui.AppBackdrop
 import com.dpsmpx.dpclock.ui.AppIcons
 import com.dpsmpx.dpclock.ui.ExceptionsScreen
-import com.dpsmpx.dpclock.ui.SceneBackdrop
-import com.dpsmpx.dpclock.ui.SceneLook
 import com.dpsmpx.dpclock.ui.SettingsScreen
 import com.dpsmpx.dpclock.ui.StatsScreen
 import com.dpsmpx.dpclock.ui.StopwatchScreen
 import com.dpsmpx.dpclock.ui.TimersScreen
 import com.dpsmpx.dpclock.ui.TitleText
 import com.dpsmpx.dpclock.ui.WorldClockScreen
+import com.dpsmpx.dpclock.ui.isShown
 import com.dpsmpx.dpclock.ui.orderTitle
 import com.dpsmpx.dpclock.ui.rememberNotificationPermissionRequest
-import com.dpsmpx.dpclock.ui.rememberScenePalette
 import com.dpsmpx.dpclock.ui.rememberWindowLayout
 import kotlinx.coroutines.launch
 
@@ -243,12 +242,12 @@ private fun AppRoot(request: SectionRequest) {
     fun open(item: Section) {
         scope.launch { pager.animateScrollToPage(item.ordinal) }
     }
-    // Фон приложения за списками (D-024, п. 1): эффект-обои, едва заметно; в «Часах» — их собственный фон.
-    val appBackground = settings?.appearance?.appBackground ?: ClockBackground.NONE
+    // Фон приложения (D-027): один на все разделы. За списками — едва заметно; «Часы» рисуют его
+    // сами, ярко и с касанием, поверх этого — здесь он тогда не нужен и стоит.
+    val background = settings?.appearance?.background ?: ClockBackground.NONE
+    val backdrop = background.isShown(LocalContext.current)
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        if (appBackground != ClockBackground.NONE) {
-            SceneBackdrop(appBackground, animate = section != Section.CLOCK, palette = rememberScenePalette(SceneLook.APP), interactive = false)
-        }
+        if (backdrop) AppBackdrop(background, active = section != Section.CLOCK)
         Row(Modifier.fillMaxSize()) {
             if (layout.rail) {
                 // Разделы — по центру по высоте: телефон боком держат двумя руками, большим пальцем достать проще.
@@ -268,7 +267,7 @@ private fun AppRoot(request: SectionRequest) {
             Scaffold(
                 // Отступ от края уже у боковой панели.
                 modifier = if (layout.rail) Modifier.weight(1f).consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Start)) else Modifier.weight(1f),
-                containerColor = if (appBackground != ClockBackground.NONE) Color.Transparent else MaterialTheme.colorScheme.background,
+                containerColor = if (backdrop) Color.Transparent else MaterialTheme.colorScheme.background,
                 // На прозрачном каркасе цвет текста не выводится из фона — задать явно, как у фона темы.
                 contentColor = MaterialTheme.colorScheme.onBackground,
                 topBar = {

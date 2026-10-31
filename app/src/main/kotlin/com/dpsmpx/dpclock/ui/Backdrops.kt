@@ -9,7 +9,6 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.net.Uri
-import android.provider.Settings
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -47,6 +46,7 @@ import com.dpsmpx.dpclock.model.ClockBackground
 import com.dpsmpx.dpclock.model.Sun
 import com.dpsmpx.dpclock.model.WeatherSymbol
 import com.dpsmpx.dpclock.model.Zones
+import com.dpsmpx.dpclock.model.isWallpaper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
@@ -95,14 +95,15 @@ fun ClockBackground.isShown(context: Context): Boolean =
     this != ClockBackground.NONE && (this != ClockBackground.IMAGE || backgroundFile(context).exists())
 
 /**
- * Фон раздела «Часы» (D-021, п. 6): своя картинка, анимированные и живые.
- * [active] — раздел на экране: только тогда идёт анимация и слушается наклон.
+ * Фон приложения в полную силу — в «Часах» (D-021, п. 6; D-027): своя картинка,
+ * анимированные, живые и эффекты-обои. [active] — фон на экране: только тогда идёт
+ * анимация и слушается наклон. Анимация — и с выключенными анимациями системы: фон
+ * выбран человеком (D-027). [interactive] — палец и наклон; за списками и ночью — нет.
  */
 @Composable
-fun ClockBackdrop(kind: ClockBackground, active: Boolean, modifier: Modifier = Modifier) {
+fun ClockBackdrop(kind: ClockBackground, active: Boolean, modifier: Modifier = Modifier, interactive: Boolean = true) {
     val context = LocalContext.current
-    val still = remember { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }
-    val animate = active && !still
+    val animate = active
     when (kind) {
         ClockBackground.NONE -> Unit
         ClockBackground.IMAGE -> ImageBackdrop(modifier)
@@ -112,17 +113,53 @@ fun ClockBackdrop(kind: ClockBackground, active: Boolean, modifier: Modifier = M
                 value = withContext(Dispatchers.IO) { DpClockApp.graph(context).weather.cached()?.weather?.symbol }
             }
             val known = symbol
-            if (known != null) WeatherSky(known, animate, modifier.fillMaxSize()) else SkyBackdrop(animate, live = false, modifier)
+            if (known != null) WeatherSky(known, animate, modifier.fillMaxSize(), chosen = true) else SkyBackdrop(animate, live = false, modifier)
         }
         ClockBackground.SKY -> SkyBackdrop(animate, live = false, modifier)
-        ClockBackground.LIVE_SKY -> SkyBackdrop(animate, live = true, modifier)
+        ClockBackground.LIVE_SKY -> SkyBackdrop(animate, live = interactive, modifier)
         ClockBackground.WAVES -> WavesBackdrop(animate, modifier)
         ClockBackground.STARS -> StarsBackdrop(animate, modifier)
-        ClockBackground.PARTICLES -> ParticlesBackdrop(animate, modifier)
+        ClockBackground.PARTICLES -> ParticlesBackdrop(animate, interactive, modifier)
         // Эффекты-обои (D-024): тот же рисунок, что на обоях Android.
         ClockBackground.CONSTELLATION, ClockBackground.HYPERCUBE, ClockBackground.POLAR_CLOCK,
         ClockBackground.HOURGLASS, ClockBackground.MECHANISM, ClockBackground.DIGIT_RAIN,
-        -> SceneBackdrop(kind, animate, rememberScenePalette(SceneLook.CLOCK), modifier)
+        -> SceneBackdrop(kind, animate, rememberScenePalette(SceneLook.CLOCK), modifier, interactive)
+    }
+}
+
+/** Пелена за списками: фон темы почти непрозрачный — текст темы читается на любом фоне. */
+private const val APP_VEIL = 0.82f
+
+/** Пелена в ночных часах: фон едва виден, комната остаётся тёмной. */
+private const val NIGHT_VEIL = 0.8f
+
+/**
+ * Фон приложения за списками разделов (D-027): эффекты-обои — цветом темы, едва
+ * заметно; остальные фоны — под пеленой цвета фона темы. Без касаний и наклона.
+ */
+@Composable
+fun AppBackdrop(kind: ClockBackground, active: Boolean, modifier: Modifier = Modifier) {
+    if (kind.isWallpaper) {
+        SceneBackdrop(kind, active, rememberScenePalette(SceneLook.APP), modifier, interactive = false)
+        return
+    }
+    val veil = MaterialTheme.colorScheme.background.copy(alpha = APP_VEIL)
+    Box(modifier.fillMaxSize()) {
+        ClockBackdrop(kind, active, interactive = false)
+        Spacer(Modifier.fillMaxSize().drawWithCache { onDrawBehind { drawRect(veil) } })
+    }
+}
+
+/** Фон приложения в ночных часах (D-027): эффекты-обои тёмно-красным и тускло, остальные — под чёрной пеленой. */
+@Composable
+fun NightBackdrop(kind: ClockBackground, modifier: Modifier = Modifier) {
+    if (kind.isWallpaper) {
+        SceneBackdrop(kind, animate = true, palette = rememberScenePalette(SceneLook.NIGHT), modifier = modifier, interactive = false)
+        return
+    }
+    Box(modifier.fillMaxSize()) {
+        ClockBackdrop(kind, active = true, interactive = false)
+        Spacer(Modifier.fillMaxSize().drawWithCache { onDrawBehind { drawRect(Color.Black.copy(alpha = NIGHT_VEIL)) } })
     }
 }
 
@@ -327,17 +364,18 @@ private fun StarsBackdrop(animate: Boolean, modifier: Modifier) {
     )
 }
 
-/** «Частицы» — живой фон: дрейфуют, стекают по наклону телефона и разлетаются от пальца. */
+/** «Частицы» — живой фон: дрейфуют, стекают по наклону телефона и разлетаются от пальца ([interactive]). */
 @Composable
-private fun ParticlesBackdrop(animate: Boolean, modifier: Modifier) {
+private fun ParticlesBackdrop(animate: Boolean, interactive: Boolean, modifier: Modifier) {
     val time = rememberSeconds(animate)
-    val (tiltX, tiltY) = rememberTilt(animate)
+    val (tiltX, tiltY) = rememberTilt(animate && interactive)
     val accent = MaterialTheme.colorScheme.primary
     val state = remember { ParticleField(PARTICLES) }
     Spacer(
         modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
+            .pointerInput(interactive) {
+                if (!interactive) return@pointerInput
                 awaitEachGesture {
                     var change = awaitFirstDown(requireUnconsumed = false)
                     state.touch = change.position

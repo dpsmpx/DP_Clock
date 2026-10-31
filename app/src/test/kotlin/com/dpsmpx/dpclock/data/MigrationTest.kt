@@ -362,6 +362,34 @@ class MigrationTest {
         assertEquals("", settings["pomodoro"])
     }
 
+    @Test
+    fun migration14To15MakesOneBackground() = withDb { db ->
+        SchemaFile.read(14).create(db)
+        val columns = "id, snoozeMinutes, autoStopMinutes, alarmOrder, xiaomiHintsDone, signalStyle, volumeButtons, holidaysRu, " +
+            "bedtimeMode, sleepMinutes, bedtimeHour, bedtimeMinute, bedtimeDays, bedtimeLeadMinutes, weatherMode, weatherPlace, " +
+            "theme, seedColor, clockStyle, clockFont, clockSize, nightNoise, background, highContrast, showAlarmCountdown, " +
+            "nightBackground, appBackground, wallpaper, showAlarmDate, defaultWarnings, warningSound, chimes, pomodoro"
+        fun migrated(background: String, night: String, app: String): String {
+            db.execSQL("DELETE FROM settings")
+            db.execSQL(
+                "INSERT INTO settings ($columns) VALUES (0, 10, 10, 'TIME_OF_DAY', 0, 'FULL_SCREEN', 'SNOOZE', 0, 'OFF', 480, 23, 0, 127, " +
+                    "15, 'NOT_SET', '', 'DARK', NULL, 'CIRCLE', 'REGULAR', 100, 'NONE', '$background', 0, 0, '$night', '$app', 'MECHANISM', " +
+                    "0, '', 0, '', '')",
+            )
+            MIGRATION_14_15.migrate(db)
+            val settings = row(db, "SELECT * FROM settings")
+            assertEquals("NONE", settings["appBackground"])
+            assertEquals("NONE", settings["nightBackground"])
+            assertEquals("MECHANISM", settings["wallpaper"])
+            return settings.getValue("background")!!
+        }
+        // Фон «Часов» главнее; нет его — фон приложения; нет и его — фон ночных часов.
+        assertEquals("STARS", migrated("STARS", "POLAR_CLOCK", "HYPERCUBE"))
+        assertEquals("HYPERCUBE", migrated("NONE", "POLAR_CLOCK", "HYPERCUBE"))
+        assertEquals("POLAR_CLOCK", migrated("NONE", "POLAR_CLOCK", "NONE"))
+        assertEquals("NONE", migrated("NONE", "NONE", "NONE"))
+    }
+
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)
 
     private data class Table(val columns: Map<String, Column>, val indices: Set<String>, val foreignKeys: Set<String>)

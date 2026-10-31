@@ -48,13 +48,13 @@ private class Palette(val top: Color, val bottom: Color)
  * Тихий фон погоды (D-019, п. 5; выбор автора): небо по погоде и времени суток,
  * медленные облака, косые штрихи дождя, редкие снежинки, мягкое солнце, ночью —
  * звёзды и луна. [animate] — экран виден; с выключенными анимациями системы
- * картинка стоит.
+ * картинка стоит, если это не выбранный человеком фон приложения ([chosen], D-027).
  */
 @Composable
-fun WeatherSky(symbol: WeatherSymbol, animate: Boolean, modifier: Modifier = Modifier) {
+fun WeatherSky(symbol: WeatherSymbol, animate: Boolean, modifier: Modifier = Modifier, chosen: Boolean = false) {
     val context = LocalContext.current
     val still = remember {
-        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+        !chosen && Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     }
     val time = remember { mutableFloatStateOf(0f) }
     if (animate && !still) {

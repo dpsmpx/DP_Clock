@@ -198,9 +198,14 @@ data class SettingsEntity(
     val background: String = "NONE",
     /** «Высокий контраст» (D-022, п. 5). */
     val highContrast: Boolean = false,
-    /** Фон ночных часов, фон приложения и обои Android (D-024): ClockBackground. */
+    /**
+     * Фон ночных часов и фон приложения 0.13–0.14 (D-024). С 0.15.0 не используются: фон один —
+     * `background` (D-027), миграция 14→15 перенесла их туда. Столбцы остаются: удалить столбец
+     * в SQLite Android 12 — пересоздать таблицу.
+     */
     val nightBackground: String = "NONE",
     val appBackground: String = "NONE",
+    /** Обои Android (D-024): ClockBackground. */
     val wallpaper: String = "CONSTELLATION",
     /** Полная дата срабатывания в строках будильников (D-025, п. 2). */
     val showAlarmDate: Boolean = false,
@@ -463,10 +468,10 @@ abstract class ClockDatabase : RoomDatabase() {
         const val NAME = "dpclock.db"
 
         /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
-        const val VERSION = 14
+        const val VERSION = 15
 
         /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
-        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки

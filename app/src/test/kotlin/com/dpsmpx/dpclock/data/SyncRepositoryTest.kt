@@ -41,6 +41,7 @@ class SyncRepositoryTest {
     @Before
     fun setUp() {
         Assume.assumeTrue(System.getProperty("dpclock.robolectric") == "true")
+        DpClockApp.resetGraph()
     }
 
     private suspend fun pass(remote: SyncFile?, now: Long): SyncResult {

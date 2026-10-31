@@ -60,6 +60,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
@@ -75,9 +76,13 @@ import com.dpsmpx.dpclock.R
 import com.dpsmpx.dpclock.model.DayTask
 import com.dpsmpx.dpclock.model.Task
 import com.dpsmpx.dpclock.model.TaskCache
+import com.dpsmpx.dpclock.model.TaskHistory
+import com.dpsmpx.dpclock.model.TaskLevel
+import com.dpsmpx.dpclock.model.TaskMark
 import com.dpsmpx.dpclock.model.TaskRepeat
 import com.dpsmpx.dpclock.model.TaskRules
 import com.dpsmpx.dpclock.model.TaskSource
+import com.dpsmpx.dpclock.model.TaskTree
 import com.dpsmpx.dpclock.persist
 import com.dpsmpx.dpclock.persistLater
 import com.dpsmpx.dpclock.platform.GoogleSignIn
@@ -100,7 +105,7 @@ import java.util.UUID
 private const val CLOCK_ROWS = 3
 
 @Composable
-private fun rememberToday(): LocalDate {
+internal fun rememberToday(): LocalDate {
     val now = rememberNowMillis(60_000L)
     return Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault()).toLocalDate()
 }
@@ -170,7 +175,7 @@ fun TasksPanel(active: Boolean, onBackdrop: Boolean, onOpenAll: () -> Unit, modi
 }
 
 /** «Сделано»: своя — в базе, Google — в Google Tasks. */
-private suspend fun complete(context: Context, task: DayTask): Boolean {
+internal suspend fun complete(context: Context, task: DayTask): Boolean {
     val graph = DpClockApp.graph(context)
     return when (task.source) {
         TaskSource.OWN -> {
@@ -182,7 +187,7 @@ private suspend fun complete(context: Context, task: DayTask): Boolean {
 }
 
 @Composable
-private fun DayTaskRow(task: DayTask, today: LocalDate, text: Color, secondary: Color, onDone: () -> Unit, onOpen: () -> Unit) {
+internal fun DayTaskRow(task: DayTask, today: LocalDate, text: Color, secondary: Color, onDone: () -> Unit, onOpen: () -> Unit) {
     val context = LocalContext.current
     val overdue = TaskRules.overdue(task, today)
     Row(
@@ -210,7 +215,7 @@ private fun dayNote(context: Context, task: DayTask, today: LocalDate): String =
 ).joinToString(" · ")
 
 /** Срок словами: «Сегодня, 11:00», «Завтра», «3 нояб.», «Без срока». */
-private fun dueText(context: Context, date: LocalDate?, time: LocalTime?, today: LocalDate): String {
+internal fun dueText(context: Context, date: LocalDate?, time: LocalTime?, today: LocalDate): String {
     if (date == null) return context.getString(R.string.tasks_no_date)
     val day = when (date) {
         today -> context.getString(R.string.tasks_today_short)
@@ -220,9 +225,9 @@ private fun dueText(context: Context, date: LocalDate?, time: LocalTime?, today:
     return listOfNotNull(day, time?.let { TimeText.time(context, it.hour, it.minute) }).joinToString(", ")
 }
 
-private enum class RepeatKind { NONE, DAILY, WEEKLY, MONTHLY, YEARLY }
+internal enum class RepeatKind { NONE, DAILY, WEEKLY, MONTHLY, YEARLY }
 
-private fun TaskRepeat.kind(): RepeatKind = when (this) {
+internal fun TaskRepeat.kind(): RepeatKind = when (this) {
     TaskRepeat.None -> RepeatKind.NONE
     TaskRepeat.Daily -> RepeatKind.DAILY
     is TaskRepeat.Weekly -> RepeatKind.WEEKLY
@@ -230,7 +235,7 @@ private fun TaskRepeat.kind(): RepeatKind = when (this) {
     is TaskRepeat.Yearly -> RepeatKind.YEARLY
 }
 
-private fun repeatKindName(kind: RepeatKind): Int = when (kind) {
+internal fun repeatKindName(kind: RepeatKind): Int = when (kind) {
     RepeatKind.NONE -> R.string.tasks_repeat_none
     RepeatKind.DAILY -> R.string.tasks_repeat_daily
     RepeatKind.WEEKLY -> R.string.tasks_repeat_weekly
@@ -238,38 +243,79 @@ private fun repeatKindName(kind: RepeatKind): Int = when (kind) {
     RepeatKind.YEARLY -> R.string.tasks_repeat_yearly
 }
 
-private fun reminderName(context: Context, minutes: Int?): String = when (minutes) {
+internal fun reminderName(context: Context, minutes: Int?): String = when (minutes) {
     null -> context.getString(R.string.tasks_reminder_none)
     0 -> context.getString(R.string.tasks_reminder_due)
     else -> context.getString(R.string.warning_before, leadText(context, minutes))
 }
 
+/** «Низкая», «Средняя»… — сложность и срочность (D-033). */
+fun levelName(level: TaskLevel): Int = when (level) {
+    TaskLevel.NONE -> R.string.tasks_level_none
+    TaskLevel.LOW -> R.string.tasks_level_low
+    TaskLevel.MEDIUM -> R.string.tasks_level_medium
+    TaskLevel.HIGH -> R.string.tasks_level_high
+}
+
+/** «Через 3 д», «через 1 мес» — тихое напоминание постоянной (D-033). */
+private fun afterName(context: Context, days: Int?): String =
+    if (days == null) context.getString(R.string.tasks_reminder_none) else context.getString(R.string.tasks_after, elapsedText(context, days * 86_400_000L))
+
 /**
  * Редактор своей задачи (D-032; выбор автора — срок, напоминание, повтор, заметка,
- * флажок «В календарь»). [task] null — новая, со сроком [today].
+ * флажок «В календарь»). [task] null — новая: со сроком [today] или постоянная
+ * ([permanent], D-033), подзадача [parentId]. У постоянной вместо срока — тихие
+ * напоминания; у существующей — подзадачи и история отметок.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TaskEditor(task: Task?, today: LocalDate, onDismiss: () -> Unit) {
+fun TaskEditor(task: Task?, today: LocalDate, onDismiss: () -> Unit, parentId: String? = null, permanent: Boolean = false) {
     val context = LocalContext.current
     val resources = LocalResources.current
     val repository = DpClockApp.graph(context).repository
     val calendarSettings by DpClockApp.graph(context).calendar.settings.collectAsStateWithLifecycle()
+    val all by repository.tasks.collectAsStateWithLifecycle(emptyList())
     var title by rememberSaveable { mutableStateOf(task?.title.orEmpty()) }
     var note by rememberSaveable { mutableStateOf(task?.note.orEmpty()) }
-    var date by rememberSaveable { mutableStateOf(if (task == null) today else task.date) }
+    var isPermanent by rememberSaveable { mutableStateOf(task?.permanent ?: permanent) }
+    var date by rememberSaveable { mutableStateOf(if (task == null) (if (permanent) null else today) else task.date) }
     var time by rememberSaveable { mutableStateOf(task?.time) }
     var reminder by rememberSaveable { mutableStateOf(task?.reminder) }
     var repeatCode by rememberSaveable { mutableStateOf(task?.repeat?.code.orEmpty()) }
     var inCalendar by rememberSaveable { mutableStateOf(task?.inCalendar ?: false) }
+    var difficulty by rememberSaveable { mutableStateOf(task?.difficulty ?: TaskLevel.NONE) }
+    var urgency by rememberSaveable { mutableStateOf(task?.urgency ?: TaskLevel.NONE) }
+    var remindLate by rememberSaveable { mutableStateOf(task?.remindLate ?: false) }
+    var remindAfterDays by rememberSaveable { mutableStateOf(task?.remindAfterDays) }
     var picking by rememberSaveable { mutableStateOf<String?>(null) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    var addingSubtask by rememberSaveable { mutableStateOf(false) }
+    var openSubtask by remember { mutableStateOf<Task?>(null) }
     val calendarSetup = rememberTaskCalendarSetup()
     val repeat = TaskRepeat.decode(repeatCode)
+    val parent = (task?.parentId ?: parentId)?.let { id -> all.firstOrNull { it.id == id } }
+    val subtasks = task?.let { current -> all.filter { it.parentId == current.id } }.orEmpty()
 
     fun save() {
-        val base = task ?: Task(UUID.randomUUID().toString(), "", createdAt = System.currentTimeMillis())
-        val saved = base.copy(title = title, note = note, date = date, time = time, reminder = reminder, repeat = repeat, inCalendar = inCalendar)
+        val base = task ?: Task(UUID.randomUUID().toString(), "", createdAt = System.currentTimeMillis(), parentId = parentId)
+        val nudgeChanged = base.remindLate != remindLate || base.remindAfterDays != remindAfterDays || base.permanent != isPermanent
+        val saved = base.copy(
+            title = title,
+            note = note,
+            permanent = isPermanent,
+            date = if (isPermanent) null else date,
+            time = if (isPermanent) null else time,
+            reminder = if (isPermanent) null else reminder,
+            repeat = if (isPermanent) TaskRepeat.None else repeat,
+            inCalendar = !isPermanent && inCalendar,
+            difficulty = difficulty,
+            urgency = urgency,
+            remindLate = isPermanent && remindLate,
+            remindAfterDays = if (isPermanent) remindAfterDays else null,
+            // Настройки напоминания поменялись — напомнить можно снова.
+            nudged = if (nudgeChanged) null else base.nudged,
+            done = if (isPermanent) false else base.done,
+        )
         onDismiss()
         persistLater { repository.saveTask(saved) }
     }
@@ -283,6 +329,9 @@ fun TaskEditor(task: Task?, today: LocalDate, onDismiss: () -> Unit) {
                     actions = { TextButton(enabled = title.isNotBlank(), onClick = ::save) { Text(stringResource(R.string.save)) } },
                 )
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (parent != null) {
+                        Text(stringResource(R.string.tasks_subtask_of, parent.title), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     OutlinedTextField(
                         value = title,
                         onValueChange = { title = it.take(Task.MAX_TITLE) },
@@ -297,70 +346,96 @@ fun TaskEditor(task: Task?, today: LocalDate, onDismiss: () -> Unit) {
                         minLines = 2,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    ListItem(
-                        headlineContent = { Text(stringResource(R.string.tasks_due)) },
-                        supportingContent = { Text(dueText(context, date, null, today)) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        modifier = Modifier.clickable { picking = "date" },
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        AssistChip(onClick = { date = today }, label = { Text(stringResource(R.string.tasks_today_short)) })
-                        AssistChip(onClick = { date = today.plusDays(1) }, label = { Text(stringResource(R.string.tasks_tomorrow)) })
-                        AssistChip(onClick = { date = null }, label = { Text(stringResource(R.string.tasks_no_date)) })
-                    }
-                    val day = date
-                    if (day != null) {
+                    SwitchRow(stringResource(R.string.tasks_permanent), isPermanent, stringResource(R.string.tasks_permanent_text)) { isPermanent = it }
+                    if (isPermanent) {
+                        SwitchRow(stringResource(R.string.tasks_remind_late), remindLate, stringResource(R.string.tasks_remind_late_text)) { remindLate = it }
+                        ChoiceStepper(
+                            stringResource(R.string.tasks_remind_after),
+                            listOf<Int?>(null) + TaskHistory.AFTER_DAYS,
+                            remindAfterDays,
+                            text = { afterName(context, it) },
+                        ) { remindAfterDays = it }
+                    } else {
                         ListItem(
-                            headlineContent = { Text(stringResource(R.string.tasks_time)) },
-                            supportingContent = { Text(time?.let { TimeText.time(context, it.hour, it.minute) } ?: stringResource(R.string.tasks_no_time)) },
-                            trailingContent = {
-                                if (time != null) {
-                                    IconButton(onClick = { time = null }) { Icon(AppIcons.Remove, contentDescription = stringResource(R.string.tasks_no_time)) }
-                                }
-                            },
+                            headlineContent = { Text(stringResource(R.string.tasks_due)) },
+                            supportingContent = { Text(dueText(context, date, null, today)) },
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                            modifier = Modifier.clickable { picking = "time" },
+                            modifier = Modifier.clickable { picking = "date" },
                         )
-                        ChoiceStepper(
-                            stringResource(R.string.tasks_reminder),
-                            listOf<Int?>(null) + TaskRules.REMINDERS,
-                            reminder,
-                            text = { reminderName(context, it) },
-                        ) { reminder = it }
-                        ChoiceStepper(
-                            stringResource(R.string.tasks_repeat),
-                            RepeatKind.entries.toList(),
-                            repeat.kind(),
-                            text = { resources.getString(repeatKindName(it)) },
-                        ) { kind ->
-                            repeatCode = when (kind) {
-                                RepeatKind.NONE -> TaskRepeat.None
-                                RepeatKind.DAILY -> TaskRepeat.Daily
-                                RepeatKind.WEEKLY -> TaskRepeat.Weekly(setOf(day.dayOfWeek))
-                                RepeatKind.MONTHLY -> TaskRepeat.Monthly(day.dayOfMonth)
-                                RepeatKind.YEARLY -> TaskRepeat.Yearly(day.monthValue, day.dayOfMonth)
-                            }.code
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            AssistChip(onClick = { date = today }, label = { Text(stringResource(R.string.tasks_today_short)) })
+                            AssistChip(onClick = { date = today.plusDays(1) }, label = { Text(stringResource(R.string.tasks_tomorrow)) })
+                            AssistChip(onClick = { date = null }, label = { Text(stringResource(R.string.tasks_no_date)) })
                         }
-                        if (repeat is TaskRepeat.Weekly) {
-                            DayChips(repeat.days) { toggled ->
-                                val days = if (toggled in repeat.days) repeat.days - toggled else repeat.days + toggled
-                                repeatCode = TaskRepeat.Weekly(days.ifEmpty { setOf<DayOfWeek>(toggled) }).code
+                        val day = date
+                        if (day != null) {
+                            ListItem(
+                                headlineContent = { Text(stringResource(R.string.tasks_time)) },
+                                supportingContent = { Text(time?.let { TimeText.time(context, it.hour, it.minute) } ?: stringResource(R.string.tasks_no_time)) },
+                                trailingContent = {
+                                    if (time != null) {
+                                        IconButton(onClick = { time = null }) { Icon(AppIcons.Remove, contentDescription = stringResource(R.string.tasks_no_time)) }
+                                    }
+                                },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier.clickable { picking = "time" },
+                            )
+                            ChoiceStepper(
+                                stringResource(R.string.tasks_reminder),
+                                listOf<Int?>(null) + TaskRules.REMINDERS,
+                                reminder,
+                                text = { reminderName(context, it) },
+                            ) { reminder = it }
+                            ChoiceStepper(
+                                stringResource(R.string.tasks_repeat),
+                                RepeatKind.entries.toList(),
+                                repeat.kind(),
+                                text = { resources.getString(repeatKindName(it)) },
+                            ) { kind ->
+                                repeatCode = when (kind) {
+                                    RepeatKind.NONE -> TaskRepeat.None
+                                    RepeatKind.DAILY -> TaskRepeat.Daily
+                                    RepeatKind.WEEKLY -> TaskRepeat.Weekly(setOf(day.dayOfWeek))
+                                    RepeatKind.MONTHLY -> TaskRepeat.Monthly(day.dayOfMonth)
+                                    RepeatKind.YEARLY -> TaskRepeat.Yearly(day.monthValue, day.dayOfMonth)
+                                }.code
+                            }
+                            if (repeat is TaskRepeat.Weekly) {
+                                DayChips(repeat.days) { toggled ->
+                                    val days = if (toggled in repeat.days) repeat.days - toggled else repeat.days + toggled
+                                    repeatCode = TaskRepeat.Weekly(days.ifEmpty { setOf<DayOfWeek>(toggled) }).code
+                                }
                             }
                         }
+                        SwitchRow(
+                            stringResource(R.string.tasks_in_calendar),
+                            inCalendar,
+                            supporting = when {
+                                !inCalendar -> stringResource(R.string.tasks_in_calendar_text)
+                                date == null -> stringResource(R.string.tasks_in_calendar_no_date)
+                                calendarSettings.taskCalendar == null -> stringResource(R.string.tasks_calendar_none)
+                                else -> stringResource(R.string.tasks_in_calendar_on)
+                            },
+                        ) { on ->
+                            if (on) calendarSetup { inCalendar = true } else inCalendar = false
+                        }
                     }
-                    SwitchRow(
-                        stringResource(R.string.tasks_in_calendar),
-                        inCalendar,
-                        supporting = when {
-                            !inCalendar -> stringResource(R.string.tasks_in_calendar_text)
-                            date == null -> stringResource(R.string.tasks_in_calendar_no_date)
-                            calendarSettings.taskCalendar == null -> stringResource(R.string.tasks_calendar_none)
-                            else -> stringResource(R.string.tasks_in_calendar_on)
-                        },
-                    ) { on ->
-                        if (on) calendarSetup { inCalendar = true } else inCalendar = false
-                    }
+                    ChoiceStepper(stringResource(R.string.tasks_difficulty), TaskLevel.entries.toList(), difficulty, text = { resources.getString(levelName(it)) }) { difficulty = it }
+                    ChoiceStepper(stringResource(R.string.tasks_urgency), TaskLevel.entries.toList(), urgency, text = { resources.getString(levelName(it)) }) { urgency = it }
                     if (task != null) {
+                        HorizontalDivider()
+                        Text(stringResource(R.string.tasks_subtasks), style = MaterialTheme.typography.titleSmall)
+                        for (sub in subtasks) {
+                            Text(
+                                (if (sub.done) "✓ " else "") + sub.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.fillMaxWidth().clickable { openSubtask = sub }.padding(vertical = 8.dp),
+                            )
+                        }
+                        TextButton(onClick = { addingSubtask = true }) { Text(stringResource(R.string.tasks_add_subtask)) }
+                        HorizontalDivider()
+                        TaskHistoryBlock(task)
+                        HorizontalDivider()
                         TextButton(onClick = { confirmDelete = true }) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
                     }
                 }
@@ -390,11 +465,16 @@ fun TaskEditor(task: Task?, today: LocalDate, onDismiss: () -> Unit) {
             }
         }
     }
+    if (addingSubtask && task != null) TaskEditor(null, today, onDismiss = { addingSubtask = false }, parentId = task.id, permanent = task.permanent)
+    openSubtask?.let { sub -> TaskEditor(sub, today, onDismiss = { openSubtask = null }) }
     if (confirmDelete && task != null) {
+        val nested = TaskTree.descendants(all, task.id).size
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text(stringResource(R.string.tasks_delete_title)) },
-            text = { Text(task.title) },
+            text = {
+                Text(if (nested == 0) task.title else task.title + "\n" + pluralStringResource(R.plurals.tasks_delete_subtasks, nested, nested))
+            },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
@@ -406,6 +486,95 @@ fun TaskEditor(task: Task?, today: LocalDate, onDismiss: () -> Unit) {
         )
     }
 }
+
+/**
+ * История отметок задачи (D-033; идея — DP_Repeated_Tasks): сколько раз, «обычно раз
+ * в … (от … до …)», сколько прошло; отметки с промежутком до предыдущей; «Добавить
+ * прошлую отметку» и удаление ошибочной.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TaskHistoryBlock(task: Task) {
+    val context = LocalContext.current
+    val repository = DpClockApp.graph(context).repository
+    val all by repository.marks.collectAsStateWithLifecycle(emptyList())
+    val marks = all.filter { it.taskId == task.id }.sortedBy { it.at }
+    val stats = TaskHistory.stats(marks.map { it.at })
+    val now = rememberNowMillis(60_000L)
+    var showAll by rememberSaveable { mutableStateOf(false) }
+    var adding by rememberSaveable { mutableStateOf<String?>(null) }
+    var addDate by rememberSaveable { mutableStateOf<LocalDate?>(null) }
+    var deleting by remember { mutableStateOf<TaskMark?>(null) }
+    Text(stringResource(R.string.tasks_history), style = MaterialTheme.typography.titleSmall)
+    val last = stats.last
+    Text(
+        listOfNotNull(
+            pluralStringResource(R.plurals.tasks_done_times, stats.count, stats.count),
+            stats.average?.let { avg ->
+                stringResource(R.string.tasks_usually_range, elapsedText(context, avg), elapsedText(context, stats.shortest ?: avg), elapsedText(context, stats.longest ?: avg))
+            },
+            if (last == null) stringResource(R.string.tasks_never_done) else stringResource(R.string.tasks_ago, elapsedText(context, now - last)),
+        ).joinToString(" · "),
+        style = MaterialTheme.typography.bodyMedium,
+        color = if (TaskHistory.late(stats, now)) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    val newest = marks.reversed()
+    val shown = if (showAll) newest else newest.take(HISTORY_ROWS)
+    for (mark in shown) {
+        val index = marks.indexOf(mark)
+        val gap = if (index > 0) mark.at - marks[index - 1].at else null
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.weight(1f)) {
+                Text(DateUtils.formatDateTime(context, mark.at, DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_SHOW_YEAR or DateUtils.FORMAT_ABBREV_MONTH))
+                if (gap != null) Text(stringResource(R.string.tasks_after_previous, elapsedText(context, gap)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            IconButton(onClick = { deleting = mark }) { Icon(AppIcons.Delete, contentDescription = stringResource(R.string.tasks_delete_mark)) }
+        }
+    }
+    if (newest.size > shown.size) TextButton(onClick = { showAll = true }) { Text(stringResource(R.string.tasks_more, newest.size - shown.size)) }
+    TextButton(onClick = { adding = "date" }) { Text(stringResource(R.string.tasks_add_mark)) }
+
+    when (adding) {
+        "date" -> {
+            val state = rememberDatePickerState(initialSelectedDateMillis = LocalDate.now().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli())
+            DatePickerDialog(
+                onDismissRequest = { adding = null },
+                confirmButton = {
+                    TextButton(onClick = {
+                        addDate = state.selectedDateMillis?.let { Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
+                        adding = if (addDate != null) "time" else null
+                    }) { Text(stringResource(R.string.ok)) }
+                },
+                dismissButton = { TextButton(onClick = { adding = null }) { Text(stringResource(R.string.cancel)) } },
+            ) { DatePicker(state) }
+        }
+        "time" -> TimePickerDialog(12, 0, onDismiss = { adding = null }) { hour, minute ->
+            val day = addDate
+            adding = null
+            if (day != null) {
+                val at = day.atTime(hour, minute).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                persistLater { repository.addMark(task.id, at) }
+            }
+        }
+    }
+    deleting?.let { mark ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text(stringResource(R.string.tasks_delete_mark)) },
+            text = { Text(DateUtils.formatDateTime(context, mark.at, DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_SHOW_YEAR)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleting = null
+                    persistLater { repository.deleteMark(mark.id) }
+                }) { Text(stringResource(R.string.delete)) }
+            },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+}
+
+/** Сколько отметок видно сразу. */
+private const val HISTORY_ROWS = 10
 
 /**
  * Готовность к записи в календарь (D-032, п. 6): разрешение на чтение и запись
@@ -484,108 +653,6 @@ private fun TaskCalendarDialog(onDismiss: () -> Unit, onChoose: (Long) -> Unit) 
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
-}
-
-/**
- * Экран «Все задачи» (D-032): свои — просроченные, сегодня, завтра, позже, без срока,
- * сделанные; задачи Google на сегодня. «+» — новая задача.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun AllTasksScreen(onBack: () -> Unit) {
-    val context = LocalContext.current
-    val graph = DpClockApp.graph(context)
-    val own by graph.repository.tasks.collectAsStateWithLifecycle(emptyList())
-    val state by graph.tasks.state.collectAsStateWithLifecycle()
-    val today = rememberToday()
-    var editing by remember { mutableStateOf<Task?>(null) }
-    var creating by rememberSaveable { mutableStateOf(false) }
-    var showDone by rememberSaveable { mutableStateOf(false) }
-    val open = own.filter { !it.done }
-    val groups = listOf(
-        R.string.tasks_group_overdue to open.filter { it.date != null && it.date!! < today },
-        R.string.tasks_today_short to open.filter { it.date == today },
-        R.string.tasks_tomorrow to open.filter { it.date == today.plusDays(1) },
-        R.string.tasks_group_later to open.filter { it.date != null && it.date!! > today.plusDays(1) },
-        R.string.tasks_no_date to open.filter { it.date == null },
-    ).map { (title, list) -> title to list.sortedWith(compareBy<Task>({ it.date }, { it.time }, { it.createdAt })) }
-    val done = own.filter { it.done }.sortedByDescending { it.doneAt ?: 0L }
-    val google = if (state.cache.google) TaskRules.forDay(state.cache.tasks, today) else emptyList()
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { TitleText(stringResource(R.string.tasks_all_title)) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(AppIcons.Back, contentDescription = stringResource(R.string.back)) } },
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { creating = true }) { Icon(AppIcons.Add, contentDescription = stringResource(R.string.tasks_new)) }
-        },
-    ) { padding ->
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = padding.calculateTopPadding(), bottom = 96.dp)) {
-            if (own.isEmpty() && google.isEmpty()) {
-                item { Text(stringResource(R.string.tasks_empty), modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            }
-            for ((title, list) in groups) {
-                if (list.isEmpty()) continue
-                item(key = "h$title") { GroupTitle(stringResource(title)) }
-                items(list, key = { it.id }) { task -> OwnTaskRow(task, today, onOpen = { editing = task }) }
-            }
-            if (google.isNotEmpty()) {
-                item(key = "google") { GroupTitle(stringResource(R.string.tasks_google)) }
-                items(google, key = { "g" + it.listId + it.id }) { task ->
-                    DayTaskRow(task, today, MaterialTheme.colorScheme.onSurface, MaterialTheme.colorScheme.onSurfaceVariant, onDone = { persistLater { complete(context, task) } }, onOpen = {})
-                }
-            }
-            if (done.isNotEmpty()) {
-                item(key = "done") {
-                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                    TextButton(onClick = { showDone = !showDone }) { Text(stringResource(if (showDone) R.string.tasks_hide_done else R.string.tasks_show_done, done.size)) }
-                }
-                if (showDone) items(done, key = { "d" + it.id }) { task -> OwnTaskRow(task, today, onOpen = { editing = task }) }
-            }
-        }
-    }
-    if (creating) TaskEditor(null, today, onDismiss = { creating = false })
-    editing?.let { task -> TaskEditor(task, today, onDismiss = { editing = null }) }
-}
-
-@Composable
-private fun GroupTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp))
-}
-
-@Composable
-private fun OwnTaskRow(task: Task, today: LocalDate, onOpen: () -> Unit) {
-    val context = LocalContext.current
-    val resources = LocalResources.current
-    val repository = DpClockApp.graph(context).repository
-    val overdue = !task.done && task.date != null && task.date!! < today
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
-        IconButton(onClick = { persistLater { if (task.done) repository.reopenTask(task.id) else repository.completeTask(task.id) } }) {
-            Icon(
-                if (task.done) AppIcons.TaskDone else AppIcons.TaskOpen,
-                contentDescription = stringResource(if (task.done) R.string.tasks_mark_open else R.string.tasks_mark_done, task.title),
-            )
-        }
-        Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
-            Text(
-                task.title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (task.done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            val details = listOfNotNull(
-                task.date?.let { dueText(context, it, task.time, today) },
-                task.repeat.takeIf { it != TaskRepeat.None }?.let { resources.getString(repeatKindName(it.kind())) },
-                task.reminder?.let { reminderName(context, it) },
-                if (task.inCalendar) resources.getString(R.string.tasks_in_calendar) else null,
-            ).joinToString(" · ")
-            if (details.isNotEmpty()) Text(details, style = MaterialTheme.typography.bodySmall, color = if (overdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-            if (task.note.isNotBlank()) Text(task.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        }
-    }
 }
 
 /**

@@ -20,8 +20,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
-/** Разделы нижней панели слева направо (D-010, п. 2). */
-enum class Section { ALARMS, TIMERS, STOPWATCH, CLOCK, WORLD }
+/**
+ * Разделы нижней панели слева направо (D-010, п. 2). С 0.20.0 (D-033) секундомер —
+ * вкладка «Таймеров», на его месте — «Задачи».
+ */
+enum class Section { ALARMS, TIMERS, TASKS, CLOCK, WORLD }
 
 /** Общие объекты процесса. Работают и до первой разблокировки: база — в хранилище устройства. */
 class AppGraph(context: Context) {
@@ -64,6 +67,11 @@ class DpClockApp : Application(), CameraXConfig.Provider {
 
         fun graph(context: Context): AppGraph =
             graph ?: synchronized(this) { graph ?: AppGraph(context.applicationContext).also { graph = it } }
+
+        /** Тесты на Robolectric: у каждого теста своё приложение и свои файлы — и свой граф. */
+        internal fun resetGraph() {
+            graph = null
+        }
     }
 }
 

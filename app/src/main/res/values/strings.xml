@@ -895,7 +895,6 @@
     <string name="tasks_new">New task</string>
     <string name="tasks_edit">Task</string>
     <string name="tasks_all">All</string>
-    <string name="tasks_all_title">All tasks</string>
     <string name="tasks_empty">No tasks yet. Tap + to add one.</string>
     <string name="tasks_more">More: %1$d</string>
     <string name="tasks_loading">Updating…</string>
@@ -959,4 +958,64 @@
     <string name="tasks_google_page_done">Done — Google Tasks is connected.</string>
     <string name="tasks_google_page_failed">Google didn\'t allow access.</string>
     <string name="tasks_google_page_back">Back to DP Clock</string>
+
+    <!-- Постоянные задачи и раздел «Задачи» (D-033) -->
+    <string name="section_tasks">Tasks</string>
+    <string name="channel_task_nudges">Permanent tasks</string>
+    <string name="tasks_tab_all">All</string>
+    <string name="tasks_tab_permanent">Permanent</string>
+    <string name="tasks_tab_board">Board</string>
+    <string name="tasks_search">Search tasks</string>
+    <string name="tasks_sort">Order</string>
+    <string name="tasks_sort_due">By due date</string>
+    <string name="tasks_sort_elapsed">Longest ago first</string>
+    <string name="tasks_sort_name">By name</string>
+    <string name="tasks_sort_urgency">By urgency</string>
+    <string name="tasks_sort_difficulty">By difficulty</string>
+    <string name="tasks_marked">Marked: %1$s</string>
+    <string name="tasks_not_found">Nothing found</string>
+    <string name="tasks_permanent_empty">No permanent tasks yet. Tap + for chores without a due date: water the plants, change the filter.</string>
+    <string name="tasks_never_done">not done yet</string>
+    <string name="tasks_ago">%1$s ago</string>
+    <string name="tasks_usually">usually every %1$s</string>
+    <string name="tasks_usually_range">usually every %1$s (%2$s to %3$s)</string>
+    <plurals name="tasks_done_times">
+        <item quantity="one">Done %1$d time</item>
+        <item quantity="other">Done %1$d times</item>
+    </plurals>
+    <string name="tasks_after_previous">%1$s after the previous one</string>
+    <string name="tasks_delete_mark">Delete the mark</string>
+    <string name="tasks_add_mark">Add a past mark</string>
+    <string name="tasks_history">History</string>
+    <string name="tasks_subtasks">Subtasks</string>
+    <string name="tasks_add_subtask">Add a subtask</string>
+    <string name="tasks_subtask_of">Subtask of “%1$s”</string>
+    <plurals name="tasks_delete_subtasks">
+        <item quantity="one">and %1$d subtask</item>
+        <item quantity="other">and %1$d subtasks</item>
+    </plurals>
+    <string name="tasks_permanent">Permanent</string>
+    <string name="tasks_permanent_text">Never closes: “Done” leaves a mark, and you see how long it\'s been</string>
+    <string name="tasks_remind_late">Remind when it\'s been longer than usual</string>
+    <string name="tasks_remind_late_text">A quiet notification without sound, once after each mark</string>
+    <string name="tasks_remind_after">Remind after</string>
+    <string name="tasks_after">in %1$s</string>
+    <string name="tasks_difficulty">Difficulty</string>
+    <string name="tasks_urgency">Urgency</string>
+    <string name="tasks_level_none">Not set</string>
+    <string name="tasks_level_low">Low</string>
+    <string name="tasks_level_medium">Medium</string>
+    <string name="tasks_level_high">High</string>
+    <string name="tasks_urgency_short">urgency: %1$s</string>
+    <string name="tasks_difficulty_short">difficulty: %1$s</string>
+    <string name="tasks_expand">Expand</string>
+    <string name="tasks_collapse">Collapse</string>
+    <plurals name="elapsed_years">
+        <item quantity="one">%1$d y</item>
+        <item quantity="other">%1$d y</item>
+    </plurals>
+    <plurals name="elapsed_months">
+        <item quantity="one">%1$d mo</item>
+        <item quantity="other">%1$d mo</item>
+    </plurals>
 </resources>

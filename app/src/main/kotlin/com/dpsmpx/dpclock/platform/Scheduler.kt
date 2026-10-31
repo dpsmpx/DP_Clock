@@ -64,6 +64,19 @@ class Scheduler(private val context: Context) {
             .putExtra(AlarmReceiver.EXTRA_ID, taskId),
     )
 
+    /** Тихое напоминание постоянной задачи (D-033): не точное — пара минут ничего не меняет. */
+    fun setTaskNudge(taskId: String, at: Long) =
+        alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, nudgeIntent(taskId))
+
+    fun cancelTaskNudge(taskId: String) = alarmManager.cancel(nudgeIntent(taskId))
+
+    private fun nudgeIntent(taskId: String): PendingIntent = broadcast(
+        Intent(context, AlarmReceiver::class.java)
+            .setAction(AlarmReceiver.ACTION_TASK_NUDGE)
+            .setData("dpclock://task-nudge/$taskId".toUri())
+            .putExtra(AlarmReceiver.EXTRA_ID, taskId),
+    )
+
     /** Бой курантов в [at] (D-025, п. 4); один на приложение. Точный: бой в начале часа, а не когда-нибудь. */
     fun setChime(at: Long) = setExact(at, chimeIntent(at))
 

@@ -931,7 +931,6 @@
     <string name="tasks_new">Новая задача</string>
     <string name="tasks_edit">Задача</string>
     <string name="tasks_all">Все</string>
-    <string name="tasks_all_title">Все задачи</string>
     <string name="tasks_empty">Задач пока нет. «+» — новая.</string>
     <string name="tasks_more">Ещё %1$d</string>
     <string name="tasks_loading">Обновляю…</string>
@@ -995,4 +994,72 @@
     <string name="tasks_google_page_done">Готово — Google Tasks подключён.</string>
     <string name="tasks_google_page_failed">Google не дал доступ.</string>
     <string name="tasks_google_page_back">Вернуться в DP Clock</string>
+
+    <!-- Постоянные задачи и раздел «Задачи» (D-033) -->
+    <string name="section_tasks">Задачи</string>
+    <string name="channel_task_nudges">Постоянные задачи</string>
+    <string name="tasks_tab_all">Все</string>
+    <string name="tasks_tab_permanent">Постоянные</string>
+    <string name="tasks_tab_board">Доска</string>
+    <string name="tasks_search">Поиск задач</string>
+    <string name="tasks_sort">Порядок</string>
+    <string name="tasks_sort_due">По сроку</string>
+    <string name="tasks_sort_elapsed">Давно не делал</string>
+    <string name="tasks_sort_name">По названию</string>
+    <string name="tasks_sort_urgency">По срочности</string>
+    <string name="tasks_sort_difficulty">По сложности</string>
+    <string name="tasks_marked">Отмечено: %1$s</string>
+    <string name="tasks_not_found">Ничего не нашлось</string>
+    <string name="tasks_permanent_empty">Постоянных задач пока нет. «+» — для дел без срока: полить цветы, поменять фильтр.</string>
+    <string name="tasks_never_done">ещё ни разу</string>
+    <string name="tasks_ago">%1$s назад</string>
+    <string name="tasks_usually">обычно раз в %1$s</string>
+    <string name="tasks_usually_range">обычно раз в %1$s (от %2$s до %3$s)</string>
+    <plurals name="tasks_done_times">
+        <item quantity="one">Отмечено %1$d раз</item>
+        <item quantity="few">Отмечено %1$d раза</item>
+        <item quantity="many">Отмечено %1$d раз</item>
+        <item quantity="other">Отмечено %1$d раза</item>
+    </plurals>
+    <string name="tasks_after_previous">через %1$s после предыдущей</string>
+    <string name="tasks_delete_mark">Удалить отметку</string>
+    <string name="tasks_add_mark">Добавить прошлую отметку</string>
+    <string name="tasks_history">История</string>
+    <string name="tasks_subtasks">Подзадачи</string>
+    <string name="tasks_add_subtask">Добавить подзадачу</string>
+    <string name="tasks_subtask_of">Подзадача: «%1$s»</string>
+    <plurals name="tasks_delete_subtasks">
+        <item quantity="one">и %1$d подзадача</item>
+        <item quantity="few">и %1$d подзадачи</item>
+        <item quantity="many">и %1$d подзадач</item>
+        <item quantity="other">и %1$d подзадачи</item>
+    </plurals>
+    <string name="tasks_permanent">Постоянная</string>
+    <string name="tasks_permanent_text">Не закрывается: «Сделано» ставит отметку, и видно, сколько прошло</string>
+    <string name="tasks_remind_late">Напомнить, когда дольше обычного</string>
+    <string name="tasks_remind_late_text">Тихое уведомление без звука, один раз после каждой отметки</string>
+    <string name="tasks_remind_after">Напомнить через</string>
+    <string name="tasks_after">через %1$s</string>
+    <string name="tasks_difficulty">Сложность</string>
+    <string name="tasks_urgency">Срочность</string>
+    <string name="tasks_level_none">Не указана</string>
+    <string name="tasks_level_low">Низкая</string>
+    <string name="tasks_level_medium">Средняя</string>
+    <string name="tasks_level_high">Высокая</string>
+    <string name="tasks_urgency_short">срочность: %1$s</string>
+    <string name="tasks_difficulty_short">сложность: %1$s</string>
+    <string name="tasks_expand">Развернуть</string>
+    <string name="tasks_collapse">Свернуть</string>
+    <plurals name="elapsed_years">
+        <item quantity="one">%1$d г</item>
+        <item quantity="few">%1$d г</item>
+        <item quantity="many">%1$d л</item>
+        <item quantity="other">%1$d г</item>
+    </plurals>
+    <plurals name="elapsed_months">
+        <item quantity="one">%1$d мес</item>
+        <item quantity="few">%1$d мес</item>
+        <item quantity="many">%1$d мес</item>
+        <item quantity="other">%1$d мес</item>
+    </plurals>
 </resources>

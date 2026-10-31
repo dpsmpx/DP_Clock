@@ -227,3 +227,20 @@ val MIGRATION_16_17 = SqlMigration(
             "`createdAt` INTEGER NOT NULL, `inCalendar` INTEGER NOT NULL, `eventId` INTEGER, PRIMARY KEY(`id`))",
     ),
 )
+
+/** 0.20.0 (D-033): постоянные задачи, подзадачи, сложность и срочность, тихие напоминания; отметки «сделано». */
+val MIGRATION_17_18 = SqlMigration(
+    17,
+    18,
+    listOf(
+        "ALTER TABLE `task` ADD COLUMN `permanent` INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE `task` ADD COLUMN `parentId` TEXT",
+        "ALTER TABLE `task` ADD COLUMN `difficulty` TEXT NOT NULL DEFAULT 'NONE'",
+        "ALTER TABLE `task` ADD COLUMN `urgency` TEXT NOT NULL DEFAULT 'NONE'",
+        "ALTER TABLE `task` ADD COLUMN `remindLate` INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE `task` ADD COLUMN `remindAfterDays` INTEGER",
+        "ALTER TABLE `task` ADD COLUMN `nudged` INTEGER",
+        "CREATE TABLE IF NOT EXISTS `task_mark` (`id` TEXT NOT NULL, `taskId` TEXT NOT NULL, `at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "CREATE INDEX IF NOT EXISTS `index_task_mark_taskId` ON `task_mark` (`taskId`)",
+    ),
+)

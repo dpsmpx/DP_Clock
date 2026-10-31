@@ -61,6 +61,14 @@ class AlarmReceiver : BroadcastReceiver() {
                 }
                 return
             }
+            ACTION_TASK_NUDGE -> {
+                val id = intent.getStringExtra(EXTRA_ID) ?: return
+                runAsync {
+                    val graph = DpClockApp.graph(context)
+                    graph.repository.onTaskNudge(id)?.let { (task, stats) -> graph.notifier.taskNudge(task, stats) }
+                }
+                return
+            }
             ACTION_WARNING -> {
                 val id = intent.getStringExtra(EXTRA_ID) ?: return
                 val alarmAt = intent.getLongExtra(EXTRA_ALARM_AT, 0L)
@@ -108,6 +116,7 @@ class AlarmReceiver : BroadcastReceiver() {
         const val ACTION_WARNING = "com.dpsmpx.dpclock.action.WARNING"
         const val ACTION_CHIME = "com.dpsmpx.dpclock.action.CHIME"
         const val ACTION_TASK = "com.dpsmpx.dpclock.action.TASK"
+        const val ACTION_TASK_NUDGE = "com.dpsmpx.dpclock.action.TASK_NUDGE"
 
         /** Бой опоздал больше этого (телефон был выключен) — не звонить. */
         private const val CHIME_LATE_MILLIS = 2 * 60_000L

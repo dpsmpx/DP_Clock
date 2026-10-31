@@ -60,7 +60,6 @@ import com.dpsmpx.dpclock.platform.Appearances
 import com.dpsmpx.dpclock.platform.CalendarSync
 import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.ui.AlarmsDialog
-import com.dpsmpx.dpclock.ui.AllTasksScreen
 import com.dpsmpx.dpclock.ui.AlarmsMenu
 import com.dpsmpx.dpclock.ui.AlarmsScreen
 import com.dpsmpx.dpclock.ui.AppBackdrop
@@ -70,8 +69,8 @@ import com.dpsmpx.dpclock.ui.FitText
 import com.dpsmpx.dpclock.ui.OnboardingDialog
 import com.dpsmpx.dpclock.ui.SettingsScreen
 import com.dpsmpx.dpclock.ui.StatsScreen
-import com.dpsmpx.dpclock.ui.StopwatchScreen
-import com.dpsmpx.dpclock.ui.TimersScreen
+import com.dpsmpx.dpclock.ui.TasksScreen
+import com.dpsmpx.dpclock.ui.TimersSection
 import com.dpsmpx.dpclock.ui.TitleText
 import com.dpsmpx.dpclock.ui.WorldClockScreen
 import com.dpsmpx.dpclock.ui.isShown
@@ -132,14 +131,17 @@ class MainActivity : ComponentActivity() {
         }
         val section = when (quick) {
             QuickAction.NEW_ALARM, QuickAction.EDIT_ALARM -> Section.ALARMS
-            QuickAction.SLEEP_TIMER -> Section.TIMERS
-            QuickAction.START_STOPWATCH -> Section.STOPWATCH
+            QuickAction.SLEEP_TIMER, QuickAction.START_STOPWATCH -> Section.TIMERS
             null -> sectionOf(intent)
         }
+        // Секундомер — вкладка «Таймеров» (D-033); прежние ярлыки и уведомления просят раздел «STOPWATCH».
+        val stopwatch = quick == QuickAction.START_STOPWATCH || intent?.getBooleanExtra(EXTRA_STOPWATCH, false) == true ||
+            intent?.getStringExtra(EXTRA_SECTION) == OLD_STOPWATCH
         return SectionRequest(
             section,
             serial,
             quick?.takeIf { it != QuickAction.START_STOPWATCH }?.let { QuickRequest(it, intent?.getStringExtra(EXTRA_ALARM_ID), SystemClock.elapsedRealtimeNanos()) },
+            stopwatch = stopwatch,
         )
     }
 
@@ -153,23 +155,31 @@ class MainActivity : ComponentActivity() {
         return QuickAction.entries.firstOrNull { it.name == name }
     }
 
-    private fun sectionOf(intent: Intent?): Section =
-        intent?.getStringExtra(EXTRA_SECTION)?.let { name -> Section.entries.firstOrNull { it.name == name } }
-            ?: Section.ALARMS
+    private fun sectionOf(intent: Intent?): Section {
+        val name = intent?.getStringExtra(EXTRA_SECTION)
+        if (name == OLD_STOPWATCH) return Section.TIMERS
+        return name?.let { Section.entries.firstOrNull { it.name == name } } ?: Section.ALARMS
+    }
 
     companion object {
         private const val EXTRA_SECTION = "section"
         private const val EXTRA_QUICK = "quick"
         private const val EXTRA_ALARM_ID = "alarmId"
+        private const val EXTRA_STOPWATCH = "stopwatch"
+
+        /** Раздел «Секундомер» до 0.20.0. */
+        private const val OLD_STOPWATCH = "STOPWATCH"
 
         /** Ярлыки на иконке (`res/xml/shortcuts.xml`, D-020). */
         const val ACTION_NEW_ALARM = "com.dpsmpx.dpclock.action.NEW_ALARM"
         const val ACTION_SLEEP_TIMER = "com.dpsmpx.dpclock.action.SLEEP_TIMER"
         const val ACTION_START_STOPWATCH = "com.dpsmpx.dpclock.action.START_STOPWATCH"
 
-        fun intent(context: Context, section: Section): Intent =
+        /** Открыть раздел; [stopwatch] — у «Таймеров» сразу вкладку «Секундомер». */
+        fun intent(context: Context, section: Section, stopwatch: Boolean = false): Intent =
             Intent(context, MainActivity::class.java)
                 .putExtra(EXTRA_SECTION, section.name)
+                .putExtra(EXTRA_STOPWATCH, stopwatch)
                 .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
 
         /** Открыть с быстрым действием: новый будильник, будильник [alarmId] в редакторе, таймер засыпания. */
@@ -187,12 +197,13 @@ enum class QuickAction { NEW_ALARM, EDIT_ALARM, SLEEP_TIMER, START_STOPWATCH }
 /** Быстрое действие для экрана; [token] — своё у каждого интента: действие выполняется один раз. */
 data class QuickRequest(val action: QuickAction, val alarmId: String?, val token: Long)
 
-data class SectionRequest(val section: Section, val serial: Int, val quick: QuickRequest? = null)
+/** [stopwatch] — у «Таймеров» открыть вкладку «Секундомер» (D-033). */
+data class SectionRequest(val section: Section, val serial: Int, val quick: QuickRequest? = null, val stopwatch: Boolean = false)
 
 private val SECTION_TITLES = mapOf(
     Section.ALARMS to R.string.section_alarms,
     Section.TIMERS to R.string.section_timers,
-    Section.STOPWATCH to R.string.section_stopwatch,
+    Section.TASKS to R.string.section_tasks,
     Section.CLOCK to R.string.section_clock,
     Section.WORLD to R.string.section_world,
 )
@@ -206,7 +217,7 @@ private val NAV_LABELS = SECTION_TITLES + (Section.WORLD to R.string.nav_world)
 private fun Section.icon(): ImageVector = when (this) {
     Section.ALARMS -> AppIcons.Alarm
     Section.TIMERS -> AppIcons.Timer
-    Section.STOPWATCH -> AppIcons.Stopwatch
+    Section.TASKS -> AppIcons.TaskDone
     Section.CLOCK -> AppIcons.Clock
     Section.WORLD -> AppIcons.Globe
 }
@@ -219,7 +230,6 @@ private fun AppRoot(request: SectionRequest) {
     var settingsSection by rememberSaveable { mutableStateOf<Int?>(null) }
     var exceptionsOpen by rememberSaveable { mutableStateOf(false) }
     var statsOpen by rememberSaveable { mutableStateOf(false) }
-    var tasksOpen by rememberSaveable { mutableStateOf(false) }
     var alarmsDialog by rememberSaveable { mutableStateOf<AlarmsDialog?>(null) }
     val pager = rememberPagerState(initialPage = request.section.ordinal) { Section.entries.size }
     val scope = rememberCoroutineScope()
@@ -234,7 +244,6 @@ private fun AppRoot(request: SectionRequest) {
         settingsOpen = false
         exceptionsOpen = false
         statsOpen = false
-        tasksOpen = false
         pager.scrollToPage(request.section.ordinal)
     }
 
@@ -263,11 +272,7 @@ private fun AppRoot(request: SectionRequest) {
         StatsScreen(onBack = { statsOpen = false })
         return
     }
-    if (tasksOpen) {
-        BackHandler { tasksOpen = false }
-        AllTasksScreen(onBack = { tasksOpen = false })
-        return
-    }
+
 
     val section = Section.entries[pager.currentPage]
     val layout = rememberWindowLayout()
@@ -361,13 +366,14 @@ private fun AppRoot(request: SectionRequest) {
                             onQuickHandled = { handledQuick = it },
                             visible = pager.currentPage == Section.ALARMS.ordinal,
                         )
-                        Section.TIMERS -> TimersScreen(
+                        Section.TIMERS -> TimersSection(
                             requestNotifications,
                             quick = quick?.takeIf { it.action == QuickAction.SLEEP_TIMER },
                             onQuickHandled = { handledQuick = it },
+                            request = request,
                         )
-                        Section.STOPWATCH -> StopwatchScreen()
-                        Section.CLOCK -> ClockScreen(visible = pager.currentPage == Section.CLOCK.ordinal, openTasks = { tasksOpen = true })
+                        Section.TASKS -> TasksScreen(snackbar, visible = pager.currentPage == Section.TASKS.ordinal)
+                        Section.CLOCK -> ClockScreen(visible = pager.currentPage == Section.CLOCK.ordinal, openTasks = { open(Section.TASKS) })
                         Section.WORLD -> WorldClockScreen(visible = pager.currentPage == Section.WORLD.ordinal && !pager.isScrollInProgress)
                     }
                 }

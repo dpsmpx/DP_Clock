@@ -422,6 +422,22 @@ class MigrationTest {
         assertEquals("Хлеб", row(db, "SELECT * FROM task")["title"])
     }
 
+    @Test
+    fun migration17To18KeepsTasksAsOrdinary() = withDb { db ->
+        SchemaFile.read(17).create(db)
+        db.execSQL("INSERT INTO task (id, title, note, repeat, done, createdAt, inCalendar) VALUES ('t', 'Хлеб', '', 'daily', 0, 1, 0)")
+        MIGRATION_17_18.migrate(db)
+
+        val task = row(db, "SELECT * FROM task")
+        assertEquals("Хлеб", task["title"])
+        assertEquals("daily", task["repeat"])
+        assertEquals("0", task["permanent"])
+        assertEquals(null, task["parentId"])
+        assertEquals("NONE", task["difficulty"])
+        assertEquals("NONE", task["urgency"])
+        assertEquals(emptyList<Map<String, String?>>(), rows(db, "SELECT * FROM task_mark"))
+    }
+
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)
 
     private data class Table(val columns: Map<String, Column>, val indices: Set<String>, val foreignKeys: Set<String>)

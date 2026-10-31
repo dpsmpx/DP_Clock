@@ -18,8 +18,10 @@ import com.dpsmpx.dpclock.model.Moment
 import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
 import com.dpsmpx.dpclock.model.Task
+import com.dpsmpx.dpclock.model.TaskStats
 import com.dpsmpx.dpclock.model.TimerRun
 import com.dpsmpx.dpclock.model.TimerState
+import com.dpsmpx.dpclock.ui.elapsedText
 import com.dpsmpx.dpclock.ui.leadText
 
 /** Уведомления (SCREEN_MAP.md, п. 11). */
@@ -43,6 +45,8 @@ class Notifier(private val context: Context) {
                 NotificationChannel(CHANNEL_SYNC, text(R.string.channel_sync), NotificationManager.IMPORTANCE_LOW),
                 NotificationChannel(CHANNEL_TASKS, text(R.string.channel_tasks), NotificationManager.IMPORTANCE_LOW),
                 NotificationChannel(CHANNEL_TASK_REMINDERS, text(R.string.channel_task_reminders), NotificationManager.IMPORTANCE_HIGH),
+                // Постоянные задачи (D-033; выбор автора — мягко, без звука).
+                NotificationChannel(CHANNEL_TASK_NUDGES, text(R.string.channel_task_nudges), NotificationManager.IMPORTANCE_LOW),
             ),
         )
     }
@@ -239,6 +243,27 @@ class Notifier(private val context: Context) {
 
     fun cancelTaskReminder(taskId: String) = manager.cancel("task:$taskId", ID_TASK)
 
+    /** Тихое напоминание постоянной задачи: «прошло 5 д 3 ч · обычно раз в 3 д», «Сделано». */
+    fun taskNudge(task: Task, stats: TaskStats) {
+        val last = stats.last
+        val text = listOfNotNull(
+            if (last == null) text(R.string.tasks_never_done) else context.getString(R.string.tasks_ago, elapsedText(context, System.currentTimeMillis() - last)),
+            stats.average?.let { context.getString(R.string.tasks_usually, elapsedText(context, it)) },
+        ).joinToString(" · ")
+        show(
+            ID_TASK,
+            Notification.Builder(context, CHANNEL_TASK_NUDGES)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(task.title)
+                .setContentText(text)
+                .setContentIntent(openApp(Section.TASKS))
+                .addAction(action(text(R.string.tasks_done), broadcast(ActionReceiver.ACTION_TASK_DONE, task.id)))
+                .setAutoCancel(true)
+                .build(),
+            tag = "task:${task.id}",
+        )
+    }
+
     /**
      * «Задачи на сегодня» после утреннего будильника: первые задачи строками. На экране
      * блокировки — только число, без названий.
@@ -391,7 +416,7 @@ class Notifier(private val context: Context) {
             .setContentTitle(text(R.string.section_stopwatch))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setContentIntent(openApp(Section.STOPWATCH))
+            .setContentIntent(openStopwatch())
             .setWhen(System.currentTimeMillis() - elapsed)
             .setShowWhen(running)
             .setUsesChronometer(running)
@@ -440,6 +465,14 @@ class Notifier(private val context: Context) {
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
+    /** Секундомер — вкладка раздела «Таймеры» (D-033). */
+    private fun openStopwatch(): PendingIntent = PendingIntent.getActivity(
+        context,
+        STOPWATCH_REQUEST,
+        MainActivity.intent(context, Section.TIMERS, stopwatch = true),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
     private fun openApp(section: Section): PendingIntent = PendingIntent.getActivity(
         context,
         section.ordinal,
@@ -460,6 +493,8 @@ class Notifier(private val context: Context) {
         private const val CHANNEL_TASKS = "tasks"
         private const val ID_TASK = 9
         private const val CHANNEL_TASK_REMINDERS = "task-reminders"
+        private const val CHANNEL_TASK_NUDGES = "task-nudges"
+        private const val STOPWATCH_REQUEST = 100
         private const val TASK_LINES = 5
         private const val CHANNEL_WARNING = "warning"
         private const val CHANNEL_WARNING_SOUND = "warning-sound"

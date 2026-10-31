@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
@@ -265,6 +266,23 @@ data class TaskEntity(
     val createdAt: Long,
     val inCalendar: Boolean,
     val eventId: Long?,
+    /** 0.20.0 (D-033): постоянная, подзадача, сложность и срочность (`TaskLevel`), тихое напоминание. */
+    val permanent: Boolean = false,
+    val parentId: String? = null,
+    val difficulty: String = "NONE",
+    val urgency: String = "NONE",
+    val remindLate: Boolean = false,
+    val remindAfterDays: Int? = null,
+    /** Своё у телефона: для какой отметки уже было тихое напоминание. */
+    val nudged: Long? = null,
+)
+
+/** Отметка «сделано» своей задачи (D-033): когда, мс UTC. */
+@Entity(tableName = "task_mark", indices = [Index("taskId")])
+data class TaskMarkEntity(
+    @PrimaryKey val id: String,
+    val taskId: String,
+    val at: Long,
 )
 
 /** Действия для статистики (D-023, п. 7): ночные часы, таймер засыпания, «пора спать», таймеры, секундомер. */
@@ -482,6 +500,27 @@ interface ClockDao {
 
     @Query("DELETE FROM task WHERE id = :id")
     suspend fun deleteTask(id: String)
+
+    @Query("SELECT * FROM task_mark ORDER BY at")
+    fun marks(): Flow<List<TaskMarkEntity>>
+
+    @Query("SELECT * FROM task_mark ORDER BY at")
+    suspend fun allMarks(): List<TaskMarkEntity>
+
+    @Query("SELECT * FROM task_mark WHERE taskId = :taskId ORDER BY at")
+    suspend fun marksOf(taskId: String): List<TaskMarkEntity>
+
+    @Query("SELECT * FROM task_mark WHERE id = :id")
+    suspend fun mark(id: String): TaskMarkEntity?
+
+    @Upsert
+    suspend fun upsertMark(mark: TaskMarkEntity)
+
+    @Query("DELETE FROM task_mark WHERE id = :id")
+    suspend fun deleteMark(id: String)
+
+    @Query("DELETE FROM task_mark WHERE taskId = :taskId")
+    suspend fun deleteMarksOf(taskId: String)
 }
 
 @Database(
@@ -499,6 +538,7 @@ interface ClockDao {
         WorldCityEntity::class,
         ActivityEventEntity::class,
         TaskEntity::class,
+        TaskMarkEntity::class,
     ],
     version = ClockDatabase.VERSION,
     exportSchema = true,
@@ -510,10 +550,10 @@ abstract class ClockDatabase : RoomDatabase() {
         const val NAME = "dpclock.db"
 
         /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
-        const val VERSION = 17
+        const val VERSION = 18
 
         /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
-        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки

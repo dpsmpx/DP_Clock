@@ -31,8 +31,12 @@ import com.dpsmpx.dpclock.model.SyncResult
 import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
 import com.dpsmpx.dpclock.model.Task
+import com.dpsmpx.dpclock.model.TaskHistory
+import com.dpsmpx.dpclock.model.TaskMark
 import com.dpsmpx.dpclock.model.TaskRepeat
 import com.dpsmpx.dpclock.model.TaskRules
+import com.dpsmpx.dpclock.model.TaskStats
+import com.dpsmpx.dpclock.model.TaskTree
 import com.dpsmpx.dpclock.model.TimerPreset
 import com.dpsmpx.dpclock.model.TimerProgram
 import com.dpsmpx.dpclock.model.TimerRules
@@ -137,6 +141,9 @@ class ClockRepository(
 
     /** Свои задачи (D-032). */
     val tasks: Flow<List<Task>> = dao.tasks().map { list -> list.map { it.toModel() } }
+
+    /** Отметки «сделано» (D-033), по времени. */
+    val marks: Flow<List<TaskMark>> = dao.marks().map { list -> list.map { it.toModel() } }
 
     /** Журнал срабатываний, новые сверху. */
     val events: Flow<List<SignalEvent>> = dao.events().map { list -> list.map { it.toModel() } }
@@ -821,6 +828,7 @@ class ClockRepository(
             worldCities = dao.allWorldCities().map { it.zoneId },
             settings = dao.currentSettings().toModel(),
             tasks = dao.allTasks().map { it.toModel() },
+            marks = dao.allMarks().map { it.toModel() },
         )
 
     /**
@@ -836,6 +844,7 @@ class ClockRepository(
         prepared.exceptions.forEach { dao.upsertException(it.toEntity()) }
         prepared.presets.forEach { dao.upsertPreset(it.toEntity()) }
         prepared.alarms.forEach { dao.upsertAlarm(normalized(it).toEntity()) }
+        prepared.marks.forEach { dao.upsertMark(it.toEntity()) }
         prepared.tasks.forEach { saveTaskLocked(it) }
         // Города — пояса: тот же город второй раз не добавляется.
         val cities = dao.allWorldCities().map { it.zoneId }.toMutableList()
@@ -897,12 +906,48 @@ class ClockRepository(
     }
 
     /** «Сделано» (D-032): повторяющаяся — на следующий срок, прежнее событие календаря — с «✓». */
-    suspend fun completeTask(id: String) = locked {
-        val task = dao.task(id)?.toModel()?.takeIf { !it.done } ?: return@locked
-        val next = TaskRules.complete(task, LocalDate.now(), now())
-        if (!next.done && task.eventId != null) withCalendar(task.copy(done = true))
+    suspend fun completeTask(id: String): TaskMark? = locked {
+        val task = dao.task(id)?.toModel()?.takeIf { !it.done } ?: return@locked null
+        val now = now()
+        // Каждое «сделано» — отметка (D-033): у постоянной — только она, задача остаётся.
+        val mark = TaskMark(UUID.randomUUID().toString(), id, now)
+        dao.upsertMark(mark.toEntity())
+        val next = TaskRules.complete(task, LocalDate.now(), now)
+        if (!task.permanent && !next.done && task.eventId != null) withCalendar(task.copy(done = true))
         saveTaskLocked(next)
         notifier.cancelTaskReminder(id)
+        mark
+    }
+
+    /** Отметка задним числом (D-033): «забыл отметить вовремя». */
+    suspend fun addMark(taskId: String, at: Long) = locked {
+        val task = dao.task(taskId)?.toModel() ?: return@locked
+        dao.upsertMark(TaskMark(UUID.randomUUID().toString(), taskId, at).toEntity())
+        scheduleNudge(task)
+    }
+
+    /** Удалить ошибочную отметку; у обычной задачи «сделано» это не отменяет. */
+    suspend fun deleteMark(id: String) = locked {
+        val mark = dao.mark(id) ?: return@locked
+        dao.deleteMark(id)
+        dao.task(mark.taskId)?.toModel()?.let { scheduleNudge(it) }
+    }
+
+    /**
+     * Пришло время тихого напоминания (D-033): задача и её история, если оно ещё
+     * нужно. Напоминание помечается — для этой отметки второго не будет.
+     */
+    suspend fun onTaskNudge(id: String): Pair<Task, TaskStats>? = locked(quiet = true) {
+        val task = dao.task(id)?.toModel() ?: return@locked null
+        val marks = dao.marksOf(id).map { it.at }
+        val at = TaskHistory.nudgeAt(task, marks, Instant.ofEpochMilli(now()), ZoneId.systemDefault()) ?: return@locked null
+        // Поставлено раньше срока (сдвинули часы) — подождать.
+        if (at.toEpochMilli() > now() + NUDGE_SLACK_MILLIS) {
+            scheduler.setTaskNudge(id, at.toEpochMilli())
+            return@locked null
+        }
+        dao.upsertTask(task.copy(nudged = TaskHistory.base(task, marks)).toEntity())
+        task to TaskHistory.stats(marks)
     }
 
     /** Вернуть сделанную задачу в работу. */
@@ -911,9 +956,11 @@ class ClockRepository(
         saveTaskLocked(task.copy(done = false, doneAt = null))
     }
 
-    /** Удалить задачу и её событие; возвращает удалённую — для «Отменить». */
+    /** Удалить задачу с подзадачами, событиями и отметками; возвращает удалённую. */
     suspend fun deleteTask(id: String): Task? = locked {
         val task = dao.task(id)?.toModel() ?: return@locked null
+        val all = dao.allTasks().map { it.toModel() }
+        for (child in TaskTree.descendants(all, id)) removeTaskLocked(child)
         removeTaskLocked(id)
         task.copy(eventId = null)
     }
@@ -922,13 +969,22 @@ class ClockRepository(
         val stored = withCalendar(task)
         dao.upsertTask(stored.toEntity())
         scheduleTaskReminder(stored)
+        scheduleNudge(stored)
     }
 
     private suspend fun removeTaskLocked(id: String) {
         dao.task(id)?.eventId?.let { TaskCalendar.delete(context, it) }
         dao.deleteTask(id)
+        dao.deleteMarksOf(id)
         scheduler.cancelTaskReminder(id)
+        scheduler.cancelTaskNudge(id)
         notifier.cancelTaskReminder(id)
+    }
+
+    /** Тихое напоминание постоянной задачи (D-033) — по её отметкам. */
+    private suspend fun scheduleNudge(task: Task) {
+        val at = TaskHistory.nudgeAt(task, dao.marksOf(task.id).map { it.at }, Instant.ofEpochMilli(now()), ZoneId.systemDefault())
+        if (at != null) scheduler.setTaskNudge(task.id, at.toEpochMilli()) else scheduler.cancelTaskNudge(task.id)
     }
 
     /**
@@ -960,6 +1016,7 @@ class ClockRepository(
     private suspend fun rescheduleTasksLocked() {
         for (task in dao.allTasks().map { it.toModel() }) {
             scheduleTaskReminder(task)
+            scheduleNudge(task)
             if (task.inCalendar && task.eventId == null && task.date != null) {
                 val fixed = withCalendar(task)
                 if (fixed != task) dao.upsertTask(fixed.toEntity())
@@ -1005,6 +1062,7 @@ class ClockRepository(
             SyncItems.PRESET,
             SyncItems.ALARM,
             SyncItems.TASK,
+            SyncItems.MARK,
             SyncItems.SETTINGS,
             SyncItems.WORLD_CITIES,
         )
@@ -1026,7 +1084,12 @@ class ClockRepository(
                             // Флажок «В календарь» и событие — свои у телефона (D-032).
                             val incoming = SyncItems.task(data)
                             val phone = dao.task(incoming.id)?.toModel()
-                            saveTaskLocked(incoming.copy(inCalendar = phone?.inCalendar ?: false, eventId = phone?.eventId))
+                            saveTaskLocked(incoming.copy(inCalendar = phone?.inCalendar ?: false, eventId = phone?.eventId, nudged = phone?.nudged))
+                        }
+                        key.startsWith(SyncItems.MARK) -> {
+                            val mark = SyncItems.mark(data)
+                            dao.upsertMark(mark.toEntity())
+                            dao.task(mark.taskId)?.toModel()?.let { scheduleNudge(it) }
                         }
                         key.startsWith(SyncItems.ALARM) -> {
                             val incoming = SyncItems.alarm(data)
@@ -1060,6 +1123,7 @@ class ClockRepository(
                     key.startsWith(SyncItems.EXCEPTION) -> dao.deleteException(id)
                     key.startsWith(SyncItems.PRESET) -> dao.deletePreset(id)
                     key.startsWith(SyncItems.TASK) -> removeTaskLocked(id)
+                    key.startsWith(SyncItems.MARK) -> dao.deleteMark(id)
                     key.startsWith(SyncItems.ALARM) -> if (dao.alarm(id) != null) removeAlarmLocked(id)
                 }
             }
@@ -1306,3 +1370,6 @@ class ClockRepository(
         const val WARNING_SLACK_MILLIS = 30_000L
     }
 }
+
+/** Тихое напоминание пришло раньше срока больше чем на это — переставить (D-033). */
+private const val NUDGE_SLACK_MILLIS = 5 * 60_000L

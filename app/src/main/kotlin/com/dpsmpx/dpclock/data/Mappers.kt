@@ -29,6 +29,8 @@ import com.dpsmpx.dpclock.model.SignalStyle
 import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
 import com.dpsmpx.dpclock.model.Task
+import com.dpsmpx.dpclock.model.TaskLevel
+import com.dpsmpx.dpclock.model.TaskMark
 import com.dpsmpx.dpclock.model.TaskRepeat
 import com.dpsmpx.dpclock.model.ThemeMode
 import com.dpsmpx.dpclock.model.TimerPreset
@@ -147,8 +149,15 @@ fun TaskEntity.toModel() = Task(
     done = done,
     doneAt = doneAt,
     createdAt = createdAt,
+    permanent = permanent,
+    parentId = parentId,
+    difficulty = TaskLevel.entries.firstOrNull { it.name == difficulty } ?: TaskLevel.NONE,
+    urgency = TaskLevel.entries.firstOrNull { it.name == urgency } ?: TaskLevel.NONE,
+    remindLate = remindLate,
+    remindAfterDays = remindAfterDays,
     inCalendar = inCalendar,
     eventId = eventId,
+    nudged = nudged,
 )
 
 fun Task.toEntity() = TaskEntity(
@@ -164,7 +173,18 @@ fun Task.toEntity() = TaskEntity(
     createdAt = createdAt,
     inCalendar = inCalendar,
     eventId = eventId,
+    permanent = permanent,
+    parentId = parentId,
+    difficulty = difficulty.name,
+    urgency = urgency.name,
+    remindLate = remindLate,
+    remindAfterDays = remindAfterDays,
+    nudged = nudged,
 )
+
+fun TaskMarkEntity.toModel() = TaskMark(id, taskId, at)
+
+fun TaskMark.toEntity() = TaskMarkEntity(id, taskId, at)
 
 fun PresetEntity.toModel() = TimerPreset(id, name, TimerProgram.decode(program), createdAt)
 

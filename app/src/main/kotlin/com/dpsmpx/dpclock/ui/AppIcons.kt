@@ -25,6 +25,9 @@ object AppIcons {
     val Add = icon("Add", "M12 5v14 M5 12h14")
     val Remove = icon("Remove", "M5 12h14")
     val Check = icon("Check", "M5 12.5l4.5 4.5L19 7")
+    /** Задача не сделана — кружок; сделана — кружок с галочкой (D-031). */
+    val TaskOpen = icon("TaskOpen", "M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0")
+    val TaskDone = icon("TaskDone", "M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0 M8.5 12.5l2.5 2.5l4.5 -5")
     val FullScreen = icon("FullScreen", "M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5")
     val Play = icon("Play", "M8 5l11 7l-11 7z", filled = true)
     val Pause = icon("Pause", "M9 5v14 M15 5v14", width = 3f)

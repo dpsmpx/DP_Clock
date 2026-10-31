@@ -13,6 +13,7 @@ import com.dpsmpx.dpclock.platform.CloudSync
 import com.dpsmpx.dpclock.platform.Notifier
 import com.dpsmpx.dpclock.platform.Scheduler
 import com.dpsmpx.dpclock.platform.Surfaces
+import com.dpsmpx.dpclock.platform.TaskStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -36,6 +37,9 @@ class AppGraph(context: Context) {
 
     /** Синхронизация общим файлом (D-030). */
     val cloud: CloudSync by lazy { CloudSync(context, repository, notifier) }
+
+    /** Задачи из таск-менеджеров (D-031). */
+    val tasks: TaskStore by lazy { TaskStore(context, notifier) }
 
     /** Погода нужна только экрану «Мировые часы» (D-019). */
     val weather by lazy { WeatherStore(context, repository) }

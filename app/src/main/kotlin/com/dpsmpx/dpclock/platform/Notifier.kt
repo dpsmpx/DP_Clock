@@ -13,6 +13,7 @@ import com.dpsmpx.dpclock.R
 import com.dpsmpx.dpclock.RingActivity
 import com.dpsmpx.dpclock.Section
 import com.dpsmpx.dpclock.model.Alarm
+import com.dpsmpx.dpclock.model.DayTask
 import com.dpsmpx.dpclock.model.Moment
 import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
@@ -39,6 +40,7 @@ class Notifier(private val context: Context) {
                 NotificationChannel(CHANNEL_WARNING, text(R.string.channel_warning), NotificationManager.IMPORTANCE_LOW),
                 NotificationChannel(CHANNEL_WARNING_SOUND, text(R.string.channel_warning_sound), NotificationManager.IMPORTANCE_DEFAULT),
                 NotificationChannel(CHANNEL_SYNC, text(R.string.channel_sync), NotificationManager.IMPORTANCE_LOW),
+                NotificationChannel(CHANNEL_TASKS, text(R.string.channel_tasks), NotificationManager.IMPORTANCE_LOW),
             ),
         )
     }
@@ -209,6 +211,37 @@ class Notifier(private val context: Context) {
     )
 
     fun cancelSyncConflicts() = manager.cancel(ID_SYNC)
+
+    // Задачи из таск-менеджеров (D-031)
+
+    /**
+     * «Задачи на сегодня» после утреннего будильника: первые задачи строками. На экране
+     * блокировки — только число, без названий.
+     */
+    fun tasks(tasks: List<DayTask>) {
+        val count = context.resources.getQuantityString(R.plurals.tasks_count, tasks.size, tasks.size)
+        val style = Notification.InboxStyle()
+        tasks.take(TASK_LINES).forEach { style.addLine(it.title) }
+        if (tasks.size > TASK_LINES) style.setSummaryText(context.getString(R.string.tasks_more, tasks.size - TASK_LINES))
+        val public = Notification.Builder(context, CHANNEL_TASKS)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(text(R.string.tasks_today))
+            .setContentText(count)
+            .build()
+        show(
+            ID_TASKS,
+            Notification.Builder(context, CHANNEL_TASKS)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(text(R.string.tasks_today))
+                .setContentText(count)
+                .setStyle(style)
+                .setVisibility(Notification.VISIBILITY_PRIVATE)
+                .setPublicVersion(public)
+                .setContentIntent(openApp(Section.CLOCK))
+                .setAutoCancel(true)
+                .build(),
+        )
+    }
 
     // Сон и после будильника (D-017)
 
@@ -398,6 +431,9 @@ class Notifier(private val context: Context) {
         private const val ID_WARNING = 6
         private const val ID_SYNC = 7
         private const val CHANNEL_SYNC = "sync"
+        private const val ID_TASKS = 8
+        private const val CHANNEL_TASKS = "tasks"
+        private const val TASK_LINES = 5
         private const val CHANNEL_WARNING = "warning"
         private const val CHANNEL_WARNING_SOUND = "warning-sound"
 

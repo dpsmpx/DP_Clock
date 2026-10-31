@@ -880,4 +880,47 @@
     <string name="sync_kind_template">Template</string>
     <string name="sync_kind_exception">Exception</string>
     <string name="sync_kind_preset">Timer preset</string>
+
+    <!-- Задачи из таск-менеджеров (D-031) -->
+    <string name="channel_tasks">Tasks for today</string>
+    <string name="settings_tasks">Tasks</string>
+    <string name="tasks_text">Tasks for today and overdue ones from Todoist, TickTick and Google Tasks — in “Clock”, after the morning alarm and in the “Clock” widget. Keys stay only on this phone, encrypted; requests go only to the services you connect.</string>
+    <string name="tasks_todoist" translatable="false">Todoist</string>
+    <string name="tasks_ticktick" translatable="false">TickTick</string>
+    <string name="tasks_google" translatable="false">Google Tasks</string>
+    <string name="tasks_today">Tasks for today</string>
+    <plurals name="tasks_count">
+        <item quantity="one">%1$d task</item>
+        <item quantity="other">%1$d tasks</item>
+    </plurals>
+    <string name="tasks_more">More: %1$d</string>
+    <string name="tasks_loading">Updating…</string>
+    <string name="tasks_none">No tasks for today</string>
+    <string name="tasks_never">Not updated yet</string>
+    <string name="tasks_complete_failed">Couldn\'t mark the task — it\'s back in the list</string>
+    <string name="tasks_not_updated">Not updated: no connection or the service refused</string>
+    <string name="tasks_mark_done">Mark done: %1$s</string>
+    <string name="tasks_overdue_since">overdue since %1$s</string>
+    <string name="tasks_off">Not connected</string>
+    <string name="tasks_on">Connected — tap to disconnect</string>
+    <string name="tasks_sign_in_again">Sign in again or enter a new key</string>
+    <string name="tasks_connected">Connected</string>
+    <string name="tasks_wrong_key">The key didn\'t work — check it</string>
+    <string name="tasks_no_network">No connection — try again later</string>
+    <string name="tasks_failed">Couldn\'t connect</string>
+    <string name="tasks_show_clock">In “Clock”</string>
+    <string name="tasks_show_after_alarm">After the morning alarm</string>
+    <string name="tasks_show_after_alarm_text">A notification with today\'s tasks, once a day, 4:00–12:00</string>
+    <string name="tasks_show_widget">In the “Clock” widget</string>
+    <string name="tasks_refresh">Update now</string>
+    <string name="tasks_refreshed">Updated: %1$s</string>
+    <string name="tasks_disconnect">Disconnect</string>
+    <string name="tasks_disconnect_text">The key and this service\'s tasks will be removed from the phone. The tasks in the service itself stay.</string>
+    <string name="tasks_disconnected">Disconnected</string>
+    <string name="tasks_key">Key</string>
+    <string name="tasks_connect">Connect</string>
+    <string name="tasks_todoist_key_text">The key is in Todoist: Settings → Integrations → Developer → API token. Copy it and paste it here.</string>
+    <string name="tasks_ticktick_key_text">The key is in TickTick on the web (ticktick.com): avatar → Settings → Account → API Token. Create it, copy it and paste it here.</string>
+    <string name="tasks_google_setup_title">Google doesn\'t know DP Clock yet</string>
+    <string name="tasks_google_setup_text">Google lets an app into Google Tasks only through a project in Google Cloud. Once, at console.cloud.google.com:\n1. Create a project.\n2. APIs and services → Library → Google Tasks API → Enable.\n3. OAuth consent screen → External; add your account as a test user, or publish the app — in testing mode Google asks to sign in again every 7 days.\n4. Credentials → Create OAuth client ID → Android: package com.dpsmpx.dpclock, SHA-1 21:4D:70:12:D4:3B:6C:70:DF:74:78:AC:97:35:A0:D8:48:E3:F5:51.\nThen connect Google Tasks again.</string>
 </resources>

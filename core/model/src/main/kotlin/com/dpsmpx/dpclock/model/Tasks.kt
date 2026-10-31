@@ -228,8 +228,6 @@ data class TaskCache(
     val fetchedAt: Long = 0L,
     /** Почему сервис не обновился в прошлый раз: код HTTP, 0 — нет связи, -1 — нужен вход. */
     val failures: Map<TaskService, Int> = emptyMap(),
-    /** Аккаунт Google — показать в настройках. */
-    val googleAccount: String = "",
     val showClock: Boolean = true,
     val showAfterAlarm: Boolean = true,
     val showWidget: Boolean = true,
@@ -244,7 +242,6 @@ data class TaskCache(
                 "connected" to cache.connected.map { it.name }.sorted(),
                 "fetchedAt" to cache.fetchedAt,
                 "failures" to cache.failures.entries.associate { (service, code) -> service.name to code }.toSortedMap(),
-                "googleAccount" to cache.googleAccount,
                 "showClock" to cache.showClock,
                 "showAfterAlarm" to cache.showAfterAlarm,
                 "showWidget" to cache.showWidget,
@@ -272,7 +269,6 @@ data class TaskCache(
                 connected = (root["connected"] as List<*>).mapNotNull { service(it) }.toSet(),
                 fetchedAt = root["fetchedAt"] as Long,
                 failures = (root["failures"] as? Map<*, *>).orEmpty().entries.mapNotNull { (k, v) -> service(k)?.let { it to (v as Long).toInt() } }.toMap(),
-                googleAccount = root["googleAccount"] as? String ?: "",
                 showClock = root["showClock"] as? Boolean ?: true,
                 showAfterAlarm = root["showAfterAlarm"] as? Boolean ?: true,
                 showWidget = root["showWidget"] as? Boolean ?: true,

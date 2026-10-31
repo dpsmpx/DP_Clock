@@ -143,7 +143,10 @@ class ActionReceiver : BroadcastReceiver() {
         val id = intent.getStringExtra(EXTRA_ID).orEmpty()
         runAsync {
             when (intent.action) {
-                ACTION_DISMISS_SNOOZED -> repository.stopAlarm(id, SignalOutcome.DISMISSED)
+                ACTION_DISMISS_SNOOZED -> {
+                    repository.stopAlarm(id, SignalOutcome.DISMISSED)
+                    DpClockApp.graph(context).tasks.afterAlarm()
+                }
                 // Предупреждение до сигнала (D-025, п. 5).
                 ACTION_WARNING_SKIP -> repository.skipOccurrence(id)
                 ACTION_WARNING_DISMISS -> repository.dismissEarly(id)

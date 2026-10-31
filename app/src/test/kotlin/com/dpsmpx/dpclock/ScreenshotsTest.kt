@@ -18,10 +18,13 @@ import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withTranslation
 import com.dpsmpx.dpclock.model.Alarm
 import com.dpsmpx.dpclock.model.Backup
+import com.dpsmpx.dpclock.model.DayTask
 import com.dpsmpx.dpclock.model.Repeat
 import com.dpsmpx.dpclock.model.Settings
 import com.dpsmpx.dpclock.model.SyncConflict
 import com.dpsmpx.dpclock.model.SyncItems
+import com.dpsmpx.dpclock.model.TaskCache
+import com.dpsmpx.dpclock.model.TaskService
 import com.dpsmpx.dpclock.model.TimerPreset
 import com.dpsmpx.dpclock.model.TimerProgram
 import com.dpsmpx.dpclock.model.TimerStep
@@ -53,6 +56,8 @@ import org.robolectric.shadows.ShadowNotificationManager
 import java.io.File
 import java.time.DayOfWeek
 import java.time.Duration
+import java.time.LocalDate
+import java.time.LocalTime
 
 /**
  * Снимки экранов на JVM (D-029): настоящие экраны приложения с примерными данными —
@@ -84,6 +89,30 @@ class ScreenshotsTest {
                 it.copy(xiaomiHintsDone = true, onboardingDone = true, weather = WeatherSettings(WeatherMode.OFF))
             }
         }
+        // Задачи (D-031) — только в своём снимке.
+        DpClockApp.graph(app).tasks.preview(TaskCache())
+    }
+
+    /** Задачи на сегодня (D-031): в «Часах» и раздел настроек. */
+    @Test
+    fun tasks() {
+        val today = LocalDate.now()
+        DpClockApp.graph(app).tasks.preview(
+            TaskCache(
+                connected = TaskService.entries.toSet(),
+                tasks = listOf(
+                    DayTask(TaskService.TODOIST, "1", "p", "Купить хлеб", today, priority = 3),
+                    DayTask(TaskService.TICKTICK, "2", "p", "Отчёт за октябрь", today.minusDays(2)),
+                    DayTask(TaskService.GOOGLE, "3", "L", "Полить цветы", today),
+                    DayTask(TaskService.TODOIST, "4", "p", "Созвон с командой", today, LocalTime.of(11, 0)),
+                ),
+            ),
+        )
+        val controller = Robolectric.buildActivity(MainActivity::class.java, MainActivity.intent(app, Section.CLOCK)).setup()
+        save(controller.get(), "section-clock-tasks")
+        controller.pause().stop().destroy()
+        shoot("settings-tasks") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_tasks) } }
+        DpClockApp.graph(app).tasks.preview(TaskCache())
     }
 
     @Test

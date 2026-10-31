@@ -207,6 +207,9 @@ class RingService : Service() {
                 val item = Ringing.items.value.firstOrNull { it.key == "alarm:$id" } as? RingItem.AlarmRing
                 repository.stopAlarm(id, SignalOutcome.DISMISSED)
                 silence("alarm:$id")
+                // Утром — задачи на сегодня (D-031).
+                val graph = DpClockApp.graph(this)
+                DpClockApp.scope.launch { graph.tasks.afterAlarm() }
                 // Выключен не на экране сигнала — приложение открывается из уведомления (D-017, п. 5).
                 if (item != null && item.afterApp.isNotEmpty() && !intent.getBooleanExtra(EXTRA_FROM_SCREEN, false)) {
                     DpClockApp.graph(this).notifier.openAfterAlarm(item.afterApp)

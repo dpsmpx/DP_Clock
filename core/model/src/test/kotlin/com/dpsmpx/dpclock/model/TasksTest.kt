@@ -122,7 +122,6 @@ class TasksTest {
             tasks = listOf(DayTask(TaskService.TODOIST, "a", "p", "Хлеб \"бородинский\"", today, LocalTime.of(9, 30), today.minusDays(1), 2)),
             fetchedAt = 123L,
             failures = mapOf(TaskService.GOOGLE to TaskCache.SIGN_IN),
-            googleAccount = "me@example.com",
             showWidget = false,
             notifiedOn = today,
         )

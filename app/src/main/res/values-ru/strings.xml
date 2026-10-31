@@ -915,4 +915,46 @@
     <string name="sync_kind_template">Шаблон</string>
     <string name="sync_kind_exception">Исключение</string>
     <string name="sync_kind_preset">Пресет таймера</string>
+
+    <!-- Задачи из таск-менеджеров (D-031) -->
+    <string name="channel_tasks">Задачи на сегодня</string>
+    <string name="settings_tasks">Задачи</string>
+    <string name="tasks_text">Задачи на сегодня и просроченные из Todoist, TickTick и Google Tasks — в «Часах», после утреннего будильника и в виджете «Часы». Ключи — только на этом телефоне, зашифрованы; запросы — только к подключённым сервисам.</string>
+    <string name="tasks_today">Задачи на сегодня</string>
+    <plurals name="tasks_count">
+        <item quantity="one">%1$d задача</item>
+        <item quantity="few">%1$d задачи</item>
+        <item quantity="many">%1$d задач</item>
+        <item quantity="other">%1$d задачи</item>
+    </plurals>
+    <string name="tasks_more">Ещё %1$d</string>
+    <string name="tasks_loading">Обновляю…</string>
+    <string name="tasks_none">На сегодня задач нет</string>
+    <string name="tasks_never">Ещё не обновлялось</string>
+    <string name="tasks_complete_failed">Отметить не удалось — задача вернулась в список</string>
+    <string name="tasks_not_updated">Не обновилось: нет связи или сервис отказал</string>
+    <string name="tasks_mark_done">Отметить «сделано»: %1$s</string>
+    <string name="tasks_overdue_since">просрочено с %1$s</string>
+    <string name="tasks_off">Не подключено</string>
+    <string name="tasks_on">Подключено — касание, чтобы отключить</string>
+    <string name="tasks_sign_in_again">Войдите снова или введите новый ключ</string>
+    <string name="tasks_connected">Подключено</string>
+    <string name="tasks_wrong_key">Ключ не подошёл — проверьте его</string>
+    <string name="tasks_no_network">Нет связи — попробуйте позже</string>
+    <string name="tasks_failed">Подключить не удалось</string>
+    <string name="tasks_show_clock">В «Часах»</string>
+    <string name="tasks_show_after_alarm">После утреннего будильника</string>
+    <string name="tasks_show_after_alarm_text">Уведомление с задачами на сегодня — раз в день, с 4 до 12 часов</string>
+    <string name="tasks_show_widget">В виджете «Часы»</string>
+    <string name="tasks_refresh">Обновить сейчас</string>
+    <string name="tasks_refreshed">Обновлено: %1$s</string>
+    <string name="tasks_disconnect">Отключить</string>
+    <string name="tasks_disconnect_text">Ключ и задачи этого сервиса удалятся с телефона. Задачи в самом сервисе останутся.</string>
+    <string name="tasks_disconnected">Отключено</string>
+    <string name="tasks_key">Ключ</string>
+    <string name="tasks_connect">Подключить</string>
+    <string name="tasks_todoist_key_text">Ключ — в Todoist: Настройки → Интеграции → Разработчик → «API-токен». Скопируйте его и вставьте сюда.</string>
+    <string name="tasks_ticktick_key_text">Ключ — в веб-версии TickTick (ticktick.com): аватар → Настройки → Аккаунт → API Token. Создайте его, скопируйте и вставьте сюда.</string>
+    <string name="tasks_google_setup_title">Google ещё не знает DP Clock</string>
+    <string name="tasks_google_setup_text">Google пускает приложение к Google Tasks только через проект в Google Cloud. Один раз, на console.cloud.google.com:\n1. Создайте проект.\n2. «API и сервисы» → «Библиотека» → Google Tasks API → «Включить».\n3. «Окно запроса доступа OAuth» → «Внешний»; добавьте свой аккаунт в тестовые пользователи или опубликуйте приложение — в режиме тестирования Google просит войти заново раз в 7 дней.\n4. «Учётные данные» → «Создать идентификатор клиента OAuth» → Android: пакет com.dpsmpx.dpclock, SHA-1 21:4D:70:12:D4:3B:6C:70:DF:74:78:AC:97:35:A0:D8:48:E3:F5:51.\nПотом снова подключите Google Tasks.</string>
 </resources>

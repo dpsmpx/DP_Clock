@@ -1,60 +1,196 @@
 package com.dpsmpx.dpclock.model
 
+import java.net.URLDecoder
 import java.net.URLEncoder
+import java.security.MessageDigest
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
+import java.util.Base64
 
-/** Таск-менеджеры (D-031; выбор автора — все три). */
-enum class TaskService { TODOIST, TICKTICK, GOOGLE }
+/** Откуда задача (D-032): своя — в приложении, или из Google Tasks. */
+enum class TaskSource { OWN, GOOGLE }
 
 /**
- * Задача на сегодня из таск-менеджера. [date] — срок (день), [time] — время срока,
- * если задано; [start] — с какого дня задача идёт (у TickTick — начало; у остальных — срок).
- * [listId] — список или проект: TickTick и Google Tasks закрывают задачу по нему.
- * [priority] — 0 (нет) … 3 (высокий), одинаково для всех сервисов.
+ * Задача на сегодня для экранов: своя или из Google Tasks. [date] — срок (день),
+ * [time] — время срока, если задано. [listId] — список Google: по нему задача
+ * закрывается; у своей — пусто.
  */
 data class DayTask(
-    val service: TaskService,
+    val source: TaskSource,
     val id: String,
     val listId: String,
     val title: String,
     val date: LocalDate,
     val time: LocalTime? = null,
-    val start: LocalDate = date,
-    val priority: Int = 0,
 )
 
-/** Что показывать и в каком порядке (выбор автора — сегодня и просроченные). */
+/** Повтор своей задачи (D-032; выбор автора — повтор есть). */
+sealed interface TaskRepeat {
+    data object None : TaskRepeat
+
+    data object Daily : TaskRepeat
+
+    /** По дням недели; пусто — по дню недели срока. */
+    data class Weekly(val days: Set<DayOfWeek>) : TaskRepeat
+
+    /** Каждый месяц [day]-го; в коротком месяце — в последний день. */
+    data class Monthly(val day: Int) : TaskRepeat
+
+    /** Каждый год [day] [month]-го; 29 февраля в невисокосный год — 28-го. */
+    data class Yearly(val month: Int, val day: Int) : TaskRepeat
+
+    /** Строкой для базы и файла: «», «daily», «weekly:MONDAY,FRIDAY», «monthly:31», «yearly:2-29». */
+    val code: String
+        get() = when (this) {
+            None -> ""
+            Daily -> "daily"
+            is Weekly -> "weekly:" + DayOfWeek.entries.filter { it in days }.joinToString(",") { it.name }
+            is Monthly -> "monthly:$day"
+            is Yearly -> "yearly:$month-$day"
+        }
+
+    companion object {
+        /** Повтор с тем же видом, но привязанный к [date]: месяц и год — от числа срока. */
+        fun of(kind: TaskRepeat, date: LocalDate): TaskRepeat = when (kind) {
+            is Monthly -> Monthly(date.dayOfMonth)
+            is Yearly -> Yearly(date.monthValue, date.dayOfMonth)
+            else -> kind
+        }
+
+        /** Чужое и повреждённое — без повтора. */
+        fun decode(code: String): TaskRepeat = runCatching {
+            when {
+                code.isEmpty() -> None
+                code == "daily" -> Daily
+                code.startsWith("weekly:") -> Weekly(code.removePrefix("weekly:").split(',').filter { it.isNotEmpty() }.map { DayOfWeek.valueOf(it) }.toSet())
+                code.startsWith("monthly:") -> Monthly(code.removePrefix("monthly:").toInt().coerceIn(1, 31))
+                code.startsWith("yearly:") -> code.removePrefix("yearly:").split('-').let { (m, d) -> Yearly(m.toInt().coerceIn(1, 12), d.toInt().coerceIn(1, 31)) }
+                else -> None
+            }
+        }.getOrDefault(None)
+    }
+}
+
+/**
+ * Своя задача (D-032). [date] — срок, null — без срока; [time] — время срока.
+ * [reminder] — за сколько минут до срока напомнить, null — не напоминать; у задачи
+ * без времени срок — в [TaskRules.DAY_HOUR] часов. Сделанная повторяющаяся задача
+ * не закрывается, а переходит на следующий срок.
+ *
+ * [inCalendar] и [eventId] — свои у телефона (как включение будильника, D-030):
+ * событие пишет в календарь только тот телефон, где стоит флажок, — иначе два
+ * телефона с одним аккаунтом Google сделали бы два события.
+ */
+data class Task(
+    val id: String,
+    val title: String,
+    val note: String = "",
+    val date: LocalDate? = null,
+    val time: LocalTime? = null,
+    val reminder: Int? = null,
+    val repeat: TaskRepeat = TaskRepeat.None,
+    val done: Boolean = false,
+    val doneAt: Long? = null,
+    val createdAt: Long = 0L,
+    val inCalendar: Boolean = false,
+    val eventId: Long? = null,
+) {
+    companion object {
+        const val MAX_TITLE = 300
+        const val MAX_NOTE = 4000
+    }
+}
+
+/** Задачи дня и правила своих задач (выбор автора — сегодня и просроченные). */
 object TaskRules {
-    /** Не чаще: задачи меняются не каждую минуту, а запросы — к чужим серверам. */
+    /** Google Tasks — не чаще: задачи меняются не каждую минуту, а запросы — к чужому серверу. */
     const val REFRESH_MILLIS = 15 * 60_000L
 
     /** Уведомление после будильника — утром: с 4 до 12 часов, один раз в день. */
     const val MORNING_FROM = 4
     const val MORNING_TO = 12
 
+    /** Срок задачи без времени для напоминания и календаря — в 9 утра. */
+    const val DAY_HOUR = 9
+
+    /** Напоминание: в срок, за 5, 15, 30 минут, за час, за день. */
+    val REMINDERS = listOf(0, 5, 15, 30, 60, 24 * 60)
+
     fun overdue(task: DayTask, today: LocalDate): Boolean = task.date < today
 
-    /** Сегодня и просроченные: сначала просроченные по сроку, потом по времени, важности и названию. */
+    /** Сегодня и просроченные: сначала просроченные по сроку, потом по времени и названию. */
     fun forDay(tasks: List<DayTask>, today: LocalDate): List<DayTask> =
-        tasks.filter { it.start <= today }
-            .distinctBy { it.service to it.id }
+        tasks.filter { it.date <= today }
+            .distinctBy { it.source to it.id }
             .sortedWith(
                 compareBy<DayTask> { if (overdue(it, today)) 0 else 1 }
                     .thenBy { it.date }
                     .thenBy(nullsLast()) { it.time }
-                    .thenByDescending { it.priority }
                     .thenBy { it.title.lowercase() },
             )
 
     fun isMorning(time: LocalTime): Boolean = time.hour in MORNING_FROM until MORNING_TO
+
+    /** Своя задача для списков дня: несделанная и со сроком. */
+    fun day(task: Task): DayTask? =
+        if (task.done || task.date == null) null else DayTask(TaskSource.OWN, task.id, "", task.title, task.date, task.time)
+
+    /** Момент срока: дата и время, у задачи без времени — [DAY_HOUR] часов. */
+    fun dueAt(task: Task, zone: ZoneId): Instant? = task.date?.atTime(task.time ?: LocalTime.of(DAY_HOUR, 0))?.atZone(zone)?.toInstant()
+
+    /** Когда напомнить: только в будущем и у несделанной задачи со сроком. */
+    fun reminderAt(task: Task, zone: ZoneId, now: Instant): Instant? {
+        val minutes = task.reminder ?: return null
+        if (task.done) return null
+        val at = dueAt(task, zone)?.minusSeconds(minutes * 60L) ?: return null
+        return at.takeIf { it.isAfter(now) }
+    }
+
+    /** Ближайший срок повтора строго после [after]; без повтора — null. */
+    fun next(repeat: TaskRepeat, date: LocalDate, after: LocalDate): LocalDate? = when (repeat) {
+        TaskRepeat.None -> null
+        TaskRepeat.Daily -> after.plusDays(1)
+        is TaskRepeat.Weekly -> {
+            val days = repeat.days.ifEmpty { setOf(date.dayOfWeek) }
+            (1L..7L).map { after.plusDays(it) }.first { it.dayOfWeek in days }
+        }
+        is TaskRepeat.Monthly -> {
+            var month = after.withDayOfMonth(1)
+            var found: LocalDate
+            do {
+                found = month.withDayOfMonth(minOf(repeat.day, month.lengthOfMonth()))
+                month = month.plusMonths(1)
+            } while (found <= after)
+            found
+        }
+        is TaskRepeat.Yearly -> {
+            var year = after.year
+            var found: LocalDate
+            do {
+                val first = LocalDate.of(year, repeat.month, 1)
+                found = first.withDayOfMonth(minOf(repeat.day, first.lengthOfMonth()))
+                year++
+            } while (found <= after)
+            found
+        }
+    }
+
+    /**
+     * «Сделано» (выбор автора — отметка). Повторяющаяся задача со сроком переходит
+     * на ближайший срок после сегодня или после прежнего срока, что позже;
+     * остальные отмечаются сделанными.
+     */
+    fun complete(task: Task, today: LocalDate, now: Long): Task {
+        val date = task.date
+        val next = date?.let { next(task.repeat, it, maxOf(it, today)) }
+        return if (next != null) task.copy(date = next, eventId = null) else task.copy(done = true, doneAt = now)
+    }
 }
 
 /** Ответ сервиса не разобрался. */
@@ -64,117 +200,8 @@ class TaskFormatException(message: String) : RuntimeException(message)
 data class TaskPage(val tasks: List<DayTask>, val next: String?)
 
 /**
- * Todoist API v1 (developer.todoist.com/api/v1): личный ключ из «Настройки →
- * Интеграции → Разработчик» в заголовке `Authorization: Bearer`.
- */
-object TodoistApi {
-    const val BASE = "https://api.todoist.com/api/v1"
-
-    /** Фильтр Todoist: сегодня и просроченные. */
-    const val QUERY = "today | overdue"
-    private const val LIMIT = 200
-
-    fun filterUrl(cursor: String?): String =
-        "$BASE/tasks/filter?query=" + encode(QUERY) + "&limit=$LIMIT" + (cursor?.let { "&cursor=" + encode(it) } ?: "")
-
-    fun closeUrl(id: String): String = "$BASE/tasks/" + encode(id) + "/close"
-
-    /**
-     * Срок — `due.date`: день «2026-10-31», плавающее время «2026-10-31T09:00:00»
-     * или точное в UTC «2026-10-31T09:00:00Z»; точное переводится в пояс телефона.
-     */
-    fun parse(text: String, zone: ZoneId): TaskPage = parsing {
-        val root = Json.parse(text) as Map<*, *>
-        val tasks = (root["results"] as List<*>).mapNotNull { raw ->
-            val item = raw as Map<*, *>
-            if (item["checked"] == true || item["is_deleted"] == true) return@mapNotNull null
-            val due = (item["due"] as? Map<*, *>)?.get("date") as? String ?: return@mapNotNull null
-            val (date, time) = dateTime(due, zone)
-            DayTask(
-                service = TaskService.TODOIST,
-                id = item["id"] as String,
-                listId = item["project_id"] as? String ?: "",
-                title = (item["content"] as? String).orEmpty(),
-                date = date,
-                time = time,
-                // Todoist: 1 — обычная, 4 — срочная.
-                priority = ((item["priority"] as? Long)?.toInt() ?: 1).coerceIn(1, 4) - 1,
-            )
-        }
-        TaskPage(tasks, root["next_cursor"] as? String)
-    }
-
-    private fun dateTime(due: String, zone: ZoneId): Pair<LocalDate, LocalTime?> = when {
-        due.length == 10 -> LocalDate.parse(due) to null
-        due.endsWith("Z") -> Instant.parse(due).atZone(zone).let { it.toLocalDate() to it.toLocalTime() }
-        else -> LocalDateTime.parse(due).let { it.toLocalDate() to it.toLocalTime() }
-    }
-}
-
-/**
- * TickTick Open API (developer.ticktick.com/docs#/openapi): личный ключ из веб-версии,
- * «Настройки → Аккаунт → API Token», в заголовке `Authorization: Bearer`.
- */
-object TickTickApi {
-    const val BASE = "https://api.ticktick.com/open/v1"
-    const val FILTER_URL = "$BASE/task/filter"
-    private val STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ")
-
-    fun completeUrl(projectId: String, id: String): String = "$BASE/project/" + encode(projectId) + "/task/" + encode(id) + "/complete"
-
-    /** Открытые задачи, начатые не позже конца [today]: сегодняшние и просроченные (до 200). */
-    fun filterBody(today: LocalDate, zone: ZoneId): String = Json.write(
-        linkedMapOf(
-            "endDate" to today.atTime(LocalTime.MAX).atZone(zone).format(STAMP),
-            "status" to listOf(0),
-        ),
-    )
-
-    /**
-     * Срок — `dueDate`, без него — `startDate`: момент «2026-03-05T00:00:00.000+0000».
-     * У задачи на весь день (`isAllDay`) день считается в её поясе (`timeZone`).
-     */
-    fun parse(text: String, zone: ZoneId): List<DayTask> = parsing {
-        (Json.parse(text) as List<*>).mapNotNull { raw ->
-            val item = raw as Map<*, *>
-            if ((item["status"] as? Long ?: 0L) != 0L) return@mapNotNull null
-            val dueText = item["dueDate"] as? String ?: item["startDate"] as? String ?: return@mapNotNull null
-            val startText = item["startDate"] as? String ?: dueText
-            val allDay = item["isAllDay"] as? Boolean ?: false
-            val taskZone = (item["timeZone"] as? String)?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: zone
-            val due = stamp(dueText)
-            val start = stamp(startText)
-            DayTask(
-                service = TaskService.TICKTICK,
-                id = item["id"] as String,
-                listId = item["projectId"] as? String ?: "",
-                title = (item["title"] as? String).orEmpty(),
-                date = due.atZone(if (allDay) taskZone else zone).toLocalDate(),
-                time = if (allDay) null else due.atZone(zone).toLocalTime(),
-                start = start.atZone(if (allDay) taskZone else zone).toLocalDate(),
-                // TickTick: 0 — нет, 1 — низкая, 3 — средняя, 5 — высокая.
-                priority = when ((item["priority"] as? Long)?.toInt() ?: 0) {
-                    5 -> 3
-                    3 -> 2
-                    1 -> 1
-                    else -> 0
-                },
-            )
-        }
-    }
-
-    private fun stamp(text: String): Instant = try {
-        OffsetDateTime.parse(text, STAMP).toInstant()
-    } catch (e: DateTimeParseException) {
-        // Без долей секунды: «2019-11-13T03:00:00+0000».
-        OffsetDateTime.parse(text, DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssZ")).toInstant()
-    }
-}
-
-/**
- * Google Tasks API v1 (tasks.googleapis.com): вход Google, доступ
- * `https://www.googleapis.com/auth/tasks`. Срок у Google — только день: время в
- * `due` всегда полночь UTC.
+ * Google Tasks API v1 (tasks.googleapis.com), доступ `https://www.googleapis.com/auth/tasks`.
+ * Срок у Google — только день: время в `due` всегда полночь UTC.
  */
 object GoogleTasksApi {
     const val BASE = "https://tasks.googleapis.com/tasks/v1"
@@ -210,7 +237,7 @@ object GoogleTasksApi {
             if (item["status"] != "needsAction" || item["deleted"] == true || item["hidden"] == true) return@mapNotNull null
             val due = item["due"] as? String ?: return@mapNotNull null
             DayTask(
-                service = TaskService.GOOGLE,
+                source = TaskSource.GOOGLE,
                 id = item["id"] as String,
                 listId = listId,
                 title = (item["title"] as? String).orEmpty(),
@@ -221,69 +248,152 @@ object GoogleTasksApi {
     }
 }
 
-/** Последние задачи на телефоне (D-031, п. 6): что показывать без сети. */
+/**
+ * Вход Google в браузере (D-032; выбор автора — «веб-форма»): OAuth 2.0 для
+ * установленных приложений — клиент «Компьютерное приложение», возврат на
+ * `http://127.0.0.1:<порт>`, PKCE (S256). Клиент и секрет — из проекта Google
+ * Cloud человека: у установленных приложений секрет не тайна (так пишет Google),
+ * но в коде его нет.
+ */
+object GoogleOAuth {
+    const val AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+    const val TOKEN_URL = "https://oauth2.googleapis.com/token"
+    const val REVOKE_URL = "https://oauth2.googleapis.com/revoke"
+
+    private val base64 = Base64.getUrlEncoder().withoutPadding()
+
+    /** Секрет проверки (code_verifier) из 32 случайных байт — 43 знака. */
+    fun verifier(random: ByteArray): String = base64.encodeToString(random)
+
+    fun challenge(verifier: String): String = base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.US_ASCII)))
+
+    /** Страница входа: доступ только к Google Tasks; `offline` и `consent` — чтобы пришёл ключ обновления. */
+    fun authUrl(clientId: String, redirect: String, challenge: String, state: String): String = AUTH_URL + "?" + form(
+        "client_id" to clientId,
+        "redirect_uri" to redirect,
+        "response_type" to "code",
+        "scope" to GoogleTasksApi.SCOPE,
+        "code_challenge" to challenge,
+        "code_challenge_method" to "S256",
+        "state" to state,
+        "access_type" to "offline",
+        "prompt" to "consent",
+    )
+
+    fun codeBody(clientId: String, secret: String, code: String, verifier: String, redirect: String): String = form(
+        "client_id" to clientId,
+        "client_secret" to secret,
+        "code" to code,
+        "code_verifier" to verifier,
+        "grant_type" to "authorization_code",
+        "redirect_uri" to redirect,
+    )
+
+    fun refreshBody(clientId: String, secret: String, refreshToken: String): String = form(
+        "client_id" to clientId,
+        "client_secret" to secret,
+        "refresh_token" to refreshToken,
+        "grant_type" to "refresh_token",
+    )
+
+    fun revokeBody(token: String): String = form("token" to token)
+
+    /** Ключи из ответа: [refresh] приходит только при первом входе. */
+    data class Tokens(val access: String, val expiresIn: Long, val refresh: String?)
+
+    fun parseTokens(text: String): Tokens = parsing {
+        val root = Json.parse(text) as Map<*, *>
+        Tokens(root["access_token"] as String, root["expires_in"] as? Long ?: 3600L, root["refresh_token"] as? String)
+    }
+
+    /** Отказ Google в теле ответа: `{"error": "invalid_client", "error_description": "…"}`; не разобрался — пусто. */
+    fun parseError(text: String): String = runCatching {
+        val root = Json.parse(text) as Map<*, *>
+        listOfNotNull(root["error"] as? String, root["error_description"] as? String).joinToString(": ")
+    }.getOrDefault("")
+
+    /** Что браузер принёс на 127.0.0.1: код или отказ и state. */
+    data class Redirect(val code: String?, val state: String?, val error: String?)
+
+    /** [target] — путь из первой строки запроса: «/?state=…&code=…&scope=…». */
+    fun parseRedirect(target: String): Redirect {
+        val query = target.substringAfter('?', "")
+        val values = query.split('&').filter { '=' in it }.associate {
+            URLDecoder.decode(it.substringBefore('='), Charsets.UTF_8.name()) to URLDecoder.decode(it.substringAfter('='), Charsets.UTF_8.name())
+        }
+        return Redirect(values["code"], values["state"], values["error"])
+    }
+
+    private fun form(vararg pairs: Pair<String, String>): String = pairs.joinToString("&") { (k, v) -> encode(k) + "=" + encode(v) }
+}
+
+/**
+ * Что телефон помнит о задачах Google и показе (D-032): последние задачи Google,
+ * где показывать задачи дня и день последнего уведомления после будильника.
+ */
 data class TaskCache(
-    val connected: Set<TaskService> = emptySet(),
+    val google: Boolean = false,
     val tasks: List<DayTask> = emptyList(),
     val fetchedAt: Long = 0L,
-    /** Почему сервис не обновился в прошлый раз: код HTTP, 0 — нет связи, -1 — нужен вход. */
-    val failures: Map<TaskService, Int> = emptyMap(),
+    /** Почему Google не обновился в прошлый раз: код HTTP, 0 — нет связи, [SIGN_IN] — нужен вход; null — обновился. */
+    val failure: Int? = null,
     val showClock: Boolean = true,
     val showAfterAlarm: Boolean = true,
     val showWidget: Boolean = true,
-    /** День, когда уже было уведомление после будильника. */
     val notifiedOn: LocalDate? = null,
 ) {
     companion object {
         const val SIGN_IN = -1
+        private const val VERSION = 2
 
         fun encode(cache: TaskCache): String = Json.write(
             linkedMapOf(
-                "connected" to cache.connected.map { it.name }.sorted(),
+                "version" to VERSION,
+                "google" to cache.google,
                 "fetchedAt" to cache.fetchedAt,
-                "failures" to cache.failures.entries.associate { (service, code) -> service.name to code }.toSortedMap(),
+                "failure" to cache.failure,
                 "showClock" to cache.showClock,
                 "showAfterAlarm" to cache.showAfterAlarm,
                 "showWidget" to cache.showWidget,
                 "notifiedOn" to cache.notifiedOn?.toString(),
                 "tasks" to cache.tasks.map {
                     linkedMapOf(
-                        "service" to it.service.name,
                         "id" to it.id,
                         "listId" to it.listId,
                         "title" to it.title,
                         "date" to it.date.toString(),
                         "time" to it.time?.toString(),
-                        "start" to it.start.toString(),
-                        "priority" to it.priority,
                     )
                 },
             ),
         )
 
-        /** Повреждённый файл — пустой: задачи придут при следующем обновлении. */
+        /**
+         * Повреждённый файл — пустой: задачи придут при следующем обновлении. Файл
+         * 0.18.0 (без версии) — только выбор показа: вход Google с тех пор другой.
+         */
         fun decode(text: String): TaskCache = runCatching {
             val root = Json.parse(text) as Map<*, *>
-            fun service(name: Any?) = TaskService.entries.firstOrNull { it.name == name }
-            TaskCache(
-                connected = (root["connected"] as List<*>).mapNotNull { service(it) }.toSet(),
-                fetchedAt = root["fetchedAt"] as Long,
-                failures = (root["failures"] as? Map<*, *>).orEmpty().entries.mapNotNull { (k, v) -> service(k)?.let { it to (v as Long).toInt() } }.toMap(),
+            val shown = TaskCache(
                 showClock = root["showClock"] as? Boolean ?: true,
                 showAfterAlarm = root["showAfterAlarm"] as? Boolean ?: true,
                 showWidget = root["showWidget"] as? Boolean ?: true,
                 notifiedOn = (root["notifiedOn"] as? String)?.let { LocalDate.parse(it) },
-                tasks = (root["tasks"] as List<*>).mapNotNull { raw ->
+            )
+            if (root["version"] != VERSION.toLong()) return@runCatching shown
+            shown.copy(
+                google = root["google"] as Boolean,
+                fetchedAt = root["fetchedAt"] as Long,
+                failure = (root["failure"] as? Long)?.toInt(),
+                tasks = (root["tasks"] as List<*>).map { raw ->
                     val item = raw as Map<*, *>
                     DayTask(
-                        service = service(item["service"]) ?: return@mapNotNull null,
+                        source = TaskSource.GOOGLE,
                         id = item["id"] as String,
                         listId = item["listId"] as String,
                         title = item["title"] as String,
                         date = LocalDate.parse(item["date"] as String),
                         time = (item["time"] as? String)?.let { LocalTime.parse(it) },
-                        start = LocalDate.parse(item["start"] as String),
-                        priority = (item["priority"] as Long).toInt(),
                     )
                 },
             )

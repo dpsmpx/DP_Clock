@@ -165,6 +165,7 @@ object SyncRules {
  * Что синхронизируется (D-030, выбор автора — всё): ключи записей и их данные. У
  * будильника не синхронизируются включение и пропуск — они свои у телефона; будильники
  * перед событиями календаря — от календаря этого телефона и не синхронизируются.
+ * Свои задачи (D-032) синхронизируются без флажка «В календарь» и события.
  */
 object SyncItems {
     const val ALARM = "alarm:"
@@ -172,6 +173,7 @@ object SyncItems {
     const val TEMPLATE = "template:"
     const val EXCEPTION = "exception:"
     const val PRESET = "preset:"
+    const val TASK = "task:"
     const val SETTINGS = "settings"
     const val WORLD_CITIES = "worldCities"
 
@@ -184,6 +186,7 @@ object SyncItems {
         for (template in backup.templates) put(TEMPLATE + template.id, BackupFormat.templateMap(template))
         for (period in backup.exceptions) put(EXCEPTION + period.id, BackupFormat.exceptionMap(period))
         for (preset in backup.presets) put(PRESET + preset.id, BackupFormat.presetMap(preset))
+        for (task in backup.tasks) put(TASK + task.id, BackupFormat.taskMap(task))
         backup.settings?.let { put(SETTINGS, BackupFormat.settingsMap(it)) }
         put(WORLD_CITIES, mapOf("cities" to backup.worldCities))
     }
@@ -197,6 +200,9 @@ object SyncItems {
     fun exception(data: Map<*, *>): ExceptionPeriod = BackupFormat.exceptionFrom(json(data))
 
     fun preset(data: Map<*, *>): TimerPreset = BackupFormat.presetFrom(json(data))
+
+    /** Своя задача (D-032) — без флажка календаря и события: их ставит этот телефон. */
+    fun task(data: Map<*, *>): Task = BackupFormat.taskFrom(json(data))
 
     /**
      * Настройки. Своя картинка фона — файл этого телефона: «картинка» доходит до

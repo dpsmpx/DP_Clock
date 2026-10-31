@@ -68,22 +68,11 @@ object BackupFormat {
             "format" to if (rules) VERSION else 1,
             "appVersion" to appVersion,
             "exportedAt" to exportedAt.toString(),
-            "alarms" to backup.alarms.map { alarm(it, blueprint = false) },
-            "groups" to backup.groups.map { mapOf("id" to it.id, "name" to it.name, "createdAt" to it.createdAt) },
-            "templates" to backup.templates.map { template ->
-                mapOf(
-                    "id" to template.id,
-                    "name" to template.name,
-                    "createdAt" to template.createdAt,
-                    "alarms" to template.alarms.map { alarm(it, blueprint = true) },
-                )
-            },
-            "exceptions" to backup.exceptions.map {
-                mapOf("id" to it.id, "name" to it.name, "start" to it.start.toString(), "end" to it.end.toString())
-            },
-            "presets" to backup.presets.map {
-                mapOf("id" to it.id, "name" to it.name, "createdAt" to it.createdAt, "program" to program(it.program))
-            },
+            "alarms" to backup.alarms.map(::alarmMap),
+            "groups" to backup.groups.map(::groupMap),
+            "templates" to backup.templates.map(::templateMap),
+            "exceptions" to backup.exceptions.map(::exceptionMap),
+            "presets" to backup.presets.map(::presetMap),
             "worldCities" to backup.worldCities,
         )
         backup.settings?.let { root["settings"] = settings(it) }
@@ -105,28 +94,10 @@ object BackupFormat {
             val o = Obj(root, "")
             Backup(
                 alarms = o.objs("alarms").map { alarm(it, blueprint = false) },
-                groups = o.objs("groups").map {
-                    AlarmGroup(it.string("id"), it.string("name", "").take(AlarmGroup.MAX_NAME), it.long("createdAt", 0L))
-                },
-                templates = o.objs("templates").map {
-                    AlarmTemplate(
-                        id = it.string("id"),
-                        name = it.string("name", "").take(AlarmGroup.MAX_NAME),
-                        alarms = it.objs("alarms").map { blueprint -> alarm(blueprint, blueprint = true) },
-                        createdAt = it.long("createdAt", 0L),
-                    )
-                },
-                exceptions = o.objs("exceptions").map {
-                    ExceptionPeriod(
-                        id = it.string("id"),
-                        name = it.string("name", "").take(ExceptionPeriod.MAX_NAME),
-                        start = LocalDate.parse(it.string("start")),
-                        end = LocalDate.parse(it.string("end")),
-                    )
-                },
-                presets = o.objs("presets").map {
-                    TimerPreset(it.string("id"), it.string("name", ""), program(it.obj("program") ?: it.missing("program")), it.long("createdAt", 0L))
-                },
+                groups = o.objs("groups").map(::group),
+                templates = o.objs("templates").map(::template),
+                exceptions = o.objs("exceptions").map(::exception),
+                presets = o.objs("presets").map(::preset),
                 worldCities = o.list("worldCities").map { it as String }.distinct(),
                 settings = o.obj("settings")?.let(::settings),
                 exportedAt = o.stringOrNull("exportedAt")?.let { runCatching { Instant.parse(it) }.getOrNull() },
@@ -139,6 +110,66 @@ object BackupFormat {
             throw BackupException(BackupException.Reason.BROKEN, e.message ?: e::class.simpleName.orEmpty(), e)
         }
     }
+
+    // Части файла — и для синхронизации (D-030): тот же вид, что в файле переноса.
+
+    internal fun alarmMap(alarm: Alarm): Map<String, Any?> = alarm(alarm, blueprint = false)
+
+    internal fun groupMap(group: AlarmGroup): Map<String, Any?> = mapOf("id" to group.id, "name" to group.name, "createdAt" to group.createdAt)
+
+    internal fun templateMap(template: AlarmTemplate): Map<String, Any?> = mapOf(
+        "id" to template.id,
+        "name" to template.name,
+        "createdAt" to template.createdAt,
+        "alarms" to template.alarms.map { alarm(it, blueprint = true) },
+    )
+
+    internal fun exceptionMap(period: ExceptionPeriod): Map<String, Any?> =
+        mapOf("id" to period.id, "name" to period.name, "start" to period.start.toString(), "end" to period.end.toString())
+
+    internal fun presetMap(preset: TimerPreset): Map<String, Any?> =
+        mapOf("id" to preset.id, "name" to preset.name, "createdAt" to preset.createdAt, "program" to program(preset.program))
+
+    internal fun settingsMap(settings: Settings): Map<String, Any?> = settings(settings)
+
+    internal fun alarmFrom(map: Map<*, *>): Alarm = parse { alarm(Obj(map, "alarm"), blueprint = false) }
+
+    internal fun groupFrom(map: Map<*, *>): AlarmGroup = parse { group(Obj(map, "group")) }
+
+    internal fun templateFrom(map: Map<*, *>): AlarmTemplate = parse { template(Obj(map, "template")) }
+
+    internal fun exceptionFrom(map: Map<*, *>): ExceptionPeriod = parse { exception(Obj(map, "exception")) }
+
+    internal fun presetFrom(map: Map<*, *>): TimerPreset = parse { preset(Obj(map, "preset")) }
+
+    internal fun settingsFrom(map: Map<*, *>): Settings = parse { settings(Obj(map, "settings")) }
+
+    /** Ошибка в данных — [BackupException] «повреждён», как у файла переноса. */
+    private fun <T> parse(block: () -> T): T = try {
+        block()
+    } catch (e: BackupException) {
+        throw e
+    } catch (e: RuntimeException) {
+        throw BackupException(BackupException.Reason.BROKEN, e.message ?: e::class.simpleName.orEmpty(), e)
+    }
+
+    private fun group(o: Obj) = AlarmGroup(o.string("id"), o.string("name", "").take(AlarmGroup.MAX_NAME), o.long("createdAt", 0L))
+
+    private fun template(o: Obj) = AlarmTemplate(
+        id = o.string("id"),
+        name = o.string("name", "").take(AlarmGroup.MAX_NAME),
+        alarms = o.objs("alarms").map { blueprint -> alarm(blueprint, blueprint = true) },
+        createdAt = o.long("createdAt", 0L),
+    )
+
+    private fun exception(o: Obj) = ExceptionPeriod(
+        id = o.string("id"),
+        name = o.string("name", "").take(ExceptionPeriod.MAX_NAME),
+        start = LocalDate.parse(o.string("start")),
+        end = LocalDate.parse(o.string("end")),
+    )
+
+    private fun preset(o: Obj) = TimerPreset(o.string("id"), o.string("name", ""), program(o.obj("program") ?: o.missing("program")), o.long("createdAt", 0L))
 
     // Запись
 

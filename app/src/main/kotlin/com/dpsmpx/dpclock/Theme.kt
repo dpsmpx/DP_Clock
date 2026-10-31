@@ -6,12 +6,14 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -51,7 +53,11 @@ fun DpClockTheme(content: @Composable () -> Unit) {
             else -> dynamicLightColorScheme(context)
         }
     }
-    MaterialTheme(colorScheme = colorScheme, content = content)
+    MaterialTheme(colorScheme = colorScheme) {
+        // Текст без своего цвета — цветом темы: по умолчанию Material 3 берёт чёрный, и на
+        // прозрачном каркасе (фон приложения, D-024) в тёмной теме его не видно.
+        CompositionLocalProvider(LocalContentColor provides colorScheme.onBackground, content = content)
+    }
 }
 
 /** Контраст из настроек Android 14+; меняется — тема перерисовывается сразу. */

@@ -268,7 +268,9 @@ private fun AppRoot(request: SectionRequest) {
             Scaffold(
                 // Отступ от края уже у боковой панели.
                 modifier = if (layout.rail) Modifier.weight(1f).consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Start)) else Modifier.weight(1f),
-            containerColor = if (appBackground != ClockBackground.NONE) Color.Transparent else MaterialTheme.colorScheme.background,
+                containerColor = if (appBackground != ClockBackground.NONE) Color.Transparent else MaterialTheme.colorScheme.background,
+                // На прозрачном каркасе цвет текста не выводится из фона — задать явно, как у фона темы.
+                contentColor = MaterialTheme.colorScheme.onBackground,
                 topBar = {
                     TopAppBar(
                         title = { TitleText(stringResource(SECTION_TITLES.getValue(section))) },

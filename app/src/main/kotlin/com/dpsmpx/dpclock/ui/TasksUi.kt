@@ -243,6 +243,7 @@ fun TaskEditor(task: Task?, today: LocalDate, onDismiss: () -> Unit, parentId: S
     val repository = DpClockApp.graph(context).repository
     val calendarSettings by DpClockApp.graph(context).calendar.settings.collectAsStateWithLifecycle()
     val all by repository.tasks.collectAsStateWithLifecycle(emptyList())
+    val advanced = rememberTasksAdvanced()
     var title by rememberSaveable { mutableStateOf(task?.title.orEmpty()) }
     var note by rememberSaveable { mutableStateOf(task?.note.orEmpty()) }
     var isPermanent by rememberSaveable { mutableStateOf(task?.permanent ?: permanent) }
@@ -388,11 +389,14 @@ fun TaskEditor(task: Task?, today: LocalDate, onDismiss: () -> Unit, parentId: S
                             if (on) calendarSetup { inCalendar = true } else inCalendar = false
                         }
                     }
-                    ChoiceStepper(stringResource(R.string.tasks_difficulty), TaskLevel.entries.toList(), difficulty, text = { resources.getString(levelName(it)) }) { difficulty = it }
-                    ChoiceStepper(stringResource(R.string.tasks_urgency), TaskLevel.entries.toList(), urgency, text = { resources.getString(levelName(it)) }) { urgency = it }
+                    // Сложность, срочность и новые подзадачи — за настройкой (D-036, п. 3).
+                    if (advanced) {
+                        ChoiceStepper(stringResource(R.string.tasks_difficulty), TaskLevel.entries.toList(), difficulty, text = { resources.getString(levelName(it)) }) { difficulty = it }
+                        ChoiceStepper(stringResource(R.string.tasks_urgency), TaskLevel.entries.toList(), urgency, text = { resources.getString(levelName(it)) }) { urgency = it }
+                    }
                     if (task != null) {
                         HorizontalDivider()
-                        Text(stringResource(R.string.tasks_subtasks), style = MaterialTheme.typography.titleSmall)
+                        if (advanced || subtasks.isNotEmpty()) Text(stringResource(R.string.tasks_subtasks), style = MaterialTheme.typography.titleSmall)
                         for (sub in subtasks) {
                             Text(
                                 (if (sub.done) "✓ " else "") + sub.title,
@@ -400,8 +404,8 @@ fun TaskEditor(task: Task?, today: LocalDate, onDismiss: () -> Unit, parentId: S
                                 modifier = Modifier.fillMaxWidth().clickable { openSubtask = sub }.padding(vertical = 8.dp),
                             )
                         }
-                        TextButton(onClick = { addingSubtask = true }) { Text(stringResource(R.string.tasks_add_subtask)) }
-                        HorizontalDivider()
+                        if (advanced) TextButton(onClick = { addingSubtask = true }) { Text(stringResource(R.string.tasks_add_subtask)) }
+                        if (advanced || subtasks.isNotEmpty()) HorizontalDivider()
                         TaskHistoryBlock(task)
                         HorizontalDivider()
                         TextButton(onClick = { confirmDelete = true }) { Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error) }
@@ -627,6 +631,10 @@ private fun TaskCalendarDialog(onDismiss: () -> Unit, onChoose: (Long) -> Unit) 
  * Раздел настроек «Задачи» (D-032, D-034): календарь для задач и где показывать
  * задачи дня.
  */
+/** Доска, сложность, срочность и добавление подзадач включены в настройках (D-036, п. 3). */
+@Composable
+fun rememberTasksAdvanced(): Boolean = DpClockApp.graph(LocalContext.current).tasks.state.collectAsStateWithLifecycle().value.advanced
+
 @Composable
 fun TaskSettings() {
     val context = LocalContext.current
@@ -657,6 +665,9 @@ fun TaskSettings() {
         persistLater { store.updateShow { it.copy(showAfterAlarm = on) } }
     }
     SwitchRow(stringResource(R.string.tasks_show_widget), prefs.showWidget) { on -> persistLater { store.updateShow { it.copy(showWidget = on) } } }
+    SwitchRow(stringResource(R.string.tasks_advanced), prefs.advanced, stringResource(R.string.tasks_advanced_text)) { on ->
+        persistLater { store.updateShow { it.copy(advanced = on) } }
+    }
     if (choosingCalendar) {
         TaskCalendarDialog(onDismiss = { choosingCalendar = false }) { id ->
             graph.calendar.update { it.copy(taskCalendar = id) }

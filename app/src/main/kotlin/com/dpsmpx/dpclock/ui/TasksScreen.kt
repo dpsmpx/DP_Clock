@@ -105,7 +105,11 @@ fun TasksScreen(snackbar: SnackbarHostState, initialTab: Int = 0) {
     val loadedMarks by graph.repository.marks.collectAsStateWithLifecycle(null)
     val own = loaded.orEmpty()
     val marks = loadedMarks.orEmpty()
-    var tab by rememberSaveable { mutableStateOf(TasksTab.entries[initialTab]) }
+    // Доска, сложность и срочность — за настройкой (D-036, п. 3).
+    val advanced = rememberTasksAdvanced()
+    val tabs = if (advanced) TasksTab.entries else TasksTab.entries - TasksTab.BOARD
+    var chosenTab by rememberSaveable { mutableStateOf(TasksTab.entries[initialTab]) }
+    val tab = chosenTab.takeIf { it in tabs } ?: TasksTab.ALL
     var query by rememberSaveable { mutableStateOf("") }
     var allSort by rememberSaveable { mutableStateOf(TaskSort.DUE) }
     var permanentSort by rememberSaveable { mutableStateOf(TaskSort.ELAPSED) }
@@ -119,8 +123,8 @@ fun TasksScreen(snackbar: SnackbarHostState, initialTab: Int = 0) {
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            PrimaryTabRow(selectedTabIndex = tab.ordinal) {
-                for (item in TasksTab.entries) Tab(selected = tab == item, onClick = { tab = item }, text = { Text(stringResource(item.title)) })
+            PrimaryTabRow(selectedTabIndex = tabs.indexOf(tab)) {
+                for (item in tabs) Tab(selected = tab == item, onClick = { chosenTab = item }, text = { Text(stringResource(item.title)) })
             }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp)) {
                 OutlinedTextField(
@@ -132,7 +136,7 @@ fun TasksScreen(snackbar: SnackbarHostState, initialTab: Int = 0) {
                     modifier = Modifier.weight(1f),
                 )
                 if (tab != TasksTab.BOARD) {
-                    SortMenu(if (tab == TasksTab.ALL) allSort else permanentSort) { sort -> if (tab == TasksTab.ALL) allSort = sort else permanentSort = sort }
+                    SortMenu(if (tab == TasksTab.ALL) allSort else permanentSort, advanced) { sort -> if (tab == TasksTab.ALL) allSort = sort else permanentSort = sort }
                 }
             }
             if (loaded == null || loadedMarks == null) return@Column
@@ -151,12 +155,13 @@ fun TasksScreen(snackbar: SnackbarHostState, initialTab: Int = 0) {
 }
 
 @Composable
-private fun SortMenu(sort: TaskSort, onChange: (TaskSort) -> Unit) {
+private fun SortMenu(sort: TaskSort, advanced: Boolean, onChange: (TaskSort) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) { Icon(AppIcons.Sort, contentDescription = stringResource(R.string.tasks_sort)) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            for (item in TaskSort.entries) {
+            // Выбранный раньше порядок остаётся в списке и без настройки.
+            for (item in TaskSort.entries.filter { advanced || it == sort || (it != TaskSort.URGENCY && it != TaskSort.DIFFICULTY) }) {
                 DropdownMenuItem(
                     text = { Text(stringResource(sortName(item))) },
                     leadingIcon = { RadioButton(selected = item == sort, onClick = null) },
@@ -385,6 +390,7 @@ private fun TaskRow(
     val context = LocalContext.current
     val resources = LocalResources.current
     val repository = DpClockApp.graph(context).repository
+    val advanced = rememberTasksAdvanced()
     val overdue = !task.done && !task.permanent && task.date?.let { it < today } == true
     val late = stats != null && TaskHistory.late(stats, now)
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(start = (depth * 20).dp)) {
@@ -425,8 +431,8 @@ private fun TaskRow(
                 task.date?.let { dueText(context, it, task.time, today) },
                 task.repeat.takeIf { it != TaskRepeat.None }?.let { resources.getString(repeatKindName(it.kind())) },
                 task.reminder?.let { reminderName(context, it) },
-                task.urgency.takeIf { it != TaskLevel.NONE }?.let { resources.getString(R.string.tasks_urgency_short, resources.getString(levelName(it)).lowercase()) },
-                task.difficulty.takeIf { it != TaskLevel.NONE }?.let { resources.getString(R.string.tasks_difficulty_short, resources.getString(levelName(it)).lowercase()) },
+                task.urgency.takeIf { advanced && it != TaskLevel.NONE }?.let { resources.getString(R.string.tasks_urgency_short, resources.getString(levelName(it)).lowercase()) },
+                task.difficulty.takeIf { advanced && it != TaskLevel.NONE }?.let { resources.getString(R.string.tasks_difficulty_short, resources.getString(levelName(it)).lowercase()) },
                 if (task.inCalendar) resources.getString(R.string.tasks_in_calendar) else null,
             ).joinToString(" · ")
             if (details.isNotEmpty()) Text(details, style = MaterialTheme.typography.bodySmall, color = if (overdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)

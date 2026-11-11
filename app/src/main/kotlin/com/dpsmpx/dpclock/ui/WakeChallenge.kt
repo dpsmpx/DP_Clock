@@ -33,7 +33,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -52,19 +51,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.dpsmpx.dpclock.R
 import com.dpsmpx.dpclock.model.KeypadTask
-import com.dpsmpx.dpclock.model.PhotoSignature
 import com.dpsmpx.dpclock.model.ShakeCounter
 import com.dpsmpx.dpclock.model.WakeCheck
 import com.dpsmpx.dpclock.model.WakeMethod
 import com.dpsmpx.dpclock.model.WakeTasks
 import kotlinx.coroutines.delay
 
-/** Подряд столько похожих кадров — место узнано: один случайный кадр не засчитывается. */
-private const val PHOTO_FRAMES = 3
-
 /**
- * Проверка пробуждения (D-015, п. 2–3): пример, код, встряхивание, QR-код или
- * снимок места. [onInteract] — человек что-то делает, сигнал можно приглушить;
+ * Проверка пробуждения (D-015, п. 2–3): пример, код, встряхивание или QR-код. [onInteract] — человек что-то делает, сигнал можно приглушить;
  * [onPassed] — проверка пройдена. Камера или датчик не помогают — запасной
  * способ, сложные примеры ([WakeCheck.FALLBACK]).
  */
@@ -75,7 +69,7 @@ fun WakeChallenge(check: WakeCheck, onInteract: () -> Unit, onPassed: () -> Unit
         mutableStateOf(
             when {
                 !check.isComplete -> WakeCheck.FALLBACK
-                (check.method == WakeMethod.QR || check.method == WakeMethod.PHOTO) && !context.hasCamera() -> WakeCheck.FALLBACK
+                check.method == WakeMethod.QR && !context.hasCamera() -> WakeCheck.FALLBACK
                 check.method == WakeMethod.SHAKE && !context.hasAccelerometer() -> WakeCheck.FALLBACK
                 else -> check
             },
@@ -100,12 +94,12 @@ fun WakeChallenge(check: WakeCheck, onInteract: () -> Unit, onPassed: () -> Unit
             when (active.method) {
                 WakeMethod.MATH, WakeMethod.CODE -> KeypadChallenge(active, onInteract, onPassed)
                 WakeMethod.SHAKE -> ShakeChallenge(active, onInteract, onPassed)
-                WakeMethod.QR, WakeMethod.PHOTO -> CameraChallenge(active, onInteract, onPassed, onError = fallback)
+                WakeMethod.QR -> CameraChallenge(active, onInteract, onPassed, onError = fallback)
                 WakeMethod.NONE -> LaunchedEffect(Unit) { onPassed() }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (active.method == WakeMethod.QR || active.method == WakeMethod.PHOTO || active.method == WakeMethod.SHAKE) {
+            if (active.method == WakeMethod.QR || active.method == WakeMethod.SHAKE) {
                 OutlinedButton(onClick = fallback) { Text(stringResource(R.string.wake_cannot)) }
             }
             TextButton(onClick = onBack) { Text(stringResource(R.string.back)) }
@@ -240,9 +234,6 @@ private fun ShakeChallenge(check: WakeCheck, onInteract: () -> Unit, onPassed: (
 
 @Composable
 private fun CameraChallenge(check: WakeCheck, onInteract: () -> Unit, onPassed: () -> Unit, onError: () -> Unit) {
-    val reference = remember(check) { if (check.method == WakeMethod.PHOTO) PhotoSignature.decode(check.reference) else null }
-    var similar by remember(check) { mutableIntStateOf(0) }
-    var score by remember(check) { mutableDoubleStateOf(-1.0) }
     var otherCode by remember(check) { mutableStateOf(false) }
     var lastInteract by remember(check) { mutableLongStateOf(0L) }
     // Камера смотрит — человек занят проверкой: сигнал молчит, пока она открыта.
@@ -254,22 +245,13 @@ private fun CameraChallenge(check: WakeCheck, onInteract: () -> Unit, onPassed: 
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
-            stringResource(if (check.method == WakeMethod.QR) R.string.wake_scan_code else R.string.wake_scan_place),
+            stringResource(R.string.wake_scan_code),
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
         CameraScanner(
-            mode = if (check.method == WakeMethod.QR) CameraMode.CODE else CameraMode.PHOTO,
-            onResult = { found ->
-                when (found) {
-                    is CameraResult.Code -> if (found.text == check.reference) onPassed() else otherCode = true
-                    is CameraResult.Signature -> {
-                        val value = reference?.let { PhotoSignature.similarity(it, found.value) } ?: -1.0
-                        score = value
-                        similar = if (value >= PhotoSignature.threshold(check.level)) similar + 1 else 0
-                        if (similar >= PHOTO_FRAMES) onPassed()
-                    }
-                }
+            onCode = { found ->
+                if (found == check.reference) onPassed() else otherCode = true
                 val now = System.currentTimeMillis()
                 if (now - lastInteract > 5_000L) {
                     lastInteract = now
@@ -280,12 +262,6 @@ private fun CameraChallenge(check: WakeCheck, onInteract: () -> Unit, onPassed: 
             modifier = Modifier.fillMaxWidth().aspectRatio(3f / 4f),
         )
         if (otherCode) Text(stringResource(R.string.wake_other_code), color = MaterialTheme.colorScheme.error)
-        if (check.method == WakeMethod.PHOTO) {
-            LinearProgressIndicator(
-                progress = { (score / PhotoSignature.threshold(check.level)).coerceIn(0.0, 1.0).toFloat() },
-                modifier = Modifier.fillMaxWidth().height(8.dp),
-            )
-        }
         Spacer(Modifier.size(4.dp))
     }
 }

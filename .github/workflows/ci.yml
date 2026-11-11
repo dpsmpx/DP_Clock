@@ -1,5 +1,6 @@
 # Проверки на каждый push в main и на pull request (D-036, п. 2): тесты ядра и
-# приложения, Lint, вызовы Java ядра против minSdk, сборка отладочного APK и APK выпуска.
+# приложения, тесты на Robolectric, Lint, вызовы Java ядра против minSdk, сборка
+# отладочного APK и APK выпуска.
 name: CI
 
 on:
@@ -29,12 +30,17 @@ jobs:
         run: tools/setup-android-sdk.sh
       - name: Тесты и Lint
         run: ./gradlew --console=plain :core:model:test :app:testDebugUnitTest :app:lintDebug
+      # База и будильники Android на Robolectric; образ Android (213 МБ) качает Gradle.
+      - name: Тесты на Robolectric
+        run: ./gradlew --console=plain :app:testDebugUnitTest -Pscreenshots --tests '*RepositoryTest*'
       - name: Вызовы Java в ядре есть в Android minSdk
         run: python3 tools/check-core-api.py
       - name: Сборка
         run: ./gradlew --console=plain :app:assembleDebug :app:assembleRelease
       - name: Отчёты при сбое
         if: failure()
+        # Хранилище артефактов бывает заполнено — отчёт не должен скрывать настоящую причину сбоя.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: reports

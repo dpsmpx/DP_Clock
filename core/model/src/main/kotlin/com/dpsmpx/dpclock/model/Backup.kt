@@ -399,8 +399,8 @@ object BackupFormat {
             honorExceptions = o.bool("honorExceptions", true),
             groupId = if (blueprint) null else o.stringOrNull("groupId"),
             wakeCheck = wake?.let {
-                WakeCheck(
-                    method = it.enum("method", WakeMethod.NONE),
+                WakeCheck.stored(
+                    method = it.string("method", WakeMethod.NONE.name),
                     level = it.enum("level", WakeLevel.MEDIUM),
                     tasks = it.int("tasks", 1).coerceIn(1, WakeCheck.MAX_TASKS),
                     reference = it.string("reference", ""),

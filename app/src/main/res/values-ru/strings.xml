@@ -251,27 +251,21 @@
     <string name="wake_wrong">Неверно — вот новая задача</string>
     <string name="wake_shake">Встряхните телефон</string>
     <string name="wake_scan_code">Наведите камеру на свой код</string>
-    <string name="wake_scan_place">Наведите камеру на место из образца</string>
     <string name="wake_other_code">Это другой код</string>
     <string name="wake_check">Подтверждение пробуждения</string>
     <string name="wake_no_camera">Без доступа к камере этот способ недоступен.</string>
     <string name="wake_level">Настойчивость</string>
     <string name="wake_tasks">Задач подряд</string>
     <string name="wake_reference_code">Образец кода</string>
-    <string name="wake_reference_photo">Образец снимка</string>
     <string name="wake_reference_missing">Ещё не снят</string>
-    <string name="wake_reference_photo_ready">Снят. Хранится сетка яркости 16×16, а не снимок.</string>
     <string name="wake_scan">Сканировать</string>
-    <string name="wake_take">Снять</string>
     <string name="wake_snooze_free">«Отложить» без проверки</string>
     <string name="recheck">Повторная проверка «Не спите?»</string>
     <string name="recheck_text">Через несколько минут после выключения. Нет ответа за минуту — будильник звонит снова.</string>
     <string name="recheck_in">повтор: %1$d мин</string>
     <string name="wake_try">Попробовать</string>
     <string name="wake_reference_code_hint">Наведите камеру на QR-код или штрихкод — например, распечатанный и приклеенный на кухне.</string>
-    <string name="wake_reference_photo_hint">Наведите камеру на место, до которого придётся дойти, — с деталями и при хорошем свете — и нажмите «Снять».</string>
     <string name="wake_camera_failed">Камера не открылась.</string>
-    <string name="wake_reference_flat">Слишком однотонно: выберите место с деталями.</string>
     <string name="wake_none">Нет</string>
     <string name="wake_none_text">Выключить одним нажатием</string>
     <string name="wake_math">Пример</string>
@@ -282,8 +276,6 @@
     <string name="wake_shake_text">Встряхнуть телефон нужное число раз</string>
     <string name="wake_qr">QR-код или штрихкод</string>
     <string name="wake_qr_text">Отсканировать свой код: положите его туда, куда придётся дойти</string>
-    <string name="wake_photo">Снимок места</string>
-    <string name="wake_photo_text">Навести камеру на место из образца</string>
     <string name="wake_shakes_easy">20 раз</string>
     <string name="wake_shakes_medium">40 раз</string>
     <string name="wake_shakes_hard">70 раз</string>
@@ -652,7 +644,6 @@
     <string name="background_polar_clock">Полярные часы — кольца времени</string>
     <string name="background_hourglass">Песочные часы — песок за час</string>
     <string name="background_mechanism">Механизм часов — колёса и баланс</string>
-    <string name="background_digit_rain">Дождь цифр — цифры складываются во время</string>
     <string name="app_background_text">Во всех разделах: в «Часах» — ярко, за списками — едва заметно, в ночных часах — тёмно-красным</string>
     <string name="app_background">Фон приложения</string>
     <string name="wallpaper">Живые обои</string>
@@ -1090,4 +1081,11 @@
     <string name="crashes_hint">Последние 20 сбоев, свежие сверху: время, версия, телефон и место ошибки в коде. Журнал никуда не отправляется — им можно поделиться.</string>
     <string name="crashes_share">Поделиться журналом сбоев</string>
     <string name="crashes_clear">Очистить</string>
+
+    <!-- Задачи: доска, сложность, подзадачи — за настройкой (D-036) -->
+    <string name="tasks_advanced">Доска, сложность, срочность и подзадачи</string>
+    <string name="tasks_advanced_text">Вкладка «Доска», оценки задач и «Добавить подзадачу»</string>
+
+    <!-- Простой режим настроек (D-036) -->
+    <string name="settings_advanced">Расширенные</string>
 </resources>

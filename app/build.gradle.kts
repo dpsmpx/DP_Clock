@@ -25,8 +25,8 @@ android {
         applicationId = "com.dpsmpx.dpclock"
         minSdk = 31
         targetSdk = 37
-        versionCode = 29
-        versionName = "0.23.0"
+        versionCode = 30
+        versionName = "0.24.0"
     }
 
     signingConfigs {
@@ -80,7 +80,13 @@ android {
             // Образ Android — из папки, куда его положил Gradle: Robolectric сам в сеть не ходит.
             test.systemProperty("robolectric.offline", "true")
             test.systemProperty("robolectric.dependency.dir", robolectricJars.get().asFile.path)
-            if (screenshots) test.dependsOn(copyRobolectricSdk)
+            if (screenshots) {
+                test.dependsOn(copyRobolectricSdk)
+            } else {
+                // Без образа Android Robolectric падает ещё до теста — на чистой машине (CI) эти
+                // классы в обычную проверку не входят. Новый тест на Robolectric — в этот список.
+                test.exclude("**/ScreenshotsTest*", "**/SyncRepositoryTest*", "**/SunRepositoryTest*")
+            }
             // Robolectric пишет в поля FileDescriptor через SharedSecrets — на Java 17+ их надо открыть.
             test.jvmArgs("--add-opens=java.base/java.io=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
         }

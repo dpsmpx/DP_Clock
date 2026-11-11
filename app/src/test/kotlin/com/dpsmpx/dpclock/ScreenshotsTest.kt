@@ -141,6 +141,8 @@ class ScreenshotsTest {
             for (ago in listOf(30 * day, 19 * day)) repository.addMark("p3", now - ago)
         }
         shoot("tasks-permanent") { DpClockTheme { TasksScreen(SnackbarHostState(), initialTab = 1) } }
+        // Доска — за настройкой (D-036).
+        DpClockApp.graph(app).tasks.preview(TaskPrefs(advanced = true))
         shoot("tasks-board") { DpClockTheme { TasksScreen(SnackbarHostState(), initialTab = 2) } }
         shoot("tasks-editor-permanent") { DpClockTheme { TaskEditor(flowers, today, onDismiss = {}) } }
         runBlocking { (own + permanent).forEach { repository.deleteTask(it.id) } }

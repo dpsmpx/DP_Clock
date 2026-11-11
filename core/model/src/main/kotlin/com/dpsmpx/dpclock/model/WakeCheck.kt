@@ -1,19 +1,24 @@
 package com.dpsmpx.dpclock.model
 
-import kotlin.math.abs
 import kotlin.math.sqrt
 import kotlin.random.Random
 
 /** Способ подтверждения пробуждения (D-007, п. 4; D-011, п. 8; D-015). */
-enum class WakeMethod { NONE, MATH, CODE, SHAKE, QR, PHOTO }
+enum class WakeMethod {
+    NONE, MATH, CODE, SHAKE, QR;
 
-/** Настойчивость: сложность примера, длина кода, число встряхиваний, строгость сравнения снимка. */
+    companion object {
+        /** «Снимок места» убран в 0.24.0 (D-036): в базе и файлах прежних версий он ещё встречается. */
+        const val REMOVED_PHOTO = "PHOTO"
+    }
+}
+
+/** Настойчивость: сложность примера, длина кода, число встряхиваний. */
 enum class WakeLevel { EASY, MEDIUM, HARD }
 
 /**
  * Подтверждение пробуждения у будильника (D-015). Пока его нет, «Выключить»
- * не выключает. [reference] — образец: текст QR-кода или подпись снимка места
- * ([PhotoSignature]); сам снимок не хранится.
+ * не выключает. [reference] — образец: текст QR-кода.
  */
 data class WakeCheck(
     val method: WakeMethod = WakeMethod.NONE,
@@ -33,8 +38,8 @@ data class WakeCheck(
 
     val required: Boolean get() = method != WakeMethod.NONE
 
-    /** QR и снимок без образца проверить нечем. */
-    val isComplete: Boolean get() = (method != WakeMethod.QR && method != WakeMethod.PHOTO) || reference.isNotEmpty()
+    /** QR без образца проверить нечем. */
+    val isComplete: Boolean get() = method != WakeMethod.QR || reference.isNotEmpty()
 
     /** Встряхиваний до конца проверки. */
     val shakes: Int get() = when (level) {
@@ -49,6 +54,23 @@ data class WakeCheck(
 
         /** Запасной способ, когда камера или датчик не помогают: сложные примеры (D-015, п. 5). */
         val FALLBACK = WakeCheck(WakeMethod.MATH, WakeLevel.HARD, tasks = 3)
+
+        /**
+         * Проверка из базы или файла по имени способа [method]. У будильника со «снимком
+         * места» (убран в 0.24.0, D-036) — пример той же настойчивости, без образца.
+         * Незнакомый способ — без проверки.
+         */
+        fun stored(method: String, level: WakeLevel, tasks: Int, reference: String, snoozeAllowed: Boolean, recheckMinutes: Int): WakeCheck {
+            val photo = method == WakeMethod.REMOVED_PHOTO
+            return WakeCheck(
+                method = if (photo) WakeMethod.MATH else WakeMethod.entries.firstOrNull { it.name == method } ?: WakeMethod.NONE,
+                level = level,
+                tasks = tasks,
+                reference = if (photo) "" else reference,
+                snoozeAllowed = snoozeAllowed,
+                recheckMinutes = recheckMinutes,
+            )
+        }
     }
 }
 
@@ -114,101 +136,4 @@ class ShakeCounter {
         const val GAP_MILLIS = 250L
         private const val EARTH = 9.80665f
     }
-}
-
-/**
- * Подпись снимка места (D-015, п. 3): яркость в сетке [SIZE]×[SIZE], без цвета.
- * По ней место узнаётся, а сам снимок не хранится и не восстанавливается.
- * Сравнение — корреляция яркости с поправкой на сдвиг кадра на клетку.
- */
-object PhotoSignature {
-    const val SIZE = 16
-
-    /**
-     * Подпись из кадра яркости [luma] (строки по [rowStride] байт) размером
-     * [width]×[height]: берётся центральный квадрат и усредняется по клеткам.
-     */
-    fun of(luma: ByteArray, width: Int, height: Int, rowStride: Int = width): IntArray {
-        val side = minOf(width, height)
-        val left = (width - side) / 2
-        val top = (height - side) / 2
-        val cell = side / SIZE
-        val out = IntArray(SIZE * SIZE)
-        for (cy in 0 until SIZE) for (cx in 0 until SIZE) {
-            var sum = 0L
-            var n = 0
-            // Каждую вторую точку: подписи хватает, а кадр обрабатывается быстрее.
-            var y = top + cy * cell
-            while (y < top + (cy + 1) * cell) {
-                var x = left + cx * cell
-                while (x < left + (cx + 1) * cell) {
-                    sum += luma[y * rowStride + x].toInt() and 0xFF
-                    n++
-                    x += 2
-                }
-                y += 2
-            }
-            out[cy * SIZE + cx] = if (n == 0) 0 else (sum / n).toInt()
-        }
-        return out
-    }
-
-    fun encode(signature: IntArray): String = signature.joinToString("") { it.toString(16).padStart(2, '0') }
-
-    fun decode(text: String): IntArray? =
-        if (text.length != SIZE * SIZE * 2) null else IntArray(SIZE * SIZE) { text.substring(it * 2, it * 2 + 2).toInt(16) }
-
-    /** Похожесть от −1 до 1: лучшая корреляция при сдвиге до клетки в любую сторону. */
-    fun similarity(a: IntArray, b: IntArray): Double {
-        var best = -1.0
-        for (dy in -1..1) for (dx in -1..1) best = maxOf(best, correlation(a, b, dx, dy))
-        return best
-    }
-
-    /** Порог похожести по настойчивости. */
-    fun threshold(level: WakeLevel): Double = when (level) {
-        WakeLevel.EASY -> 0.55
-        WakeLevel.MEDIUM -> 0.68
-        WakeLevel.HARD -> 0.8
-    }
-
-    private fun correlation(a: IntArray, b: IntArray, dx: Int, dy: Int): Double {
-        val xs = DoubleArray(SIZE * SIZE)
-        val ys = DoubleArray(SIZE * SIZE)
-        var n = 0
-        for (y in 0 until SIZE) for (x in 0 until SIZE) {
-            val bx = x + dx
-            val by = y + dy
-            if (bx !in 0 until SIZE || by !in 0 until SIZE) continue
-            xs[n] = a[y * SIZE + x].toDouble()
-            ys[n] = b[by * SIZE + bx].toDouble()
-            n++
-        }
-        val mx = xs.take(n).average()
-        val my = ys.take(n).average()
-        var cov = 0.0
-        var vx = 0.0
-        var vy = 0.0
-        for (i in 0 until n) {
-            cov += (xs[i] - mx) * (ys[i] - my)
-            vx += (xs[i] - mx) * (xs[i] - mx)
-            vy += (ys[i] - my) * (ys[i] - my)
-        }
-        // Ровная картинка (тёмная комната, закрытая камера) ни на что не похожа.
-        if (vx < FLAT || vy < FLAT) return -1.0
-        return cov / sqrt(vx * vy)
-    }
-
-    /** Разброс яркости ниже этого — кадр почти однотонный. */
-    private const val FLAT = 64.0 * SIZE * SIZE
-
-    /** Средний перепад яркости соседних клеток: в почти однотонном кадре образец не снять. */
-    fun detail(signature: IntArray): Double {
-        var sum = 0.0
-        for (y in 0 until SIZE) for (x in 1 until SIZE) sum += abs(signature[y * SIZE + x] - signature[y * SIZE + x - 1])
-        return sum / (SIZE * (SIZE - 1))
-    }
-
-    /** Перепада меньше — образец не годится. */
-    const val MIN_DETAIL = 4.0
 }

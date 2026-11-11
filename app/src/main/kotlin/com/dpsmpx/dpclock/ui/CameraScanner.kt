@@ -19,37 +19,25 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.dpsmpx.dpclock.model.PhotoSignature
 import com.dpsmpx.dpclock.platform.CodeReader
 import java.util.concurrent.Executors
-
-/** Кадр камеры, сведённый к нужному: код или подпись снимка (D-015, п. 3). */
-sealed interface CameraResult {
-    data class Code(val text: String) : CameraResult
-
-    class Signature(val value: IntArray) : CameraResult
-}
-
-/** Что искать в кадре. */
-enum class CameraMode { CODE, PHOTO }
 
 fun Context.hasCamera(): Boolean = checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
 /**
  * Видоискатель задней камеры. Кадры разбираются в памяти, в отдельном потоке:
- * в режиме [CameraMode.CODE] — [onResult] на каждый найденный код, в режиме
- * [CameraMode.PHOTO] — на каждый кадр его подпись. Ни кадры, ни снимки не
- * сохраняются (D-011, п. 8). Камера не открылась — [onError].
+ * [onCode] — на каждый найденный QR-код или штрихкод. Кадры не сохраняются
+ * (D-011, п. 8). Камера не открылась — [onError].
  */
 @Composable
-fun CameraScanner(mode: CameraMode, onResult: (CameraResult) -> Unit, onError: () -> Unit, modifier: Modifier = Modifier) {
+fun CameraScanner(onCode: (String) -> Unit, onError: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val result by rememberUpdatedState(onResult)
+    val result by rememberUpdatedState(onCode)
     val error by rememberUpdatedState(onError)
     val previewView = remember { PreviewView(context) }
 
-    DisposableEffect(lifecycleOwner, mode) {
+    DisposableEffect(lifecycleOwner) {
         val main = ContextCompat.getMainExecutor(context)
         val analyzer = Executors.newSingleThreadExecutor()
         val reader = CodeReader()
@@ -68,7 +56,7 @@ fun CameraScanner(mode: CameraMode, onResult: (CameraResult) -> Unit, onError: (
                 .build()
                 .also { useCase ->
                     useCase.setAnalyzer(analyzer) { image ->
-                        val found = image.use { frame -> analyze(frame, mode, reader) }
+                        val found = image.use { frame -> analyze(frame, reader) }
                         if (found != null) main.execute { result(found) }
                     }
                 }
@@ -86,12 +74,9 @@ fun CameraScanner(mode: CameraMode, onResult: (CameraResult) -> Unit, onError: (
 }
 
 /** Яркость кадра — первая плоскость YUV; строки могут быть длиннее ширины. */
-private fun analyze(frame: ImageProxy, mode: CameraMode, reader: CodeReader): CameraResult? {
+private fun analyze(frame: ImageProxy, reader: CodeReader): String? {
     val plane = frame.planes.firstOrNull() ?: return null
     val buffer = plane.buffer
     val luma = ByteArray(buffer.remaining()).also { buffer.get(it) }
-    return when (mode) {
-        CameraMode.CODE -> reader.read(luma, frame.width, frame.height, plane.rowStride)?.let { CameraResult.Code(it) }
-        CameraMode.PHOTO -> CameraResult.Signature(PhotoSignature.of(luma, frame.width, frame.height, plane.rowStride))
-    }
+    return reader.read(luma, frame.width, frame.height, plane.rowStride)
 }

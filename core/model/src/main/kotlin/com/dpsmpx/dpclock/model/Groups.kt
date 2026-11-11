@@ -70,8 +70,8 @@ data class AlarmTemplate(val id: String, val name: String, val alarms: List<Alar
                     rampSeconds = f["ra"]?.toIntOrNull() ?: 0,
                     snoozeMinutes = f["sn"]?.toIntOrNull(),
                     honorExceptions = f["ex"] != "0",
-                    wakeCheck = WakeCheck(
-                        method = WakeMethod.entries.firstOrNull { it.name == f["w"] } ?: WakeMethod.NONE,
+                    wakeCheck = WakeCheck.stored(
+                        method = f["w"].orEmpty(),
                         level = WakeLevel.entries.firstOrNull { it.name == f["wl"] } ?: WakeLevel.MEDIUM,
                         tasks = f["wt"]?.toIntOrNull()?.coerceIn(1, WakeCheck.MAX_TASKS) ?: 1,
                         reference = f["wr"].orEmpty(),

@@ -46,48 +46,17 @@ class WakeCheckTest {
         assertEquals(2, counter.count)
     }
 
-    private fun scene(seed: Int, size: Int = 160): ByteArray {
-        val random = Random(seed)
-        // Крупные пятна: так выглядит реальная сцена в низком разрешении.
-        val blobs = (0 until 12).map { Triple(random.nextInt(size), random.nextInt(size), random.nextInt(30, 220)) }
-        return ByteArray(size * size) { i ->
-            val x = i % size
-            val y = i / size
-            val (bx, by, v) = blobs.minBy { (bx, by, _) -> (bx - x) * (bx - x) + (by - y) * (by - y) }
-            (v + (bx - by) % 7).coerceIn(0, 255).toByte()
-        }
-    }
-
-    @Test
-    fun photoSignatureRecognisesTheSamePlaceAndRejectsAnother() {
-        val place = PhotoSignature.of(scene(1), 160, 160)
-        assertTrue(PhotoSignature.detail(place) >= PhotoSignature.MIN_DETAIL)
-        // То же место, темнее и со сдвигом кадра на 6 точек.
-        val darker = scene(1).map { ((it.toInt() and 0xFF) * 0.7).toInt().toByte() }.toByteArray()
-        val shifted = ByteArray(160 * 160) { i ->
-            val x = (i % 160 + 6).coerceAtMost(159)
-            darker[(i / 160) * 160 + x]
-        }
-        val again = PhotoSignature.of(shifted, 160, 160)
-        val other = PhotoSignature.of(scene(2), 160, 160)
-        assertTrue(PhotoSignature.similarity(place, again) >= PhotoSignature.threshold(WakeLevel.HARD))
-        assertTrue(PhotoSignature.similarity(place, other) < PhotoSignature.threshold(WakeLevel.EASY))
-        assertEquals(place.toList(), PhotoSignature.decode(PhotoSignature.encode(place))!!.toList())
-    }
-
-    @Test
-    fun flatFrameMatchesNothing() {
-        val flat = PhotoSignature.of(ByteArray(160 * 160) { 40 }, 160, 160)
-        assertTrue(PhotoSignature.detail(flat) < PhotoSignature.MIN_DETAIL)
-        assertEquals(-1.0, PhotoSignature.similarity(flat, flat), 0.0)
-    }
-
     @Test
     fun cameraMethodsNeedAReference() {
         assertFalse(WakeCheck(WakeMethod.QR).isComplete)
         assertTrue(WakeCheck(WakeMethod.QR, reference = "кухня").isComplete)
         assertTrue(WakeCheck(WakeMethod.MATH).isComplete)
         assertFalse(WakeCheck().required)
+        // «Снимок места» прежних версий (убран в 0.24.0) читается примером без образца; незнакомый способ — без проверки.
+        val photo = WakeCheck.stored("PHOTO", WakeLevel.HARD, 2, "00ff", snoozeAllowed = false, recheckMinutes = 5)
+        assertEquals(WakeCheck(WakeMethod.MATH, WakeLevel.HARD, 2, "", snoozeAllowed = false, recheckMinutes = 5), photo)
+        assertEquals(WakeCheck(WakeMethod.QR, reference = "кухня"), WakeCheck.stored("QR", WakeLevel.MEDIUM, 1, "кухня", true, 0))
+        assertEquals(WakeMethod.NONE, WakeCheck.stored("FACE", WakeLevel.MEDIUM, 1, "", true, 0).method)
     }
 
     @Test

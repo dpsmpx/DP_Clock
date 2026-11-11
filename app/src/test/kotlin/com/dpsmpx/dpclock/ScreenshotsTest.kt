@@ -57,6 +57,10 @@ import org.robolectric.shadows.ShadowAlarmManager
 import org.robolectric.shadows.ShadowChoreographer
 import org.robolectric.shadows.ShadowDialog
 import org.robolectric.shadows.ShadowNotificationManager
+import com.dpsmpx.dpclock.model.SunMoment
+import com.dpsmpx.dpclock.model.SunSignal
+import com.dpsmpx.dpclock.model.SunSignalKind
+import com.dpsmpx.dpclock.model.SunSignals
 import java.io.File
 import java.time.DayOfWeek
 import java.time.Duration
@@ -158,6 +162,24 @@ class ScreenshotsTest {
         shoot("settings") { DpClockTheme { SettingsScreen(onBack = {}) } }
         shoot("settings-appearance") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_appearance) } }
         shoot("settings-sync") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_sync) } }
+    }
+
+    /** Восход и закат (D-035): место по геолокации, времена на сегодня, сигналы и мелодия будильника. */
+    @Test
+    fun sun() {
+        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
+        DpClockApp.graph(app).sun.setLocation("Москва", 55.7558, 37.6173, System.currentTimeMillis())
+        runBlocking {
+            DpClockApp.graph(app).repository.updateSettings {
+                it.copy(
+                    sun = SunSignals(
+                        sunrise = SunSignal(enabled = true, moments = listOf(SunMoment(5), SunMoment(0, SunSignalKind.ALARM))),
+                        sunset = SunSignal(enabled = true),
+                    ),
+                )
+            }
+        }
+        shoot("settings-sun") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_sun) } }
     }
 
     /** Синхронизация (D-030): окно расхождений с будильником и настройками. */

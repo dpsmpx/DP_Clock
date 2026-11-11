@@ -7,6 +7,7 @@ import androidx.camera.core.CameraXConfig
 import com.dpsmpx.dpclock.data.CalendarStore
 import com.dpsmpx.dpclock.data.ClockDatabase
 import com.dpsmpx.dpclock.data.ClockRepository
+import com.dpsmpx.dpclock.data.SunStore
 import com.dpsmpx.dpclock.data.WeatherStore
 import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.platform.CloudSync
@@ -33,7 +34,10 @@ class AppGraph(context: Context) {
 
     /** Календарь телефона (D-023): выбор календарей и даты исключений. */
     val calendar = CalendarStore(context)
-    val repository: ClockRepository = ClockRepository(context, ClockDatabase.open(context), scheduler, notifier, calendar) {
+
+    /** Место для восхода и заката (D-035): последняя геолокация телефона. */
+    val sun = SunStore(context)
+    val repository: ClockRepository = ClockRepository(context, ClockDatabase.open(context), scheduler, notifier, calendar, sun) {
         Surfaces.changed(context)
         cloud.changed()
     }

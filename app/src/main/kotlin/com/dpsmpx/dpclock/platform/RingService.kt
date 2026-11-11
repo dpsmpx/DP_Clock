@@ -16,6 +16,8 @@ import com.dpsmpx.dpclock.model.SignalStyle
 import com.dpsmpx.dpclock.model.SleepRules
 import com.dpsmpx.dpclock.model.WakeCheck
 import com.dpsmpx.dpclock.model.StepSignal
+import com.dpsmpx.dpclock.model.SunEvent
+import com.dpsmpx.dpclock.model.SunFire
 import com.dpsmpx.dpclock.model.TimerState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -84,6 +86,17 @@ sealed interface RingItem {
     ) : RingItem {
         override val key: String get() = "timer:$runId"
     }
+}
+
+/** Будильник на восходе или закате (D-035): за [minutes] минут до события в [eventAt]; только «Выключить». */
+data class SunRing(
+    val event: SunEvent,
+    val minutes: Int,
+    val eventAt: Long,
+    override val since: Long,
+    override val sound: RingSound,
+) : RingItem {
+    override val key: String get() = "sun:${event.name}"
 }
 
 /** Звонящие сигналы процесса; последний — сверху на экране сигнала. */
@@ -199,6 +212,20 @@ class RingService : Service() {
                     intent.getBooleanExtra(EXTRA_WAITING, false),
                 ),
             )
+            ACTION_RING_SUN -> {
+                val event = SunEvent.entries.firstOrNull { it.name == id } ?: return
+                val sun = repository.currentSettings().sun
+                ring(
+                    SunRing(
+                        event,
+                        intent.getIntExtra(EXTRA_MINUTES, 0),
+                        intent.getLongExtra(EXTRA_SCHEDULED_AT, 0L),
+                        System.currentTimeMillis(),
+                        RingSound(sun.sound, sun.vibrate),
+                    ),
+                )
+            }
+            ACTION_SUN_STOP -> silence("sun:$id")
             ACTION_SNOOZE -> {
                 repository.snoozeAlarm(id)
                 silence("alarm:$id")
@@ -281,7 +308,8 @@ class RingService : Service() {
                 when (item) {
                     is RingItem.AlarmRing -> repository.stopAlarm(item.alarmId, SignalOutcome.AUTO_STOPPED)
                     is RingItem.TimerRing -> repository.stopTimerSignal(item.runId, SignalOutcome.AUTO_STOPPED, item.endedAt, item.since)
-                    is RingItem.RecheckRing, is RingItem.GentleRing -> Unit
+                    // Будильник восхода и заката стихает молча: событие уже прошло.
+                    is RingItem.RecheckRing, is RingItem.GentleRing, is SunRing -> Unit
                 }
                 silence(item.key)
                 stopIfIdle()
@@ -365,6 +393,9 @@ class RingService : Service() {
         const val ACTION_TIMER_STOP = "com.dpsmpx.dpclock.ring.TIMER_STOP"
         const val ACTION_TIMER_ADD_MINUTE = "com.dpsmpx.dpclock.ring.TIMER_ADD_MINUTE"
         const val ACTION_TIMER_NEXT = "com.dpsmpx.dpclock.ring.TIMER_NEXT"
+        private const val ACTION_RING_SUN = "com.dpsmpx.dpclock.ring.RING_SUN"
+        const val ACTION_SUN_STOP = "com.dpsmpx.dpclock.ring.SUN_STOP"
+        private const val EXTRA_MINUTES = "minutes"
         const val ACTION_RECHECK_OK = "com.dpsmpx.dpclock.ring.RECHECK_OK"
         private const val ACTION_FIRE_GENTLE = "com.dpsmpx.dpclock.ring.FIRE_GENTLE"
         const val ACTION_GENTLE_CLOSE = "com.dpsmpx.dpclock.ring.GENTLE_CLOSE"
@@ -407,6 +438,14 @@ class RingService : Service() {
                 .putExtra(EXTRA_SOUND, sound.encode())
                 .putExtra(EXTRA_SOUND_TITLE, sound.title)
                 .putExtra(EXTRA_SCHEDULED_AT, endedAt ?: 0L),
+        )
+
+        /** Будильник на восходе или закате (D-035): звук и вибрация — из настроек. */
+        fun ringSun(context: Context, fire: SunFire) = startForeground(
+            context,
+            intent(context, ACTION_RING_SUN, fire.event.name)
+                .putExtra(EXTRA_MINUTES, fire.minutes)
+                .putExtra(EXTRA_SCHEDULED_AT, fire.eventAt.toEpochMilli()),
         )
 
         /** Интент кнопки сигнала: экран сигнала и уведомление. */

@@ -244,3 +244,10 @@ val MIGRATION_17_18 = SqlMigration(
         "CREATE INDEX IF NOT EXISTS `index_task_mark_taskId` ON `task_mark` (`taskId`)",
     ),
 )
+
+/** 0.22.0 (D-035): сигналы на восходе и закате — выключены. */
+val MIGRATION_18_19 = SqlMigration(
+    18,
+    19,
+    listOf("ALTER TABLE `settings` ADD COLUMN `sun` TEXT NOT NULL DEFAULT ''"),
+)

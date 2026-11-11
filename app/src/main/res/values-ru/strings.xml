@@ -1041,4 +1041,45 @@
         <item quantity="many">%1$d мес</item>
         <item quantity="other">%1$d мес</item>
     </plurals>
+
+    <!-- Восход и закат (D-035) -->
+    <string name="settings_sun">Восход и закат</string>
+    <string name="channel_sun">Восход и закат</string>
+    <string name="sun_sunrise">Восход</string>
+    <string name="sun_sunset">Закат</string>
+    <string name="sun_in">%1$s через %2$s</string>
+    <string name="sun_sunrise_signal">Сигнал на восходе</string>
+    <string name="sun_sunset_signal">Сигнал на закате</string>
+    <string name="sun_signal_off">Выключен</string>
+    <string name="sun_moment_before_sunrise">За %1$s до восхода</string>
+    <string name="sun_moment_before_sunset">За %1$s до заката</string>
+    <string name="sun_moment_at_sunrise">В момент восхода</string>
+    <string name="sun_moment_at_sunset">В момент заката</string>
+    <string name="sun_at_moment">в момент</string>
+    <string name="sun_kind_notification">Уведомление</string>
+    <string name="sun_kind_notification_text">со звуком уведомления, без экрана сигнала</string>
+    <string name="sun_kind_alarm">Будильник</string>
+    <string name="sun_kind_alarm_text">звонит, пока не выключите или не стихнет сам</string>
+    <string name="sun_add">Добавить сигнал</string>
+    <string name="sun_add_minutes">Минут до события</string>
+    <string name="sun_add_hint">0 — в момент события; не больше 720 (12 часов)</string>
+    <string name="sun_remove">Убрать сигнал</string>
+    <string name="sun_place">Место</string>
+    <string name="sun_place_location">%1$s · по геолокации</string>
+    <string name="sun_place_location_unnamed">По геолокации</string>
+    <string name="sun_place_weather">%1$s · город погоды</string>
+    <string name="sun_place_zone">%1$s · по часовому поясу</string>
+    <string name="sun_place_unknown">Место неизвестно</string>
+    <string name="sun_place_allow">Нажмите и разрешите геолокацию — время будет для места, где вы находитесь</string>
+    <string name="sun_place_refresh">Нажмите, чтобы обновить</string>
+    <string name="sun_today">Сегодня</string>
+    <string name="sun_sunrise_at">Восход %1$s</string>
+    <string name="sun_sunset_at">Закат %1$s</string>
+    <string name="sun_no_sunrise">Восхода нет</string>
+    <string name="sun_no_sunset">Заката нет</string>
+    <string name="sun_next">Ближайший сигнал</string>
+    <string name="sun_next_none">Не ожидается: солнце не всходит и не заходит</string>
+    <string name="sun_sound">Мелодия будильника восхода и заката</string>
+    <string name="sun_vibrate">Вибрация будильника восхода и заката</string>
+    <string name="sun_hint">Место — приблизительная геолокация; она обновляется, когда приложение открыто, и остаётся на телефоне. Время считается для ровного горизонта, с точностью около минуты. После поездки откройте приложение — сигналы переставятся на новое место.</string>
 </resources>

@@ -438,6 +438,28 @@ class MigrationTest {
         assertEquals(emptyList<Map<String, String?>>(), rows(db, "SELECT * FROM task_mark"))
     }
 
+    @Test
+    fun migration18To19KeepsSettingsAndLeavesSunSignalsOff() = withDb { db ->
+        SchemaFile.read(18).create(db)
+        db.execSQL(
+            "INSERT INTO settings (id, snoozeMinutes, autoStopMinutes, alarmOrder, showAlarmCountdown, xiaomiHintsDone, signalStyle, volumeButtons, " +
+                "holidaysRu, bedtimeMode, sleepMinutes, bedtimeHour, bedtimeMinute, bedtimeDays, bedtimeLeadMinutes, " +
+                "weatherMode, weatherPlace, weatherLat, weatherLon, theme, seedColor, clockStyle, clockFont, clockSize, " +
+                "nightNoise, background, highContrast, nightBackground, appBackground, wallpaper, showAlarmDate, defaultWarnings, " +
+                "warningSound, chimes, pomodoro, onboardingDone, haptics) VALUES " +
+                "(0, 15, NULL, 'NEXT', 0, 1, 'NOTIFICATION', 'NOTHING', 1, 'SCHEDULE', 450, 22, 30, 3, 30, " +
+                "'CITY', 'Tula', 54.1931, 37.6177, 'DARK', NULL, 'DIGITS', 'BOLD', 90, 'PINK', 'STARS', 1, 'NONE', 'NONE', " +
+                "'CONSTELLATION', 0, '', 0, '', '', 1, 1)",
+        )
+
+        MIGRATION_18_19.migrate(db)
+
+        val settings = row(db, "SELECT * FROM settings")
+        assertEquals("15", settings["snoozeMinutes"])
+        assertEquals("Tula", settings["weatherPlace"])
+        assertEquals("", settings["sun"])
+    }
+
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)
 
     private data class Table(val columns: Map<String, Column>, val indices: Set<String>, val foreignKeys: Set<String>)

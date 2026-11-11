@@ -83,6 +83,12 @@ class BackupTest {
             showAlarmDate = true, defaultWarnings = listOf(60, 5), warningSound = true, haptics = false,
             chimes = Chimes(ChimeEvery.HALF_HOUR, vibrate = true, countHours = false, quiet = true, LocalTime.of(23, 30), LocalTime.of(7, 15), setOf(DayOfWeek.SATURDAY)),
             pomodoro = Pomodoro(50, 10, 30, 3, 2, autoAdvance = true, dnd = true),
+            sun = SunSignals(
+                sunrise = SunSignal(enabled = true, moments = listOf(SunMoment(15, SunSignalKind.ALARM), SunMoment(0))),
+                sunset = SunSignal(enabled = true),
+                sound = AlarmSound.Builtin("dawn"),
+                vibrate = false,
+            ),
         ),
         worldCities = listOf("Asia/Tokyo", "Europe/London"),
     )

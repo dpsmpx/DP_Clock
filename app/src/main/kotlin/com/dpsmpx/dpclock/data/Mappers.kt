@@ -28,6 +28,7 @@ import com.dpsmpx.dpclock.model.SignalSource
 import com.dpsmpx.dpclock.model.SignalStyle
 import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
+import com.dpsmpx.dpclock.model.SunSignals
 import com.dpsmpx.dpclock.model.Task
 import com.dpsmpx.dpclock.model.TaskLevel
 import com.dpsmpx.dpclock.model.TaskMark
@@ -275,6 +276,7 @@ fun SettingsEntity?.toModel(): Settings = if (this == null) Settings() else Sett
     warningSound = warningSound,
     chimes = Chimes.decode(chimes),
     pomodoro = Pomodoro.decode(pomodoro),
+    sun = SunSignals.decode(sun),
 )
 
 fun Settings.toEntity() = SettingsEntity(
@@ -312,6 +314,7 @@ fun Settings.toEntity() = SettingsEntity(
     warningSound = warningSound,
     chimes = chimes.encode(),
     pomodoro = pomodoro.encode(),
+    sun = sun.encode(),
 )
 
 /** Неизвестное значение (например, из копии новой версии) — значение по умолчанию. */

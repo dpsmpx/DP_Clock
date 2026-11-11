@@ -342,6 +342,7 @@ object BackupFormat {
                 "dnd" to it.dnd,
             )
         },
+        "sun" to settings.sun.toMap(),
         "signalStyle" to settings.signalStyle.name,
         "volumeButtons" to settings.volumeButtons.name,
         "holidaysRu" to settings.holidaysRu,
@@ -510,6 +511,7 @@ object BackupFormat {
                     dnd = it.bool("dnd", base.dnd),
                 )
             } ?: defaults.pomodoro,
+            sun = (o.raw["sun"] as? Map<*, *>)?.let(SunSignals::fromMap) ?: defaults.sun,
             signalStyle = o.enum("signalStyle", defaults.signalStyle),
             volumeButtons = o.enum("volumeButtons", defaults.volumeButtons),
             holidaysRu = o.bool("holidaysRu", defaults.holidaysRu),

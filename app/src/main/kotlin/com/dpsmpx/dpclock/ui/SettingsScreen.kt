@@ -498,6 +498,10 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
             SettingsSection(R.string.settings_tasks, listOf(R.string.tasks_calendar, R.string.tasks_show_clock, R.string.tasks_show_after_alarm, R.string.tasks_show_widget)) {
                 TaskSettings()
             },
+            // Уведомления и будильники на восходе и закате (D-035).
+            SettingsSection(R.string.settings_sun, listOf(R.string.sun_sunrise_signal, R.string.sun_sunset_signal, R.string.sun_place, R.string.sun_sound)) {
+                SunSettings(settings) { change -> update(change) }
+            },
             SettingsSection(R.string.settings_sync, listOf(R.string.sync_create, R.string.sync_choose, R.string.sync_now, R.string.sync_off)) {
                 SyncSettings(snackbar)
             },

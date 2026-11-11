@@ -17,6 +17,7 @@
 | `./gradlew :app:lintDebug` | Lint; предупреждения — ошибки |
 | `./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*ScreenshotsTest*'` | снимки экранов на JVM (Robolectric, D-029) — `app/build/screenshots/*.png`; первый раз Gradle качает образ Android 16 (213 МБ) |
 | `./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*SyncRepositoryTest*'` | синхронизация в базе (Robolectric, D-030); тот же образ Android |
+| `./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*SunRepositoryTest*'` | сигналы восхода и заката в будильниках Android (Robolectric, D-035); тот же образ Android |
 | `python3 tools/check-core-api.py` | после сборки `:core:model`: вызовы Java в модели есть в Android minSdk (31) — Lint этот модуль не проверяет (D-020, п. 7) |
 | `python3 tools/make-zones.py` | пересобрать таблицу поясов мировых часов из `zone.tab` базы tz (D-019) |
 | `tools/debug-apk.sh` | APK из закоммиченного дерева — `build/debug-apk/debug-<коммит>.apk` и его SHA-256 |

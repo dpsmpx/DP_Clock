@@ -996,4 +996,45 @@
         <item quantity="one">%1$d mo</item>
         <item quantity="other">%1$d mo</item>
     </plurals>
+
+    <!-- Sunrise and sunset (D-035) -->
+    <string name="settings_sun">Sunrise and sunset</string>
+    <string name="channel_sun">Sunrise and sunset</string>
+    <string name="sun_sunrise">Sunrise</string>
+    <string name="sun_sunset">Sunset</string>
+    <string name="sun_in">%1$s in %2$s</string>
+    <string name="sun_sunrise_signal">Signal at sunrise</string>
+    <string name="sun_sunset_signal">Signal at sunset</string>
+    <string name="sun_signal_off">Off</string>
+    <string name="sun_moment_before_sunrise">%1$s before sunrise</string>
+    <string name="sun_moment_before_sunset">%1$s before sunset</string>
+    <string name="sun_moment_at_sunrise">At sunrise</string>
+    <string name="sun_moment_at_sunset">At sunset</string>
+    <string name="sun_at_moment">at the moment</string>
+    <string name="sun_kind_notification">Notification</string>
+    <string name="sun_kind_notification_text">with the notification sound, no alarm screen</string>
+    <string name="sun_kind_alarm">Alarm</string>
+    <string name="sun_kind_alarm_text">rings until you dismiss it or it stops by itself</string>
+    <string name="sun_add">Add a signal</string>
+    <string name="sun_add_minutes">Minutes before the event</string>
+    <string name="sun_add_hint">0 means at the moment; 720 (12 hours) at most</string>
+    <string name="sun_remove">Remove the signal</string>
+    <string name="sun_place">Place</string>
+    <string name="sun_place_location">%1$s · by location</string>
+    <string name="sun_place_location_unnamed">By location</string>
+    <string name="sun_place_weather">%1$s · weather city</string>
+    <string name="sun_place_zone">%1$s · by time zone</string>
+    <string name="sun_place_unknown">Place unknown</string>
+    <string name="sun_place_allow">Tap and allow location: the times will be for where you are</string>
+    <string name="sun_place_refresh">Tap to refresh</string>
+    <string name="sun_today">Today</string>
+    <string name="sun_sunrise_at">Sunrise %1$s</string>
+    <string name="sun_sunset_at">Sunset %1$s</string>
+    <string name="sun_no_sunrise">No sunrise</string>
+    <string name="sun_no_sunset">No sunset</string>
+    <string name="sun_next">Next signal</string>
+    <string name="sun_next_none">Not expected: the sun neither rises nor sets</string>
+    <string name="sun_sound">Sunrise and sunset alarm sound</string>
+    <string name="sun_vibrate">Sunrise and sunset alarm vibration</string>
+    <string name="sun_hint">The place is your approximate location; it is refreshed while the app is open and stays on the phone. Times are for a flat horizon, accurate to about a minute. After a trip, open the app and the signals move to the new place.</string>
 </resources>

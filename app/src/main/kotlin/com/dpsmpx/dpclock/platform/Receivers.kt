@@ -9,6 +9,7 @@ import com.dpsmpx.dpclock.model.ActivityKind
 import com.dpsmpx.dpclock.model.ChimeRules
 import com.dpsmpx.dpclock.model.SignalOutcome
 import com.dpsmpx.dpclock.model.StepSignal
+import com.dpsmpx.dpclock.model.SunSignalKind
 import com.dpsmpx.dpclock.model.TimerState
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -50,6 +51,20 @@ class AlarmReceiver : BroadcastReceiver() {
                         Sounds.chime(context, ChimeRules.strikes(chimes, time), chimes.vibrate)
                     }
                     repository.onChimeFired()
+                }
+                return
+            }
+            ACTION_SUN -> {
+                val at = intent.getLongExtra(EXTRA_SCHEDULED_AT, 0L)
+                runAsync {
+                    val graph = DpClockApp.graph(context)
+                    val due = graph.repository.onSunFired(at) ?: return@runAsync
+                    for (fire in due.fires) {
+                        when (fire.kind) {
+                            SunSignalKind.NOTIFICATION -> graph.notifier.sun(fire, due.place)
+                            SunSignalKind.ALARM -> RingService.ringSun(context, fire)
+                        }
+                    }
                 }
                 return
             }
@@ -115,6 +130,7 @@ class AlarmReceiver : BroadcastReceiver() {
         const val ACTION_CALENDAR = "com.dpsmpx.dpclock.action.CALENDAR"
         const val ACTION_WARNING = "com.dpsmpx.dpclock.action.WARNING"
         const val ACTION_CHIME = "com.dpsmpx.dpclock.action.CHIME"
+        const val ACTION_SUN = "com.dpsmpx.dpclock.action.SUN"
         const val ACTION_TASK = "com.dpsmpx.dpclock.action.TASK"
         const val ACTION_TASK_NUDGE = "com.dpsmpx.dpclock.action.TASK_NUDGE"
 

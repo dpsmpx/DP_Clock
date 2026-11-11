@@ -55,10 +55,12 @@ import com.dpsmpx.dpclock.model.VolumeButtons
 import com.dpsmpx.dpclock.platform.RingItem
 import com.dpsmpx.dpclock.platform.RingService
 import com.dpsmpx.dpclock.platform.Ringing
+import com.dpsmpx.dpclock.platform.SunRing
 import com.dpsmpx.dpclock.platform.TimeText
 import com.dpsmpx.dpclock.ui.FitText
 import com.dpsmpx.dpclock.ui.WakeChallenge
 import com.dpsmpx.dpclock.ui.rememberNowMillis
+import com.dpsmpx.dpclock.ui.sunTitle
 import kotlinx.coroutines.flow.first
 
 /**
@@ -147,6 +149,7 @@ class RingActivity : ComponentActivity() {
             is RingItem.TimerRing -> item.runId
             is RingItem.RecheckRing -> item.alarmId
             is RingItem.GentleRing -> item.alarmId
+            is SunRing -> item.event.name
         }
         send(action, id)
     }
@@ -181,11 +184,13 @@ class RingActivity : ComponentActivity() {
                 VolumeButtons.SNOOZE -> when (item) {
                     is RingItem.AlarmRing -> if (item.wakeCheck.snoozeAllowed) onAction(RingService.ACTION_SNOOZE, item)
                     is RingItem.TimerRing -> onAction(if (item.waiting) RingService.ACTION_TIMER_NEXT else RingService.ACTION_TIMER_ADD_MINUTE, item)
-                    is RingItem.RecheckRing, is RingItem.GentleRing -> Unit
+                    // У будильника восхода и заката «Отложить» нет.
+                    is RingItem.RecheckRing, is RingItem.GentleRing, is SunRing -> Unit
                 }
                 VolumeButtons.DISMISS -> when (item) {
                     is RingItem.AlarmRing -> onAction(RingService.ACTION_DISMISS, item)
                     is RingItem.TimerRing -> onAction(RingService.ACTION_TIMER_STOP, item)
+                    is SunRing -> onAction(RingService.ACTION_SUN_STOP, item)
                     is RingItem.RecheckRing, is RingItem.GentleRing -> Unit
                 }
                 VolumeButtons.NOTHING -> Unit
@@ -218,6 +223,7 @@ private fun RingContent(item: RingItem, onAction: (String, RingItem) -> Unit) {
         )
         is RingItem.RecheckRing -> stringResource(R.string.recheck_title)
         is RingItem.GentleRing -> stringResource(R.string.gentle_title)
+        is SunRing -> sunTitle(context, item.event, item.minutes) + " · " + TimeText.time(context, item.eventAt)
     }
     val info = @Composable {
         FitText(TimeText.time(context, now), style = MaterialTheme.typography.displayLarge, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
@@ -276,6 +282,9 @@ private fun RingContent(item: RingItem, onAction: (String, RingItem) -> Unit) {
             }
             is RingItem.RecheckRing -> Button(onClick = { onAction(RingService.ACTION_RECHECK_OK, item) }, modifier = buttonModifier) {
                 Text(stringResource(R.string.recheck_awake), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+            }
+            is SunRing -> Button(onClick = { onAction(RingService.ACTION_SUN_STOP, item) }, modifier = buttonModifier) {
+                Text(stringResource(R.string.dismiss), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
             }
             // Рассвет рисует SunriseContent; сюда он не попадает.
             is RingItem.GentleRing -> Unit

@@ -58,6 +58,7 @@ import com.dpsmpx.dpclock.model.ClockBackground
 import com.dpsmpx.dpclock.model.Settings
 import com.dpsmpx.dpclock.platform.Appearances
 import com.dpsmpx.dpclock.platform.CalendarSync
+import com.dpsmpx.dpclock.platform.SunLocation
 import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.ui.AlarmsDialog
 import com.dpsmpx.dpclock.ui.AlarmsMenu
@@ -117,6 +118,9 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         // Синхронизация (D-030): при открытии — прочитать общий файл.
         DpClockApp.graph(this).cloud.opened()
+        // Восход и закат (D-035): место телефона — пока приложение открыто.
+        val appContext = applicationContext
+        persistLater { SunLocation.refresh(appContext) }
     }
 
     override fun onNewIntent(intent: Intent) {

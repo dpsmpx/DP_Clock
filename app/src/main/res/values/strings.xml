@@ -1037,4 +1037,12 @@
     <string name="sun_sound">Sunrise and sunset alarm sound</string>
     <string name="sun_vibrate">Sunrise and sunset alarm vibration</string>
     <string name="sun_hint">The place is your approximate location; it is refreshed while the app is open and stays on the phone. Times are for a flat horizon, accurate to about a minute. After a trip, open the app and the signals move to the new place.</string>
+
+    <!-- Crash log (D-036) -->
+    <string name="crashes">Crash log</string>
+    <string name="crashes_text">App errors; kept on the phone</string>
+    <string name="crashes_empty">No crashes so far.</string>
+    <string name="crashes_hint">The last 20 crashes, newest first: time, version, phone and the place in the code. The log is not sent anywhere; you can share it.</string>
+    <string name="crashes_share">Share the crash log</string>
+    <string name="crashes_clear">Clear</string>
 </resources>

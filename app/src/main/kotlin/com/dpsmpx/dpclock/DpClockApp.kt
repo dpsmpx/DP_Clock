@@ -11,6 +11,7 @@ import com.dpsmpx.dpclock.data.SunStore
 import com.dpsmpx.dpclock.data.WeatherStore
 import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.platform.CloudSync
+import com.dpsmpx.dpclock.platform.Crashes
 import com.dpsmpx.dpclock.platform.Notifier
 import com.dpsmpx.dpclock.platform.Scheduler
 import com.dpsmpx.dpclock.platform.Surfaces
@@ -55,6 +56,8 @@ class AppGraph(context: Context) {
 class DpClockApp : Application(), CameraXConfig.Provider {
     override fun onCreate() {
         super.onCreate()
+        // Первым делом: сбой при запуске тоже попадает в журнал (D-036).
+        Crashes.install(this)
         Clocks.init(this)
         graph(this).notifier.createChannels()
     }

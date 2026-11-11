@@ -3,6 +3,9 @@
 #
 #   tools/debug-apk.sh             собрать build/debug-apk/debug-<коммит>.apk
 #   tools/debug-apk.sh --publish   и выложить его новым коммитом в ветку debug-builds
+#   tools/debug-apk.sh --release [--publish]
+#                                  то же для сборки выпуска (D-036): release-<коммит>.apk —
+#                                  сжатая, подписана тем же ключом и ставится поверх отладочных
 #
 # Собирается только закоммиченное дерево: короткий SHA в имени файла должен
 # описывать то, что внутри APK. Переменная DEBUG_APK_TRAILERS — строки,
@@ -12,11 +15,14 @@ set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BRANCH=debug-builds
 PUBLISH=0
-case "${1:-}" in
-    "") ;;
-    --publish) PUBLISH=1 ;;
-    *) echo "✗ ключ $1: есть только --publish"; exit 2 ;;
-esac
+KIND=debug
+for arg in "$@"; do
+    case "$arg" in
+        --publish) PUBLISH=1 ;;
+        --release) KIND=release ;;
+        *) echo "✗ ключ $arg: есть только --publish и --release"; exit 2 ;;
+    esac
+done
 
 cd "$ROOT"
 if [ -n "$(git status --porcelain)" ]; then
@@ -24,12 +30,16 @@ if [ -n "$(git status --porcelain)" ]; then
     exit 2
 fi
 FULL_SHA="$(git rev-parse HEAD)"
-NAME="debug-$(git rev-parse --short HEAD).apk"
+NAME="$KIND-$(git rev-parse --short HEAD).apk"
 
-./gradlew --console=plain :app:assembleDebug
+if [ "$KIND" = release ]; then
+    ./gradlew --console=plain :app:assembleRelease
+else
+    ./gradlew --console=plain :app:assembleDebug
+fi
 mkdir -p build/debug-apk
 APK="$ROOT/build/debug-apk/$NAME"
-cp app/build/outputs/apk/debug/app-debug.apk "$APK"
+cp "app/build/outputs/apk/$KIND/app-$KIND.apk" "$APK"
 SUM="$(sha256sum "$APK" | cut -d ' ' -f 1)"
 echo "APK: $APK"
 echo "SHA-256: $SUM"

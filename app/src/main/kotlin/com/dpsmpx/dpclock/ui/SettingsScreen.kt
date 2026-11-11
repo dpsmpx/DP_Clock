@@ -517,10 +517,16 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
                     modifier = Modifier.clickable { backup.load() },
                 )
             },
-            SettingsSection(R.string.about, listOf(R.string.licenses)) {
+            SettingsSection(R.string.about, listOf(R.string.crashes, R.string.licenses)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.app_name)) },
                     supportingContent = { Text(stringResource(R.string.version_value, BuildConfig.VERSION_NAME)) },
+                )
+                // Журнал сбоев (D-036): остаётся на телефоне, делится им человек сам.
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.crashes)) },
+                    supportingContent = { Text(stringResource(R.string.crashes_text)) },
+                    modifier = Modifier.clickable { dialog = "crashes" },
                 )
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.licenses)) },
@@ -626,6 +632,7 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
             },
         )
         "journal" -> JournalDialog(onDismiss = { dialog = null })
+        "crashes" -> CrashesDialog(onDismiss = { dialog = null })
         "defaultWarnings" -> WarningsDialog(
             title = stringResource(R.string.warnings_default),
             initial = settings.defaultWarnings,

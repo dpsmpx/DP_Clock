@@ -25,8 +25,8 @@ android {
         applicationId = "com.dpsmpx.dpclock"
         minSdk = 31
         targetSdk = 37
-        versionCode = 28
-        versionName = "0.22.0"
+        versionCode = 29
+        versionName = "0.23.0"
     }
 
     signingConfigs {
@@ -38,6 +38,17 @@ android {
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+        }
+    }
+
+    buildTypes {
+        // Сборка выпуска (D-036, п. 2): со сжатием кода и ресурсов. Магазинов нет (D-026),
+        // поэтому подпись — тем же общим ключом, что у отладочных (D-005): ставится поверх них.
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

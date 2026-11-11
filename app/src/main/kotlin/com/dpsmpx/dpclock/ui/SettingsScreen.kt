@@ -512,7 +512,7 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
             SettingsSection(R.string.settings_sync, listOf(R.string.sync_create, R.string.sync_choose, R.string.sync_now, R.string.sync_off), advanced = true) {
                 SyncSettings(snackbar)
             },
-            SettingsSection(R.string.settings_transfer, listOf(R.string.backup_save, R.string.backup_load)) {
+            SettingsSection(R.string.settings_transfer, listOf(R.string.backup_save, R.string.backup_load, R.string.auto_backup)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.backup_save)) },
                     supportingContent = { Text(stringResource(R.string.backup_save_text)) },
@@ -523,6 +523,7 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
                     supportingContent = { Text(stringResource(R.string.backup_load_text)) },
                     modifier = Modifier.clickable { backup.load() },
                 )
+                AutoBackupSettings()
             },
             SettingsSection(R.string.about, listOf(R.string.crashes, R.string.licenses)) {
                 ListItem(

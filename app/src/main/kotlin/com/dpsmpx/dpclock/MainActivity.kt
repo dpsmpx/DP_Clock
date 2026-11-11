@@ -118,6 +118,8 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         // Синхронизация (D-030): при открытии — прочитать общий файл.
         DpClockApp.graph(this).cloud.opened()
+        // Копия по расписанию (D-036): если срок прошёл, а задание Android не пришло.
+        DpClockApp.graph(this).autoBackup.opened()
         // Восход и закат (D-035): место телефона — пока приложение открыто.
         val appContext = applicationContext
         persistLater { SunLocation.refresh(appContext) }

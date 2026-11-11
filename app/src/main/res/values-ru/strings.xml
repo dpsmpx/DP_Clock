@@ -1143,4 +1143,15 @@
     <string name="help_a_skipped">Проверьте в строке будильника: пропуск ближайшего срабатывания, «Не звонить в исключения» (праздники, свои даты, события календаря), сменный график или правила повтора. Включите «Полную дату срабатывания» в настройках будильников — будет видно, когда он зазвонит на самом деле.</string>
     <string name="help_q_report">Ничего не помогло</string>
     <string name="help_a_report">Откройте «Журнал срабатываний» и «Журнал сбоев» в настройках и поделитесь ими с разработчиком: там видно, когда сигнал ожидался, когда зазвучал и что сломалось.</string>
+
+    <!-- Копия по расписанию (D-036, п. 4) -->
+    <string name="auto_backup">Копия по расписанию</string>
+    <string name="auto_backup_off">Выключена</string>
+    <string name="auto_backup_daily">Раз в день</string>
+    <string name="auto_backup_weekly">Раз в неделю</string>
+    <string name="auto_backup_folder">Папка для копий</string>
+    <string name="auto_backup_no_folder">Не выбрана — нажмите, чтобы выбрать: без папки копии не сохраняются</string>
+    <string name="auto_backup_failed">Последнюю копию записать не удалось — нажмите и выберите папку заново</string>
+    <string name="auto_backup_last">Последняя копия: %1$s. Хранятся последние %2$d</string>
+    <string name="auto_backup_pending">Копий ещё не было</string>
 </resources>

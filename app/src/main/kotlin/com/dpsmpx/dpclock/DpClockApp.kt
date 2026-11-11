@@ -9,6 +9,7 @@ import com.dpsmpx.dpclock.data.ClockDatabase
 import com.dpsmpx.dpclock.data.ClockRepository
 import com.dpsmpx.dpclock.data.SunStore
 import com.dpsmpx.dpclock.data.WeatherStore
+import com.dpsmpx.dpclock.platform.AutoBackup
 import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.platform.CloudSync
 import com.dpsmpx.dpclock.platform.Crashes
@@ -48,6 +49,9 @@ class AppGraph(context: Context) {
 
     /** Задачи Google и показ задач (D-032); свои задачи — в [repository]. */
     val tasks: TaskStore by lazy { TaskStore(context, notifier, repository) }
+
+    /** Резервная копия по расписанию (D-036, п. 4). */
+    val autoBackup: AutoBackup by lazy { AutoBackup(context, repository) }
 
     /** Погода нужна только экрану «Мировые часы» (D-019). */
     val weather by lazy { WeatherStore(context, repository) }

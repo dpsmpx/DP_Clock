@@ -1098,4 +1098,15 @@
     <string name="help_a_skipped">Check the alarm row: a skipped next occurrence, Do not ring on exceptions (holidays, your own dates, calendar events), a shift schedule or repeat rules. Turn on the full date in the alarm settings to see when it will actually ring.</string>
     <string name="help_q_report">Nothing helped</string>
     <string name="help_a_report">Open the signal log and the crash log in settings and share them with the developer: they show when the signal was expected, when it sounded and what went wrong.</string>
+
+    <!-- Scheduled backup (D-036) -->
+    <string name="auto_backup">Scheduled backup</string>
+    <string name="auto_backup_off">Off</string>
+    <string name="auto_backup_daily">Once a day</string>
+    <string name="auto_backup_weekly">Once a week</string>
+    <string name="auto_backup_folder">Backup folder</string>
+    <string name="auto_backup_no_folder">Not chosen. Tap to choose: without a folder nothing is saved</string>
+    <string name="auto_backup_failed">The last backup could not be written. Tap and choose the folder again</string>
+    <string name="auto_backup_last">Last backup: %1$s. Copies kept: %2$d</string>
+    <string name="auto_backup_pending">No backups yet</string>
 </resources>

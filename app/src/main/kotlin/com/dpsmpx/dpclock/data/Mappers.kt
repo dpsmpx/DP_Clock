@@ -28,7 +28,9 @@ import com.dpsmpx.dpclock.model.SignalSource
 import com.dpsmpx.dpclock.model.SignalStyle
 import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
+import com.dpsmpx.dpclock.model.SunEvent
 import com.dpsmpx.dpclock.model.SunSignals
+import com.dpsmpx.dpclock.model.SunTime
 import com.dpsmpx.dpclock.model.Task
 import com.dpsmpx.dpclock.model.TaskLevel
 import com.dpsmpx.dpclock.model.TaskMark
@@ -89,6 +91,7 @@ fun AlarmEntity.toModel() = Alarm(
     calendarEventAt = calendarEventAt,
     warnings = Warnings.decode(warnings),
     key = keyAlarm,
+    sun = SunEvent.entries.firstOrNull { it.name == sunEvent }?.let { SunTime(it, sunOffset.coerceIn(-SunTime.MAX_OFFSET, SunTime.MAX_OFFSET)) },
 )
 
 fun Alarm.toEntity() = AlarmEntity(
@@ -127,6 +130,8 @@ fun Alarm.toEntity() = AlarmEntity(
     skipTime = skipTime?.let { it.hour * 60 + it.minute },
     warnings = Warnings.encode(warnings),
     keyAlarm = key,
+    sunEvent = sun?.event?.name,
+    sunOffset = sun?.offsetMinutes ?: 0,
 )
 
 fun GroupEntity.toModel() = AlarmGroup(id, name, createdAt)

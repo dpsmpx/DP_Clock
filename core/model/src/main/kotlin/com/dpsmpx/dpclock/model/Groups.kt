@@ -43,6 +43,8 @@ data class AlarmTemplate(val id: String, val name: String, val alarms: List<Alar
             "aa" to alarm.after.app,
             "wn" to Warnings.encode(alarm.warnings),
             "k" to if (alarm.key) "1" else "0",
+            "se" to (alarm.sun?.event?.name ?: ""),
+            "so" to (alarm.sun?.offsetMinutes ?: 0).toString(),
         ).joinToString("&") { (k, v) -> k + "=" + URLEncoder.encode(v, "UTF-8") }
     }
 
@@ -88,6 +90,8 @@ data class AlarmTemplate(val id: String, val name: String, val alarms: List<Alar
                     ),
                     warnings = Warnings.decode(f["wn"].orEmpty()),
                     key = f["k"] == "1",
+                    sun = SunEvent.entries.firstOrNull { it.name == f["se"] }
+                        ?.let { SunTime(it, (f["so"]?.toIntOrNull() ?: 0).coerceIn(-SunTime.MAX_OFFSET, SunTime.MAX_OFFSET)) },
                 )
             }
         }

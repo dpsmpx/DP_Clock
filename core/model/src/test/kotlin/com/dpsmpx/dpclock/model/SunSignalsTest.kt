@@ -158,4 +158,51 @@ class SunSignalsTest {
         assertEquals(SunSignals(), SunSignals.decode(""))
         assertEquals(SunSignals(), SunSignals.decode("не JSON"))
     }
+
+    @Test
+    fun alarmBySunFollowsRepeatSkipAndExceptions() {
+        val weekdays = Repeat.Weekly(setOf(java.time.DayOfWeek.MONDAY, java.time.DayOfWeek.WEDNESDAY))
+        val alarm = Alarm("a", 6, 0, weekdays, enabled = true, createdAt = 0, sun = SunTime(SunEvent.SUNRISE, -10))
+        assertTrue(SunAlarmRules.applies(alarm))
+        // 20 октября 2026 — вторник: ближайшая среда, за 10 минут до её восхода.
+        val wednesday = SunTimes.on(LocalDate.of(2026, 10, 21), lat, lon, moscow).sunrise!!
+        val first = SunAlarmRules.next(alarm, lat, lon, at("2026-10-20T12:00"), moscow)
+        assertEquals(wednesday.minusSeconds(600), first)
+        // После него — понедельник.
+        val second = SunAlarmRules.next(alarm, lat, lon, first!!, moscow)
+        assertEquals(LocalDate.of(2026, 10, 26), second!!.atZone(moscow).toLocalDate())
+        // Пропуск и исключение сдвигают на следующую подходящую дату.
+        val skipped = SunAlarmRules.next(alarm.copy(skipDate = LocalDate.of(2026, 10, 21)), lat, lon, at("2026-10-20T12:00"), moscow)
+        assertEquals(second, skipped)
+        val exceptions = Exceptions(listOf(ExceptionPeriod("e", "", LocalDate.of(2026, 10, 21), LocalDate.of(2026, 10, 21))), false, emptySet())
+        assertEquals(second, SunAlarmRules.next(alarm, lat, lon, at("2026-10-20T12:00"), moscow, exceptions))
+        // Время срабатывания — в часе и минуте будильника.
+        val timed = SunAlarmRules.withTime(alarm, first, moscow)
+        assertEquals(first.atZone(moscow).hour, timed.hour)
+        assertEquals(first.atZone(moscow).minute, timed.minute)
+        assertEquals(timed, SunAlarmRules.withTime(timed, first, moscow))
+    }
+
+    @Test
+    fun alarmBySunOnceOnDateAndWithoutSun() {
+        val once = Alarm("a", 18, 0, Repeat.Once, enabled = true, createdAt = 0, sun = SunTime(SunEvent.SUNSET, 15))
+        val today = SunTimes.on(LocalDate.of(2026, 10, 20), lat, lon, moscow).sunset!!
+        // До заката — сегодня через 15 минут после него; после — завтра.
+        assertEquals(today.plusSeconds(900), SunAlarmRules.next(once, lat, lon, at("2026-10-20T12:00"), moscow))
+        assertEquals(LocalDate.of(2026, 10, 21), SunAlarmRules.next(once, lat, lon, at("2026-10-20T23:00"), moscow)!!.atZone(moscow).toLocalDate())
+        // На дату: прошла — больше не сработает.
+        val dated = once.copy(repeat = Repeat.OnDate(LocalDate.of(2026, 10, 20)))
+        assertEquals(today.plusSeconds(900), SunAlarmRules.next(dated, lat, lon, at("2026-10-01T12:00"), moscow))
+        assertEquals(null, SunAlarmRules.next(dated, lat, lon, at("2026-10-20T23:00"), moscow))
+        // Полярная ночь: однократный ждёт первого восхода.
+        val polar = once.copy(sun = SunTime(SunEvent.SUNRISE))
+        val oslo = ZoneId.of("Arctic/Longyearbyen")
+        assertEquals(2, SunAlarmRules.next(polar, 78.22, 15.65, at("2026-12-21T12:00", oslo), oslo)!!.atZone(oslo).monthValue)
+        // Без времени по солнцу и у сменного графика правило не действует.
+        assertEquals(null, SunAlarmRules.next(once.copy(sun = null), lat, lon, at("2026-10-20T12:00"), moscow))
+        val cycle = once.copy(repeat = Repeat.Cycle(LocalDate.of(2026, 10, 1), listOf(java.time.LocalTime.of(7, 0), null)))
+        assertFalse(SunAlarmRules.applies(cycle))
+        assertEquals(java.time.LocalTime.of(6, 0), SunTime(SunEvent.SUNRISE).nominal)
+        assertEquals(java.time.LocalTime.of(18, 0), SunTime(SunEvent.SUNSET, -30).nominal)
+    }
 }

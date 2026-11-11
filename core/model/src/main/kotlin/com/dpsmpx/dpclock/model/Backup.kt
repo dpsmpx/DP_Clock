@@ -231,8 +231,11 @@ object BackupFormat {
     private fun alarm(alarm: Alarm, blueprint: Boolean): Map<String, Any?> {
         val out = linkedMapOf<String, Any?>()
         if (!blueprint) out["id"] = alarm.id
-        out["hour"] = alarm.hour
-        out["minute"] = alarm.minute
+        // У времени по солнцу час и минута — у каждого телефона свои и меняются каждый день:
+        // в файл и синхронизацию идёт условное время, настоящее телефон посчитает сам (D-038).
+        val sunTime = alarm.sun?.takeIf { SunAlarmRules.applies(alarm) }?.nominal
+        out["hour"] = sunTime?.hour ?: alarm.hour
+        out["minute"] = sunTime?.minute ?: alarm.minute
         out["repeat"] = repeat(alarm.repeat)
         if (!blueprint) {
             out["enabled"] = alarm.enabled
@@ -265,6 +268,7 @@ object BackupFormat {
         }
         out["warnings"] = alarm.warnings
         out["key"] = alarm.key
+        alarm.sun?.let { out["sun"] = mapOf("event" to it.event.name, "offsetMinutes" to it.offsetMinutes) }
         return out
     }
 
@@ -420,6 +424,7 @@ object BackupFormat {
             } ?: AfterAlarm(),
             warnings = Warnings.normalize(o.list("warnings").map { (it as? Long)?.toInt() ?: 0 }),
             key = o.bool("key", false),
+            sun = o.obj("sun")?.let { SunTime(it.enum("event", SunEvent.SUNRISE), it.int("offsetMinutes", 0).coerceIn(-SunTime.MAX_OFFSET, SunTime.MAX_OFFSET)) },
         )
     }
 

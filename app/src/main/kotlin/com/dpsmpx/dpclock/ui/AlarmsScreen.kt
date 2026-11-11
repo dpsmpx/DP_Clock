@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
+import com.dpsmpx.dpclock.model.SunAlarmRules
 import com.dpsmpx.dpclock.QuickAction
 import com.dpsmpx.dpclock.QuickRequest
 import com.dpsmpx.dpclock.model.Alarm
@@ -769,6 +770,8 @@ private fun AlarmRow(
                         )
                     }
                 }
+                // Время по солнцу (D-038): крупно — время ближайшего срабатывания.
+                alarm.sun?.takeIf { SunAlarmRules.applies(alarm) }?.let { Note(sunTimeText(context, it)) }
                 // Поставил календарь (D-023, п. 3): изменить — станет обычным, удалить — в этот день не вернётся.
                 if (alarm.calendarEventAt != null) Note(stringResource(R.string.calendar_alarm_note))
                 val skipDate = alarm.skipDate

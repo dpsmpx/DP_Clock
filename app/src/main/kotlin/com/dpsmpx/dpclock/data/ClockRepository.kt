@@ -30,6 +30,7 @@ import com.dpsmpx.dpclock.model.SyncItems
 import com.dpsmpx.dpclock.model.SyncResult
 import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
+import com.dpsmpx.dpclock.model.SunAlarmRules
 import com.dpsmpx.dpclock.model.SunFire
 import com.dpsmpx.dpclock.model.SunRules
 import com.dpsmpx.dpclock.model.SunSignalKind
@@ -223,6 +224,7 @@ class ClockRepository(
         if (old.chimes != new.chimes) syncChimes(new)
         // Город погоды — запасное место для восхода и заката.
         if (old.sun != new.sun || old.weather != new.weather) syncSun(new)
+        if (old.weather != new.weather) rescheduleSunAlarmsLocked()
     }
 
     // Будильники
@@ -771,7 +773,21 @@ class ClockRepository(
     }
 
     /** Место сменилось (геолокация обновилась или запрещена) — сигнал переставляется. */
-    suspend fun syncSun() = locked(quiet = true) { syncSun(dao.currentSettings().toModel()) }
+    suspend fun syncSun() = locked {
+        syncSun(dao.currentSettings().toModel())
+        rescheduleSunAlarmsLocked()
+    }
+
+    /** Место сменилось — будильники со временем по солнцу (D-038), которые ждут срабатывания, ставятся заново. */
+    private suspend fun rescheduleSunAlarmsLocked() {
+        val exceptions = currentExceptions()
+        for (alarm in dao.allAlarms().map { it.toModel() }.filter { it.enabled && SunAlarmRules.applies(it) }) {
+            val state = dao.occurrence(alarm.id)?.state
+            if (state != null && state != Occ.SCHEDULED) continue
+            dao.deleteOccurrence(alarm.id)
+            scheduleAlarm(alarm, exceptions)
+        }
+    }
 
     private fun syncSun(settings: Settings, after: Long = now()) {
         val place = sunStore.place(settings)
@@ -831,7 +847,21 @@ class ClockRepository(
             notifier.cancelWarning(alarm.id)
             return 0L
         }
-        val at = AlarmRules.nextTrigger(alarm, nowInstant, zone, knownExceptions ?: currentExceptions())?.toEpochMilli()
+        // Время по солнцу (D-038): срабатывание считается для места телефона, а час и минута
+        // будильника становятся его временем — список, виджеты и плитки показывают их.
+        // Место неизвестно — по условному времени, как обычный будильник.
+        val sunPlace = if (SunAlarmRules.applies(alarm)) sunStore.place(dao.currentSettings().toModel()) else null
+        val at = if (sunPlace != null) {
+            SunAlarmRules.next(alarm, sunPlace.latitude, sunPlace.longitude, nowInstant, zone, knownExceptions ?: currentExceptions())?.also { next ->
+                val timed = SunAlarmRules.withTime(alarm, next, zone)
+                if (timed != alarm) {
+                    alarm = timed
+                    dao.upsertAlarm(alarm.toEntity())
+                }
+            }?.toEpochMilli()
+        } else {
+            AlarmRules.nextTrigger(alarm, nowInstant, zone, knownExceptions ?: currentExceptions())?.toEpochMilli()
+        }
         if (at == null) {
             // Дата прошла — будильник больше не сработает и выключается. У повторяющегося
             // все даты закрыли исключения: он остаётся включённым до их правки.

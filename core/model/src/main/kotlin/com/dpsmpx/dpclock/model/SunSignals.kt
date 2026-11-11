@@ -2,6 +2,7 @@ package com.dpsmpx.dpclock.model
 
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 
 /** Событие солнца, к которому привязан сигнал (D-035). */
@@ -203,4 +204,61 @@ object SunRules {
     }
 
     fun isLate(at: Long, now: Long): Boolean = now - at > LATE_MILLIS
+}
+
+/**
+ * Время будильника по солнцу (D-038): [event] со сдвигом [offsetMinutes] — меньше
+ * нуля раньше события, больше — позже.
+ */
+data class SunTime(val event: SunEvent, val offsetMinutes: Int = 0) {
+    init {
+        require(offsetMinutes in -MAX_OFFSET..MAX_OFFSET) { "сдвиг $offsetMinutes" }
+    }
+
+    /** Время, которое пишется в файл и синхронизацию и действует, пока место неизвестно. */
+    val nominal: LocalTime get() = if (event == SunEvent.SUNRISE) LocalTime.of(6, 0) else LocalTime.of(18, 0)
+
+    companion object {
+        /** Не дальше трёх часов от события. */
+        const val MAX_OFFSET = 180
+        val OFFSET_CHOICES = listOf(-120, -90, -60, -45, -30, -20, -15, -10, -5, 0, 5, 10, 15, 20, 30, 45, 60, 90, 120)
+    }
+}
+
+/** Когда звонит будильник со временем по солнцу (D-038). Чистые функции. */
+object SunAlarmRules {
+    /** Как у обычного будильника: пропуски и исключения не закрывают годы. */
+    private const val SEARCH_DAYS = 1500L
+
+    /** У будильника время по солнцу, и повтор его допускает. */
+    fun applies(alarm: Alarm): Boolean = alarm.sun != null && alarm.repeat !is Repeat.Cycle && alarm.repeat !is Repeat.Rules
+
+    /**
+     * Следующее срабатывание строго позже [after] в точке и поясе [zone]: первая
+     * подходящая повтору дата, в которую событие есть (в полярные день и ночь его
+     * нет), — событие плюс сдвиг. Пропуск и исключения — как у обычного будильника.
+     * null — больше не сработает или время у будильника не по солнцу.
+     */
+    fun next(alarm: Alarm, latitude: Double, longitude: Double, after: Instant, zone: ZoneId, exceptions: Exceptions = Exceptions.NONE): Instant? {
+        val sun = alarm.sun?.takeIf { applies(alarm) } ?: return null
+        val repeating = alarm.repeat.isRepeating
+        val start = after.atZone(zone).toLocalDate()
+        for (offset in 0L..SEARCH_DAYS) {
+            val date = start.plusDays(offset)
+            if (alarm.repeat is Repeat.OnDate && date.isAfter(alarm.repeat.date)) return null
+            if (repeating && alarm.honorExceptions && exceptions.excludes(date)) continue
+            if (repeating && date == alarm.skipDate) continue
+            if (alarm.repeat.timeOn(date, sun.nominal) == null) continue
+            val eventAt = SunTimes.on(date, latitude, longitude, zone).of(sun.event) ?: continue
+            val candidate = eventAt.plusSeconds(sun.offsetMinutes * 60L)
+            if (candidate.isAfter(after)) return candidate
+        }
+        return null
+    }
+
+    /** Будильник с временем срабатывания [at] в полях часа и минуты — так его видят список и виджеты. */
+    fun withTime(alarm: Alarm, at: Instant, zone: ZoneId): Alarm {
+        val local = at.atZone(zone)
+        return if (alarm.hour == local.hour && alarm.minute == local.minute) alarm else alarm.copy(hour = local.hour, minute = local.minute)
+    }
 }

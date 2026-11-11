@@ -474,6 +474,21 @@ class MigrationTest {
         assertEquals("0", alarm["keyAlarm"])
     }
 
+    @Test
+    fun migration20To21KeepsAlarmsByTheClock() = withDb { db ->
+        SchemaFile.read(20).create(db)
+        val columns = rows(db, "PRAGMA table_info(alarm)").filter { it["notnull"] == "1" && it["dflt_value"] == null }.map { it["name"]!! }
+        val values = columns.joinToString(", ") { if (it == "id") "'a'" else if (it == "hour") "7" else "0" }
+        db.execSQL("INSERT INTO alarm (${columns.joinToString(", ")}) VALUES ($values)")
+
+        MIGRATION_20_21.migrate(db)
+
+        val alarm = row(db, "SELECT * FROM alarm")
+        assertEquals("7", alarm["hour"])
+        assertEquals(null, alarm["sunEvent"])
+        assertEquals("0", alarm["sunOffset"])
+    }
+
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)
 
     private data class Table(val columns: Map<String, Column>, val indices: Set<String>, val foreignKeys: Set<String>)

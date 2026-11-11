@@ -3,7 +3,11 @@ package com.dpsmpx.dpclock.data
 import android.app.AlarmManager
 import android.app.Application
 import com.dpsmpx.dpclock.DpClockApp
+import com.dpsmpx.dpclock.model.Alarm
+import com.dpsmpx.dpclock.model.Repeat
+import com.dpsmpx.dpclock.model.SunAlarmRules
 import com.dpsmpx.dpclock.model.SunEvent
+import com.dpsmpx.dpclock.model.SunTime
 import com.dpsmpx.dpclock.model.SunMoment
 import com.dpsmpx.dpclock.model.SunRules
 import com.dpsmpx.dpclock.model.SunSignal
@@ -115,5 +119,33 @@ class SunRepositoryTest {
         // Выключили — будильника Android нет.
         repository.updateSettings { it.copy(sun = SunSignals()) }
         assertNull(scheduled())
+    }
+
+    /** Будильник со временем по солнцу (D-038): ставится на событие со сдвигом; час и минута — время срабатывания. */
+    @Test
+    fun alarmBySunIsScheduledForThePlaceAndMovesWithIt() = runBlocking {
+        repository.updateSettings { it.copy(weather = WeatherSettings(WeatherMode.CITY, tula)) }
+        val alarm = Alarm("s", 6, 0, Repeat.Once, enabled = true, createdAt = 1L, sun = SunTime(SunEvent.SUNRISE, -10))
+        val at = repository.saveAlarm(alarm)
+        val expected = SunAlarmRules.next(alarm, tula.latitude, tula.longitude, Instant.now(), zone)!!
+        assertEquals(expected.toEpochMilli(), at)
+        val stored = repository.surfaceData().alarms.single()
+        assertEquals(expected.atZone(zone).hour, stored.hour)
+        assertEquals(expected.atZone(zone).minute, stored.minute)
+        assertEquals(alarm.sun, stored.sun)
+        // В файл и синхронизацию идёт условное время: телефоны не перекидываются своими минутами.
+        assertEquals(alarm, repository.exportBackup().let { com.dpsmpx.dpclock.model.BackupFormat.decode(com.dpsmpx.dpclock.model.BackupFormat.encode(it, Instant.now(), "t")) }.alarms.single())
+
+        // Телефон нашёлся во Владивостоке — будильник переставлен на тамошний восход.
+        graph.sun.setLocation("Владивосток", 43.1155, 131.8855, System.currentTimeMillis())
+        repository.syncSun()
+        val moved = SunAlarmRules.next(alarm, 43.1155, 131.8855, Instant.now(), zone)!!
+        assertNotEquals(expected, moved)
+        val after = repository.surfaceData().alarms.single()
+        assertEquals(moved.atZone(zone).hour, after.hour)
+        assertEquals(moved.atZone(zone).minute, after.minute)
+        val scheduledAlarms = shadowOf(app.getSystemService(AlarmManager::class.java)).scheduledAlarms.map { it.triggerAtMs }
+        assertTrue(moved.toEpochMilli() in scheduledAlarms)
+        assertTrue(expected.toEpochMilli() !in scheduledAlarms)
     }
 }

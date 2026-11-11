@@ -1109,4 +1109,16 @@
     <string name="auto_backup_failed">The last backup could not be written. Tap and choose the folder again</string>
     <string name="auto_backup_last">Last backup: %1$s. Copies kept: %2$d</string>
     <string name="auto_backup_pending">No backups yet</string>
+
+    <!-- Alarm time by the sun (D-038) -->
+    <string name="alarm_time_clock">By the clock</string>
+    <string name="alarm_time_sunrise">At sunrise</string>
+    <string name="alarm_time_sunset">At sunset</string>
+    <string name="alarm_sun_offset">Shift</string>
+    <string name="alarm_sun_offset_none">at the moment</string>
+    <string name="alarm_sun_offset_before">%1$s before</string>
+    <string name="alarm_sun_offset_after">%1$s after</string>
+    <string name="alarm_sun_place">Place: %1$s. The time is recalculated every day; the place is set under Sunrise and sunset in settings</string>
+    <string name="alarm_sun_place_here">by location</string>
+    <string name="alarm_sun_no_place">Place unknown: the alarm will ring at a nominal time. Allow location under Sunrise and sunset in settings</string>
 </resources>

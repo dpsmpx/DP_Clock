@@ -1,9 +1,9 @@
 # Архитектурный обзор DP_Clock
 
-- **Статус:** предварительные целевые границы; существующий код — раздел «Код версии 0.27.0».
+- **Статус:** предварительные целевые границы; существующий код — раздел «Код версии 0.28.0».
 - **Подход:** собственная реализация с нуля с опорой на официальные Android APIs.
 
-## Код версии 0.27.0
+## Код версии 0.28.0
 
 MVP ([D-012](../../DECISIONS/D-012-MVP-IMPLEMENTATION.md)), будильник целиком ([D-013](../../DECISIONS/D-013-FULL-ALARM.md)), графики и исключения ([D-014](../../DECISIONS/D-014-SCHEDULES-AND-EXCEPTIONS.md)), подтверждение пробуждения ([D-015](../../DECISIONS/D-015-WAKE-CHECK.md)), дополнения таймеров ([D-016](../../DECISIONS/D-016-TIMER-ADDITIONS.md)), сон и пробуждение ([D-017](../../DECISIONS/D-017-SLEEP-AND-WAKE.md)), экспорт и импорт файлом ([D-018](../../DECISIONS/D-018-EXPORT-IMPORT.md)), мировые часы и погода ([D-019](../../DECISIONS/D-019-WORLD-CLOCK-AND-WEATHER.md)), виджеты, плитки, ярлыки и команды ([D-020](../../DECISIONS/D-020-WIDGETS-TILES-SHORTCUTS.md)), оформление ([D-021](../../DECISIONS/D-021-APPEARANCE.md)), большие экраны и доступность ([D-022](../../DECISIONS/D-022-LARGE-SCREENS-AND-ACCESSIBILITY.md)), календарь телефона и статистика ([D-023](../../DECISIONS/D-023-CALENDAR-AND-STATISTICS.md)), анимированные обои ([D-024](../../DECISIONS/D-024-ANIMATED-WALLPAPERS.md)), помидор, сложные повторы и предупреждения ([D-025](../../DECISIONS/D-025-POMODORO-REPEATS-WARNINGS.md)), синхронизация общим файлом ([D-030](../../DECISIONS/D-030-SYNC.md)), свои и постоянные задачи ([D-032](../../DECISIONS/D-032-OWN-TASKS.md)–[D-034](../../DECISIONS/D-034-NO-GOOGLE-TASKS.md)), сигналы на восходе и закате ([D-035](../../DECISIONS/D-035-SUNRISE-SUNSET-SIGNALS.md): `SunTimes` и `SunRules` в `:core:model`, место телефона — `SunStore` и `SunLocation`, раздел настроек — `SunUi`), два модуля:
 

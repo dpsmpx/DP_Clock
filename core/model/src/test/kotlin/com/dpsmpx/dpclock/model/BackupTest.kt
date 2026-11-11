@@ -54,6 +54,8 @@ class BackupTest {
             ),
             Alarm("a5", 7, 45, Repeat.Workdays, enabled = true, createdAt = 5L, sound = AlarmSound.File("content://files/x.mp3", "Свой файл")),
             Alarm("a6", 9, 0, rules, enabled = true, createdAt = 6L, skipDate = LocalDate.of(2026, 11, 2), skipTime = LocalTime.of(9, 30), warnings = listOf(1440, 45, 5)),
+            // Время по солнцу (D-038): в файле — условное время и привязка.
+            Alarm("a7", 18, 0, Repeat.Once, enabled = true, createdAt = 7L, sun = SunTime(SunEvent.SUNSET, -30)),
         ),
         groups = listOf(AlarmGroup("g1", "Будни", 10L)),
         templates = listOf(

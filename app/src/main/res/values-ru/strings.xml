@@ -1154,4 +1154,16 @@
     <string name="auto_backup_failed">Последнюю копию записать не удалось — нажмите и выберите папку заново</string>
     <string name="auto_backup_last">Последняя копия: %1$s. Хранятся последние %2$d</string>
     <string name="auto_backup_pending">Копий ещё не было</string>
+
+    <!-- Время будильника по солнцу (D-038) -->
+    <string name="alarm_time_clock">По часам</string>
+    <string name="alarm_time_sunrise">На восходе</string>
+    <string name="alarm_time_sunset">На закате</string>
+    <string name="alarm_sun_offset">Сдвиг</string>
+    <string name="alarm_sun_offset_none">в момент</string>
+    <string name="alarm_sun_offset_before">за %1$s до</string>
+    <string name="alarm_sun_offset_after">через %1$s после</string>
+    <string name="alarm_sun_place">Место: %1$s. Время пересчитывается каждый день; место — в настройках «Восход и закат»</string>
+    <string name="alarm_sun_place_here">по геолокации</string>
+    <string name="alarm_sun_no_place">Место неизвестно: будильник зазвонит по условному времени. Разрешите геолокацию в настройках «Восход и закат»</string>
 </resources>

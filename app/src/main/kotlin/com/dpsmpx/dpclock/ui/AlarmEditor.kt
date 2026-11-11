@@ -137,6 +137,7 @@ fun AlarmEditor(
     var cycleDays by remember { mutableStateOf(initialCycle?.days ?: emptyList()) }
     var rules by remember { mutableStateOf(alarm.repeat as? Repeat.Rules) }
     var warnings by remember { mutableStateOf(alarm.warnings) }
+    var key by rememberSaveable { mutableStateOf(alarm.key) }
     var label by rememberSaveable { mutableStateOf(alarm.label) }
     var sound by remember { mutableStateOf(alarm.sound) }
     var vibrate by rememberSaveable { mutableStateOf(alarm.vibrate) }
@@ -178,6 +179,7 @@ fun AlarmEditor(
             gentleMinutes = gentleMinutes,
             after = after,
             warnings = warnings,
+            key = key,
             skipTime = null,
         )
         val now = Instant.now()
@@ -311,6 +313,8 @@ fun AlarmEditor(
                     )
                 }
 
+                // Ключевой будильник (D-037): по нему — «Пора ложиться»; в списке выделен.
+                SwitchRow(stringResource(R.string.alarm_key), key, stringResource(R.string.alarm_key_text)) { key = it }
                 // Предупреждения до сигнала (D-025, п. 5) — на виду: их ставят часто.
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.warnings)) },

@@ -1088,4 +1088,9 @@
 
     <!-- Простой режим настроек (D-036) -->
     <string name="settings_advanced">Расширенные</string>
+
+    <!-- Ключевые будильники (D-037) -->
+    <string name="alarm_key">Ключевой будильник</string>
+    <string name="alarm_key_text">Нельзя пропустить: «Пора ложиться» считается по ключевым будильникам, в списке он выделен</string>
+    <string name="alarm_key_mark">ключевой</string>
 </resources>

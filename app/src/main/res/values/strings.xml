@@ -1043,4 +1043,9 @@
 
     <!-- Simple settings mode (D-036) -->
     <string name="settings_advanced">Advanced</string>
+
+    <!-- Key alarms (D-037) -->
+    <string name="alarm_key">Key alarm</string>
+    <string name="alarm_key_text">Must not be missed: “Time for bed” follows key alarms, and it stands out in the list</string>
+    <string name="alarm_key_mark">key</string>
 </resources>

@@ -72,6 +72,8 @@ data class AlarmEntity(
     val skipTime: Int? = null,
     /** Предупреждения до сигнала, минуты через запятую (D-025, п. 5). */
     val warnings: String = "",
+    /** Ключевой будильник (D-037): по таким считается сон; выделен в списке. */
+    val keyAlarm: Boolean = false,
 )
 
 /** Группа будильников (D-014, п. 5). */
@@ -552,10 +554,10 @@ abstract class ClockDatabase : RoomDatabase() {
         const val NAME = "dpclock.db"
 
         /** Версия схемы; новая — со схемой в `app/schemas` и миграцией в [MIGRATIONS]. */
-        const val VERSION = 19
+        const val VERSION = 20
 
         /** Все миграции по порядку версий; `MigrationTest` проверяет каждую по выгруженным схемам. */
-        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19)
+        val MIGRATIONS: List<SqlMigration> = listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20)
 
         /**
          * База в хранилище устройства: будильник звонит и до первой разблокировки

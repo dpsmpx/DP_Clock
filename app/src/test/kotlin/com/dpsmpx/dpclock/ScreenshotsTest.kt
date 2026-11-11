@@ -228,7 +228,8 @@ class ScreenshotsTest {
         val workdays = DayOfWeek.entries.take(5).toSet()
         repository.addAlarm(7, 0)
         val first = repository.surfaceData().alarms.first()
-        repository.saveAlarm(first.copy(label = "Подъём", repeat = Repeat.Weekly(workdays)))
+        // Ключевой (D-037): выделен в списке.
+        repository.saveAlarm(first.copy(label = "Подъём", repeat = Repeat.Weekly(workdays), key = true))
         repository.addAlarm(9, 30)
         val second = repository.surfaceData().alarms.first { it.hour == 9 }
         repository.saveAlarm(second.copy(label = "Выходные", repeat = Repeat.Weekly(setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)), enabled = false))

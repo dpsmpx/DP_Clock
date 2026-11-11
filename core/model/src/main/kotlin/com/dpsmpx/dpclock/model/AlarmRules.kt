@@ -114,6 +114,13 @@ object AlarmRules {
     /** Сигнал опоздал так, что звонить уже нельзя (телефон был выключен, часы переведены вперёд). */
     fun isMissed(scheduledAt: Long, now: Long): Boolean = now - scheduledAt > MISSED_AFTER_MILLIS
 
+    /**
+     * Будильники, по которым считается сон (D-037): включённые ключевые; ни одного
+     * включённого ключевого нет — все, как до 0.25.0.
+     */
+    fun forSleep(alarms: List<Alarm>): List<Alarm> =
+        alarms.filter { it.enabled && it.key }.ifEmpty { alarms }
+
     /** Ближайшее срабатывание среди включённых будильников. */
     fun nearest(alarms: List<Alarm>, after: Instant, zone: ZoneId, exceptions: Exceptions = Exceptions.NONE): Instant? =
         nearestAlarm(alarms, after, zone, exceptions)?.second

@@ -42,6 +42,7 @@ data class AlarmTemplate(val id: String, val name: String, val alarms: List<Alar
             "am" to alarm.after.reminderMinutes.toString(),
             "aa" to alarm.after.app,
             "wn" to Warnings.encode(alarm.warnings),
+            "k" to if (alarm.key) "1" else "0",
         ).joinToString("&") { (k, v) -> k + "=" + URLEncoder.encode(v, "UTF-8") }
     }
 
@@ -86,6 +87,7 @@ data class AlarmTemplate(val id: String, val name: String, val alarms: List<Alar
                         app = f["aa"].orEmpty(),
                     ),
                     warnings = Warnings.decode(f["wn"].orEmpty()),
+                    key = f["k"] == "1",
                 )
             }
         }

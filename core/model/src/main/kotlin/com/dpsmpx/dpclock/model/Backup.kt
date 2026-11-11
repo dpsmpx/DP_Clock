@@ -264,6 +264,7 @@ object BackupFormat {
             mapOf("presetId" to it.presetId, "reminder" to it.reminder, "reminderMinutes" to it.reminderMinutes, "app" to it.app)
         }
         out["warnings"] = alarm.warnings
+        out["key"] = alarm.key
         return out
     }
 
@@ -418,6 +419,7 @@ object BackupFormat {
                 )
             } ?: AfterAlarm(),
             warnings = Warnings.normalize(o.list("warnings").map { (it as? Long)?.toInt() ?: 0 }),
+            key = o.bool("key", false),
         )
     }
 

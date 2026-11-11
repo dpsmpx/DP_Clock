@@ -251,3 +251,10 @@ val MIGRATION_18_19 = SqlMigration(
     19,
     listOf("ALTER TABLE `settings` ADD COLUMN `sun` TEXT NOT NULL DEFAULT ''"),
 )
+
+/** 0.25.0 (D-037): ключевые будильники — пока ни одного. */
+val MIGRATION_19_20 = SqlMigration(
+    19,
+    20,
+    listOf("ALTER TABLE `alarm` ADD COLUMN `keyAlarm` INTEGER NOT NULL DEFAULT 0"),
+)

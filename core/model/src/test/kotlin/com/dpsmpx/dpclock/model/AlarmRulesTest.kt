@@ -111,6 +111,22 @@ class AlarmRulesTest {
     }
 
     @Test
+    fun sleepFollowsKeyAlarmsWhenThereAreAny() {
+        val now = at(moscow, "2026-10-19T21:00")
+        val nap = Alarm("nap", 23, 0, Repeat.Once, enabled = true, createdAt = 0)
+        val work = Alarm("work", 7, 0, Repeat.Once, enabled = true, createdAt = 1, key = true)
+        val off = Alarm("off", 5, 0, Repeat.Once, enabled = false, createdAt = 2, key = true)
+        // Ключевых нет — сон считается по всем, как раньше.
+        assertEquals(listOf(nap), AlarmRules.forSleep(listOf(nap)))
+        // Выключенный ключевой не в счёт.
+        assertEquals(listOf(nap, off), AlarmRules.forSleep(listOf(nap, off)))
+        // Есть включённый ключевой — только по нему: вечерний будильник «Пора ложиться» не сбивает.
+        assertEquals(listOf(work), AlarmRules.forSleep(listOf(nap, work, off)))
+        assertEquals(at(moscow, "2026-10-19T23:00"), AlarmRules.nearest(listOf(nap, work, off), now, moscow))
+        assertEquals(at(moscow, "2026-10-20T07:00"), AlarmRules.nearest(AlarmRules.forSleep(listOf(nap, work, off)), now, moscow))
+    }
+
+    @Test
     fun repeatBitsRoundTripAndKinds() {
         for (bits in 0 until 128) assertEquals(bits, Repeat.fromBits(bits).bits)
         assertEquals(Repeat.Once, Repeat.fromBits(0))

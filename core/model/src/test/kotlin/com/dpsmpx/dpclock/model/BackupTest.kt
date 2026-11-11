@@ -45,7 +45,7 @@ class BackupTest {
                 label = "Работа \"рано\"\nстрока", sound = AlarmSound.Builtin("dawn"), vibrate = false, rampSeconds = 60,
                 snoozeMinutes = 5, skipDate = LocalDate.of(2026, 10, 30), honorExceptions = false, groupId = "g1",
                 wakeCheck = WakeCheck(WakeMethod.QR, WakeLevel.HARD, tasks = 3, reference = "КОД-42", snoozeAllowed = false, recheckMinutes = 5),
-                gentleMinutes = 20, after = AfterAlarm("p1", "Таблетки", 15, "org.example.app"),
+                gentleMinutes = 20, after = AfterAlarm("p1", "Таблетки", 15, "org.example.app"), key = true,
             ),
             Alarm("a3", 9, 15, Repeat.OnDate(LocalDate.of(2026, 12, 31)), enabled = true, createdAt = 3L, sound = AlarmSound.Silent),
             Alarm(

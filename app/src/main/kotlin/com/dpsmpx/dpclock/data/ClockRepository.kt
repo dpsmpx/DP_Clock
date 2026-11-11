@@ -624,7 +624,9 @@ class ClockRepository(
 
     private suspend fun syncBedtimeLocked() {
         val bedtime = dao.currentSettings().toModel().bedtime
-        val nearest = dao.occurrences().filter { it.state == Occ.SCHEDULED }.minOfOrNull { it.scheduledAt }
+        // Есть включённые ключевые будильники — «Пора ложиться» считается по ним (D-037).
+        val sleepAlarms = AlarmRules.forSleep(dao.allAlarms().map { it.toModel() }).mapTo(mutableSetOf()) { it.id }
+        val nearest = dao.occurrences().filter { it.state == Occ.SCHEDULED && it.alarmId in sleepAlarms }.minOfOrNull { it.scheduledAt }
         val reminder = SleepRules.nextReminder(bedtime, nearest?.let(Instant::ofEpochMilli), Instant.ofEpochMilli(now()), ZoneId.systemDefault())
         if (reminder == null) {
             scheduler.cancelBedtime()

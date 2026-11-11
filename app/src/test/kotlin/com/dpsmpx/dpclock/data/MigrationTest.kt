@@ -460,6 +460,20 @@ class MigrationTest {
         assertEquals("", settings["sun"])
     }
 
+    @Test
+    fun migration19To20KeepsAlarmsAndNoneIsKey() = withDb { db ->
+        SchemaFile.read(19).create(db)
+        val columns = rows(db, "PRAGMA table_info(alarm)").filter { it["notnull"] == "1" && it["dflt_value"] == null }.map { it["name"]!! }
+        val values = columns.joinToString(", ") { if (it == "id") "'a'" else if (it == "hour") "7" else "0" }
+        db.execSQL("INSERT INTO alarm (${columns.joinToString(", ")}) VALUES ($values)")
+
+        MIGRATION_19_20.migrate(db)
+
+        val alarm = row(db, "SELECT * FROM alarm")
+        assertEquals("7", alarm["hour"])
+        assertEquals("0", alarm["keyAlarm"])
+    }
+
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)
 
     private data class Table(val columns: Map<String, Column>, val indices: Set<String>, val foreignKeys: Set<String>)

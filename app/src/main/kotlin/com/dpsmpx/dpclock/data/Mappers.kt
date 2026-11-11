@@ -88,6 +88,7 @@ fun AlarmEntity.toModel() = Alarm(
     after = AfterAlarm(afterPresetId, afterReminder, afterReminderMinutes.coerceAtLeast(0), afterApp),
     calendarEventAt = calendarEventAt,
     warnings = Warnings.decode(warnings),
+    key = keyAlarm,
 )
 
 fun Alarm.toEntity() = AlarmEntity(
@@ -125,6 +126,7 @@ fun Alarm.toEntity() = AlarmEntity(
     repeatRules = (repeat as? Repeat.Rules)?.let(RulesCode::encode),
     skipTime = skipTime?.let { it.hour * 60 + it.minute },
     warnings = Warnings.encode(warnings),
+    keyAlarm = key,
 )
 
 fun GroupEntity.toModel() = AlarmGroup(id, name, createdAt)

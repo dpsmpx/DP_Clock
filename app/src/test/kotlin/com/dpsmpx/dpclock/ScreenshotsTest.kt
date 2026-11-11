@@ -36,6 +36,7 @@ import com.dpsmpx.dpclock.ui.AppIcons
 import com.dpsmpx.dpclock.ui.FullScreenTime
 import com.dpsmpx.dpclock.ui.NewAlarmDialog
 import com.dpsmpx.dpclock.ui.OnboardingContent
+import com.dpsmpx.dpclock.ui.AlarmCheckDialog
 import com.dpsmpx.dpclock.ui.SettingsScreen
 import com.dpsmpx.dpclock.ui.SyncConflictsDialog
 import com.dpsmpx.dpclock.ui.TaskEditor
@@ -164,6 +165,15 @@ class ScreenshotsTest {
         shoot("settings") { DpClockTheme { SettingsScreen(onBack = {}) } }
         shoot("settings-appearance") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_appearance) } }
         shoot("settings-sync") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_sync) } }
+    }
+
+    /** Самопроверка «прозвонит ли будильник» (D-036, п. 4). */
+    @Test
+    fun alarmCheck() {
+        seed()
+        // Строка «Будильник в Android» на снимке — «проблема»: `getNextAlarmClock()` у Robolectric
+        // отдаёт не самый ранний будильник. На телефоне Android отдаёт ближайший.
+        shoot("alarm-check") { DpClockTheme { AlarmCheckDialog(onDismiss = {}) } }
     }
 
     /** Восход и закат (D-035): место по геолокации, времена на сегодня, сигналы и мелодия будильника. */

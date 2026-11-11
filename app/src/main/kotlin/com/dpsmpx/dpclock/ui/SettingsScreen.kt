@@ -456,7 +456,13 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
                     modifier = Modifier.clickable { weatherChoice.openOptions() },
                 )
             },
-            SettingsSection(R.string.settings_reliability, listOf(R.string.alarm_volume, R.string.journal, R.string.xiaomi_title)) {
+            SettingsSection(R.string.settings_reliability, listOf(R.string.check_title, R.string.help_title, R.string.alarm_volume, R.string.journal, R.string.vendor_setup)) {
+                // Самопроверка и справка (D-036, п. 4) — первой строкой.
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.check_title)) },
+                    supportingContent = { Text(stringResource(R.string.check_text)) },
+                    modifier = Modifier.clickable { dialog = "check" },
+                )
                 PermissionRow(Issue.NOTIFICATIONS, reliability.notifications)
                 PermissionRow(Issue.FULL_SCREEN, reliability.fullScreen)
                 PermissionRow(Issue.EXACT_ALARMS, reliability.exactAlarms)
@@ -476,10 +482,10 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
                     },
                 )
                 if (reliability.dndBlocksAlarms) PermissionRow(Issue.DND, granted = false)
-                if (reliability.isXiaomi) {
+                if (reliability.needsVendorSetup) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Text(stringResource(R.string.xiaomi_title), style = MaterialTheme.typography.titleMedium)
-                        Text(stringResource(R.string.xiaomi_hints), style = MaterialTheme.typography.bodyMedium)
+                        Text(reliability.vendor.brands, style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(vendorHints(reliability.vendor)), style = MaterialTheme.typography.bodyMedium)
                         Row {
                             FilledTonalButton(onClick = { context.openFix(Issue.XIAOMI) }) {
                                 Text(stringResource(R.string.open_app_settings))
@@ -634,6 +640,7 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
         )
         "journal" -> JournalDialog(onDismiss = { dialog = null })
         "crashes" -> CrashesDialog(onDismiss = { dialog = null })
+        "check" -> AlarmCheckDialog(onDismiss = { dialog = null })
         "defaultWarnings" -> WarningsDialog(
             title = stringResource(R.string.warnings_default),
             initial = settings.defaultWarnings,

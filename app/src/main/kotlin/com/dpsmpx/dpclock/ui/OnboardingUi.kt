@@ -79,9 +79,9 @@ fun OnboardingContent(onXiaomiDone: () -> Unit, onDone: () -> Unit) {
                         Status(Issue.FULL_SCREEN, ok = reliability.fullScreen)
                         Status(Issue.EXACT_ALARMS, ok = reliability.exactAlarms)
                     }
-                    else -> if (reliability.isXiaomi) {
-                        Title(R.string.xiaomi_title)
-                        Body(R.string.xiaomi_hints)
+                    else -> if (reliability.needsVendorSetup) {
+                        Text(reliability.vendor.brands, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
+                        Body(vendorHints(reliability.vendor))
                         OutlinedButton(onClick = { context.openAppSettings() }) { Text(stringResource(R.string.open_app_settings)) }
                         TextButton(onClick = onXiaomiDone) { Text(stringResource(R.string.xiaomi_done)) }
                     } else {
@@ -121,7 +121,7 @@ private fun itemName(issue: Issue): Int = when (issue) {
     Issue.EXACT_ALARMS -> R.string.onboarding_item_exact
     Issue.VOLUME_OFF, Issue.VOLUME_LOW -> R.string.onboarding_volume_title
     Issue.DND -> R.string.onboarding_item_dnd
-    Issue.XIAOMI -> R.string.xiaomi_title
+    Issue.XIAOMI -> R.string.vendor_setup
 }
 
 /** Состояние разрешения: «в порядке» или что не так и «Исправить». */

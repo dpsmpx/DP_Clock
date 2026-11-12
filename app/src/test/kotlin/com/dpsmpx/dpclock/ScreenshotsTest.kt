@@ -62,6 +62,10 @@ import com.dpsmpx.dpclock.model.SunMoment
 import com.dpsmpx.dpclock.model.SunSignal
 import com.dpsmpx.dpclock.model.SunSignalKind
 import com.dpsmpx.dpclock.model.SunSignals
+import com.dpsmpx.dpclock.model.Exceptions
+import com.dpsmpx.dpclock.model.SunEvent
+import com.dpsmpx.dpclock.model.SunTime
+import com.dpsmpx.dpclock.ui.AlarmEditor
 import java.io.File
 import java.time.DayOfWeek
 import java.time.Duration
@@ -165,6 +169,17 @@ class ScreenshotsTest {
         shoot("settings") { DpClockTheme { SettingsScreen(onBack = {}) } }
         shoot("settings-appearance") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_appearance) } }
         shoot("settings-sync") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_sync) } }
+    }
+
+    /** Редактор будильника со временем по солнцу (D-038). */
+    @Test
+    fun alarmBySun() {
+        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
+        DpClockApp.graph(app).sun.setLocation("Москва", 55.7558, 37.6173, System.currentTimeMillis())
+        val alarm = Alarm("s", 18, 0, Repeat.Weekly(DayOfWeek.entries.take(5).toSet()), enabled = true, createdAt = 1L, label = "Закат", sun = SunTime(SunEvent.SUNSET, -10), key = true)
+        shoot("alarm-editor-sun") {
+            DpClockTheme { AlarmEditor(alarm, Settings(), emptyList(), Exceptions.NONE, onDismiss = {}, onSave = {}, onDelete = {}) }
+        }
     }
 
     /** Самопроверка «прозвонит ли будильник» (D-036, п. 4). */

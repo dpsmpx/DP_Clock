@@ -47,7 +47,7 @@
 
 1. `versionName` и `versionCode` в `app/build.gradle.kts`; запись в `CHANGELOG.md`.
 2. Описание выпуска — `docs/RELEASE_NOTES/<версия>.md`: что нового человеческими словами.
-3. Тег `v<версия>` на нужном коммите: `git tag v0.28.1 && git push origin v0.28.1`. Или «Run workflow» у процесса **Release** на GitHub.
+3. Отправить коммит с описанием на GitHub: процесс **Release** запускается, когда меняется файл в `docs/RELEASE_NOTES/`, и сам ставит тег `v<версия>`. Запустить можно и тегом (`git tag v0.28.1 && git push origin v0.28.1`), и кнопкой «Run workflow».
 
 Процесс `.github/workflows/release.yml` проверит тег и описание, прогонит тесты и Lint, соберёт оба APK и создаст выпуск с описанием и суммами SHA-256. Повторный запуск обновляет тот же выпуск.
 

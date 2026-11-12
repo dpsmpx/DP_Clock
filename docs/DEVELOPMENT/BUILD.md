@@ -41,6 +41,16 @@
 - Тесты идут на отладочном варианте. Сборку выпуска проверяет только телефон: пункт И1 плана проверки.
 - CI — `.github/workflows/ci.yml`: на push в `main` и на pull request — тесты, Lint, `tools/check-core-api.py`, отладочная сборка и сборка выпуска. Тесты базы и будильников Android на Robolectric (`*RepositoryTest*`, `-Pscreenshots`) идут отдельным шагом; снимки экранов — нет. Без `-Pscreenshots` классы на Robolectric в проверку не входят (список — в `app/build.gradle.kts`): без образа Android они падают до начала теста.
 
+## Выпуск на GitHub
+
+Решение — [D-039](../../DECISIONS/D-039-LICENSE-AND-RELEASES.md). Чтобы выпустить версию:
+
+1. `versionName` и `versionCode` в `app/build.gradle.kts`; запись в `CHANGELOG.md`.
+2. Описание выпуска — `docs/RELEASE_NOTES/<версия>.md`: что нового человеческими словами.
+3. Тег `v<версия>` на нужном коммите: `git tag v0.28.1 && git push origin v0.28.1`. Или «Run workflow» у процесса **Release** на GitHub.
+
+Процесс `.github/workflows/release.yml` проверит тег и описание, прогонит тесты и Lint, соберёт оба APK и создаст выпуск с описанием и суммами SHA-256. Повторный запуск обновляет тот же выпуск.
+
 ## Сбои загрузки
 
 Первая сборка скачивает Gradle, плагины и библиотеки. Maven Central иногда отвечает `429 Too Many Requests` на всплеск запросов: это сбой сети, а не кода, — сборку повторить. Чтобы Gradle сам повторял запросы дольше, в `~/.gradle/gradle.properties` (настройки машины, не репозитория):

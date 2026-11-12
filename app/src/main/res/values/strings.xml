@@ -1121,4 +1121,8 @@
     <string name="alarm_sun_place">Place: %1$s. The time is recalculated every day; the place is set under Sunrise and sunset in settings</string>
     <string name="alarm_sun_place_here">by location</string>
     <string name="alarm_sun_no_place">Place unknown: the alarm will ring at a nominal time. Allow location under Sunrise and sunset in settings</string>
+
+    <!-- App license (D-039) -->
+    <string name="app_license">License</string>
+    <string name="app_license_text">DP Clock is free software under the GNU General Public License version 3. There is no warranty. Source code: github.com/dpsmpx/DP_Clock</string>
 </resources>

@@ -525,7 +525,7 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
                 )
                 AutoBackupSettings()
             },
-            SettingsSection(R.string.about, listOf(R.string.crashes, R.string.licenses)) {
+            SettingsSection(R.string.about, listOf(R.string.crashes, R.string.app_license, R.string.licenses)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.app_name)) },
                     supportingContent = { Text(stringResource(R.string.version_value, BuildConfig.VERSION_NAME)) },
@@ -535,6 +535,10 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
                     headlineContent = { Text(stringResource(R.string.crashes)) },
                     supportingContent = { Text(stringResource(R.string.crashes_text)) },
                     modifier = Modifier.clickable { dialog = "crashes" },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.app_license)) },
+                    supportingContent = { Text(stringResource(R.string.app_license_text)) },
                 )
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.licenses)) },

@@ -2,7 +2,7 @@ package com.dpsmpx.dpclock.update
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
+import androidx.core.net.toUri
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.FileProvider
@@ -118,7 +118,7 @@ object UpdateDownloader {
     fun openInstallPermissionSettings(context: Context) {
         val intent = Intent(
             Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-            Uri.parse("package:${context.packageName}"),
+            "package:${context.packageName}".toUri(),
         ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(intent)
     }

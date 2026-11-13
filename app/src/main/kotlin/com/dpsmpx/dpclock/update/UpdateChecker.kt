@@ -7,7 +7,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -96,19 +95,18 @@ object UpdateChecker {
         null
     }
 
-    /** Разбирает ответ GitHub «последний выпуск». Черновики и pre-release не предлагаются. */
-    internal fun parseRelease(body: String): UpdateInfo? = try {
-        val release = JSONObject(body)
-        if (release.optBoolean("draft") || release.optBoolean("prerelease")) return null
-        val version = release.optString("tag_name")
-            .removePrefix("v")
-            .takeIf { parseVersion(it) != null }
-            ?: return null
-        val assets = release.optJSONArray("assets") ?: return UpdateInfo(version, RELEASES_PAGE)
+    /**
+     * Разбирает ответ GitHub «последний выпуск» без org.json (в unit-тестах JVM stub
+     * JSONObject ненадёжен). Черновики и pre-release не предлагаются.
+     */
+    internal fun parseRelease(body: String): UpdateInfo? {
+        if (jsonFlag(body, "draft") || jsonFlag(body, "prerelease")) return null
+        val tag = jsonString(body, "tag_name") ?: return null
+        val version = tag.removePrefix("v").takeIf { parseVersion(it) != null } ?: return null
         var apkUrl: String? = null
-        for (i in 0 until assets.length()) {
-            val asset = assets.optJSONObject(i) ?: continue
-            val url = asset.optString("browser_download_url")
+        val urlRegex = Regex("\"""browser_download_url\"\\s*:\\s*\"([^\"]+)\"\""")
+        for (match in urlRegex.findAll(body)) {
+            val url = match.groupValues[1]
             if (!url.startsWith(DOWNLOAD_PREFIX) || !url.endsWith(".apk")) continue
             val name = url.substringAfterLast('/')
             if (name.startsWith(ASSET_PREFIX) && !name.contains(ASSET_DEBUG_MARK)) {
@@ -116,10 +114,15 @@ object UpdateChecker {
                 break
             }
         }
-        UpdateInfo(version, apkUrl ?: RELEASES_PAGE)
-    } catch (_: Exception) {
-        null
+        return UpdateInfo(version, apkUrl ?: RELEASES_PAGE)
     }
+
+    /** true, если в JSON на верхнем уровне поле [name] — true. */
+    private fun jsonFlag(body: String, name: String): Boolean =
+        Regex("\"""$name\"\\s*:\\s*true\""").containsMatchIn(body)
+
+    private fun jsonString(body: String, name: String): String? =
+        Regex("\"""$name\"\\s*:\\s*\"([^\"]*)\"\""").find(body)?.groupValues?.get(1)
 
     /** «1.2.10» → [1, 2, 10]; суффиксы и мусор не разбираются. */
     internal fun parseVersion(version: String): List<Int>? {

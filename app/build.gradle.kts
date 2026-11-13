@@ -30,25 +30,42 @@ android {
     }
 
     signingConfigs {
-        // Общий отладочный ключ (D-005): все отладочные сборки ставятся поверх
-        // друг друга, из какой бы сессии они ни пришли. Не секрет и не ключ
-        // выпуска.
+        // Общий отладочный ключ (D-005): отладочные сборки ставятся поверх друг друга.
         getByName("debug") {
             storeFile = file("debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // Ключ выпуска — только из окружения/секретов CI (не в репозитории).
+        // Локально: export KEYSTORE_FILE=... KEYSTORE_PASSWORD=... KEY_ALIAS=... KEY_PASSWORD=...
+        // CI: секреты KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD.
+        val releaseStore = System.getenv("KEYSTORE_FILE")
+        if (!releaseStore.isNullOrBlank()) {
+            create("release") {
+                storeFile = file(releaseStore)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                    ?: error("KEYSTORE_PASSWORD не задан")
+                keyAlias = System.getenv("KEY_ALIAS")
+                    ?: error("KEY_ALIAS не задан")
+                keyPassword = System.getenv("KEY_PASSWORD")
+                    ?: error("KEY_PASSWORD не задан")
+            }
+        }
     }
 
     buildTypes {
-        // Сборка выпуска (D-036, п. 2): со сжатием кода и ресурсов. Магазинов нет (D-026),
-        // поэтому подпись — тем же общим ключом, что у отладочных (D-005): ставится поверх них.
+        // Сборка выпуска (D-036, п. 2): minify. Подпись — ключ выпуска, если задан;
+        // иначе debug (локальные пробы). Workflow Release требует ключ выпуска.
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (signingConfigs.findByName("release") != null) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 

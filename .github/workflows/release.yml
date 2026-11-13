@@ -1,7 +1,7 @@
-# Выпуск (D-039): проверки, сборка APK выпуска и отладочного, выпуск GitHub с описанием
-# из docs/RELEASE_NOTES/<версия>.md и суммами SHA-256. Запускается, когда в любой ветке
-# появляется или меняется описание выпуска, по тегу `v<версия>` или вручную (вручную GitHub
-# запускает только процесс, который уже есть в main). Тег выпуска ставит сам процесс.
+# Выпуск (D-039): проверки, APK выпуска (ключ разработчика) и отладочный APK,
+# GitHub Release с описанием из docs/RELEASE_NOTES/<версия>.md и SHA-256.
+# Запуск: изменение docs/RELEASE_NOTES/**, тег v*, или workflow_dispatch.
+# Секреты (обязательны): KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD.
 name: Release
 
 on:
@@ -29,26 +29,52 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
+
       - name: Версия и описание
         id: version
         run: |
           VERSION="$(sed -n 's/^ *versionName = "\(.*\)"$/\1/p' app/build.gradle.kts)"
           NOTES="docs/RELEASE_NOTES/$VERSION.md"
-          # Тег должен называть ту версию, что в сборке; у версии должно быть описание.
           if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
             echo "✗ тег $GITHUB_REF_NAME, а версия в app/build.gradle.kts — $VERSION"; exit 1
           fi
           [ -f "$NOTES" ] || { echo "✗ нет описания выпуска $NOTES"; exit 1; }
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "notes=$NOTES" >> "$GITHUB_OUTPUT"
+
+      - name: Ключ подписи выпуска
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          missing=
+          [ -n "$KEYSTORE_BASE64" ] || missing="$missing KEYSTORE_BASE64"
+          [ -n "$KEYSTORE_PASSWORD" ] || missing="$missing KEYSTORE_PASSWORD"
+          [ -n "$KEY_ALIAS" ] || missing="$missing KEY_ALIAS"
+          [ -n "$KEY_PASSWORD" ] || missing="$missing KEY_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "✗ Нет обязательных секретов:$missing"
+            echo "  Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/dp-clock-release.jks"
+          echo "KEYSTORE_FILE=$RUNNER_TEMP/dp-clock-release.jks" >> "$GITHUB_ENV"
+          echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+
       - name: Android SDK
         run: tools/setup-android-sdk.sh
+
       - name: Тесты и Lint
         run: ./gradlew --console=plain :core:model:test :app:testDebugUnitTest :app:lintDebug
+
       - name: Сборка
         run: ./gradlew --console=plain :app:assembleRelease :app:assembleDebug
+
       - name: Файлы выпуска
-        id: files
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           mkdir -p build/release
@@ -59,8 +85,8 @@ jobs:
             echo
             echo "## Файлы"
             echo
-            echo "- \`dp-clock-$VERSION.apk\` — сборка выпуска: её и ставить."
-            echo "- \`dp-clock-$VERSION-debug.apk\` — отладочная, для разбора ошибок."
+            echo "- \`dp-clock-$VERSION.apk\` — сборка выпуска (ключ разработчика): её и ставить."
+            echo "- \`dp-clock-$VERSION-debug.apk\` — отладочная (debug.keystore)."
             echo
             echo "Собрано GitHub Actions из коммита \`$GITHUB_SHA\`. SHA-256:"
             echo
@@ -68,13 +94,13 @@ jobs:
             (cd build/release && sha256sum dp-clock-*.apk)
             echo '```'
           } >> build/release/notes.md
+
       - name: Выпуск GitHub
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           TAG="v$VERSION"
-          # Повторный запуск обновляет тот же выпуск, а не падает.
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" build/release/dp-clock-*.apk --clobber
             gh release edit "$TAG" --title "DP Clock $VERSION" --notes-file build/release/notes.md

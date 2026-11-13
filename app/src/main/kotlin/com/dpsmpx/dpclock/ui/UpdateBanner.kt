@@ -1,7 +1,7 @@
 package com.dpsmpx.dpclock.ui
 
 import android.content.Intent
-import android.net.Uri
+import androidx.core.net.toUri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -157,7 +157,7 @@ fun UpdateBannerHost(snackbar: SnackbarHostState? = null) {
                             if (downloading) return@TextButton
                             if (!info.url.endsWith(".apk")) {
                                 context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse(info.url))
+                                    Intent(Intent.ACTION_VIEW, info.url.toUri())
                                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                                 )
                                 return@TextButton
@@ -250,7 +250,7 @@ fun UpdateSettingsItems(snackbar: SnackbarHostState) {
             modifier = Modifier.clickable(enabled = !downloading) {
                 if (!update.url.endsWith(".apk")) {
                     context.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse(update.url))
+                        Intent(Intent.ACTION_VIEW, update.url.toUri())
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                     )
                     return@clickable

@@ -25,8 +25,8 @@ android {
         applicationId = "com.dpsmpx.dpclock"
         minSdk = 31
         targetSdk = 37
-        versionCode = 35
-        versionName = "0.28.1"
+        versionCode = 36
+        versionName = "0.28.2"
     }
 
     signingConfigs {

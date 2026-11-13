@@ -13,6 +13,7 @@ import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import androidx.core.content.edit
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -234,7 +235,7 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
                     },
                 )
             },
-            SettingsSection(R.string.settings_chimes, listOf(R.string.chimes, R.string.chimes_vibrate, R.string.chimes_count, R.string.chimes_quiet)) {
+            SettingsSection(R.string.settings_chimes, listOf(R.string.chimes, R.string.chimes_vibrate, R.string.chimes_count, R.string.chimes_quiet), advanced = true) {
                 val chimes = settings.chimes
                 fun updateChimes(change: (Chimes) -> Chimes) = update { it.copy(chimes = change(it.chimes)) }
                 ListItem(
@@ -284,7 +285,7 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
                     }
                 }
             },
-            SettingsSection(R.string.settings_calendar, listOf(R.string.calendar_exceptions, R.string.calendar_events, R.string.calendar_early, R.string.calendar_show_next)) {
+            SettingsSection(R.string.settings_calendar, listOf(R.string.calendar_exceptions, R.string.calendar_events, R.string.calendar_early, R.string.calendar_show_next), advanced = true) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.calendar_exceptions)) },
                     supportingContent = {
@@ -448,14 +449,20 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
                     modifier = Modifier.toggleable(value = settings.haptics, role = Role.Switch) { on -> update { it.copy(haptics = on) } },
                 )
             },
-            SettingsSection(R.string.settings_world, listOf(R.string.weather_title)) {
+            SettingsSection(R.string.settings_world, listOf(R.string.weather_title), advanced = true) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.weather_title)) },
                     supportingContent = { Text(weatherModeText(settings.weather.mode, settings.weather.place)) },
                     modifier = Modifier.clickable { weatherChoice.openOptions() },
                 )
             },
-            SettingsSection(R.string.settings_reliability, listOf(R.string.alarm_volume, R.string.journal, R.string.xiaomi_title)) {
+            SettingsSection(R.string.settings_reliability, listOf(R.string.check_title, R.string.help_title, R.string.alarm_volume, R.string.journal, R.string.vendor_setup)) {
+                // Самопроверка и справка (D-036, п. 4) — первой строкой.
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.check_title)) },
+                    supportingContent = { Text(stringResource(R.string.check_text)) },
+                    modifier = Modifier.clickable { dialog = "check" },
+                )
                 PermissionRow(Issue.NOTIFICATIONS, reliability.notifications)
                 PermissionRow(Issue.FULL_SCREEN, reliability.fullScreen)
                 PermissionRow(Issue.EXACT_ALARMS, reliability.exactAlarms)
@@ -475,10 +482,10 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
                     },
                 )
                 if (reliability.dndBlocksAlarms) PermissionRow(Issue.DND, granted = false)
-                if (reliability.isXiaomi) {
+                if (reliability.needsVendorSetup) {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        Text(stringResource(R.string.xiaomi_title), style = MaterialTheme.typography.titleMedium)
-                        Text(stringResource(R.string.xiaomi_hints), style = MaterialTheme.typography.bodyMedium)
+                        Text(reliability.vendor.brands, style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(vendorHints(reliability.vendor)), style = MaterialTheme.typography.bodyMedium)
                         Row {
                             FilledTonalButton(onClick = { context.openFix(Issue.XIAOMI) }) {
                                 Text(stringResource(R.string.open_app_settings))
@@ -495,13 +502,17 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
                     modifier = Modifier.clickable { dialog = "journal" },
                 )
             },
-            SettingsSection(R.string.settings_tasks, listOf(R.string.tasks_calendar, R.string.tasks_show_clock, R.string.tasks_show_after_alarm, R.string.tasks_show_widget)) {
+            SettingsSection(R.string.settings_tasks, listOf(R.string.tasks_calendar, R.string.tasks_show_clock, R.string.tasks_show_after_alarm, R.string.tasks_show_widget), advanced = true) {
                 TaskSettings()
             },
-            SettingsSection(R.string.settings_sync, listOf(R.string.sync_create, R.string.sync_choose, R.string.sync_now, R.string.sync_off)) {
+            // Уведомления и будильники на восходе и закате (D-035).
+            SettingsSection(R.string.settings_sun, listOf(R.string.sun_sunrise_signal, R.string.sun_sunset_signal, R.string.sun_place, R.string.sun_sound), advanced = true) {
+                SunSettings(settings) { change -> update(change) }
+            },
+            SettingsSection(R.string.settings_sync, listOf(R.string.sync_create, R.string.sync_choose, R.string.sync_now, R.string.sync_off), advanced = true) {
                 SyncSettings(snackbar)
             },
-            SettingsSection(R.string.settings_transfer, listOf(R.string.backup_save, R.string.backup_load)) {
+            SettingsSection(R.string.settings_transfer, listOf(R.string.backup_save, R.string.backup_load, R.string.auto_backup)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.backup_save)) },
                     supportingContent = { Text(stringResource(R.string.backup_save_text)) },
@@ -512,11 +523,22 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
                     supportingContent = { Text(stringResource(R.string.backup_load_text)) },
                     modifier = Modifier.clickable { backup.load() },
                 )
+                AutoBackupSettings()
             },
-            SettingsSection(R.string.about, listOf(R.string.licenses)) {
+            SettingsSection(R.string.about, listOf(R.string.crashes, R.string.app_license, R.string.licenses)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.app_name)) },
                     supportingContent = { Text(stringResource(R.string.version_value, BuildConfig.VERSION_NAME)) },
+                )
+                // Журнал сбоев (D-036): остаётся на телефоне, делится им человек сам.
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.crashes)) },
+                    supportingContent = { Text(stringResource(R.string.crashes_text)) },
+                    modifier = Modifier.clickable { dialog = "crashes" },
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.app_license)) },
+                    supportingContent = { Text(stringResource(R.string.app_license_text)) },
                 )
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.licenses)) },
@@ -622,6 +644,8 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
             },
         )
         "journal" -> JournalDialog(onDismiss = { dialog = null })
+        "crashes" -> CrashesDialog(onDismiss = { dialog = null })
+        "check" -> AlarmCheckDialog(onDismiss = { dialog = null })
         "defaultWarnings" -> WarningsDialog(
             title = stringResource(R.string.warnings_default),
             initial = settings.defaultWarnings,
@@ -765,14 +789,42 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
 
 /** Раздел настроек: заголовок — для TalkBack заголовок (D-022, п. 3), под ним строки. */
 /** Раздел настроек: название, пункты для поиска (D-029, п. 8) и содержимое. */
-private class SettingsSection(val title: Int, val keys: List<Int>, val content: @Composable () -> Unit)
+/**
+ * [advanced] — редкий раздел: на главном экране настроек он под строкой «Расширенные»
+ * (D-036, п. 3); поиск и ссылки из приложения находят его всегда.
+ */
+private class SettingsSection(val title: Int, val keys: List<Int>, val advanced: Boolean = false, val content: @Composable () -> Unit)
+
+/** «Расширенные» развёрнуты — запоминается на телефоне. */
+private const val UI_PREFS = "ui"
+private const val ADVANCED_SETTINGS = "advancedSettings"
 
 /** Главный экран настроек: разделы с первыми пунктами под названием. */
 @Composable
 private fun SectionList(sections: List<SettingsSection>, selected: Int?, onOpen: (Int) -> Unit, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences(UI_PREFS, Context.MODE_PRIVATE) }
+    var expanded by remember { mutableStateOf(prefs.getBoolean(ADVANCED_SETTINGS, false)) }
+    val advanced = sections.filter { it.advanced }
+    // Простой режим (D-036, п. 3): обычные разделы, строка «Расширенные», под ней — редкие, когда
+    // развёрнуто. Открытый расширенный раздел (широкое окно) виден и в свёрнутом виде.
+    val shown: List<SettingsSection?> =
+        sections.filter { !it.advanced } + listOf(null) + if (expanded) advanced else advanced.filter { it.title == selected }
     LazyColumn(modifier) {
-        items(sections.size) { index ->
-            val section = sections[index]
+        items(shown.size) { index ->
+            val section = shown[index]
+            if (section == null) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_advanced)) },
+                    supportingContent = { Text(advanced.map { stringResource(it.title) }.joinToString(", "), maxLines = 2) },
+                    trailingContent = { Icon(if (expanded) AppIcons.Up else AppIcons.ExpandMore, contentDescription = null) },
+                    modifier = Modifier.toggleable(value = expanded, role = Role.Switch) { on ->
+                        expanded = on
+                        prefs.edit { putBoolean(ADVANCED_SETTINGS, on) }
+                    },
+                )
+                return@items
+            }
             ListItem(
                 headlineContent = { Text(stringResource(section.title)) },
                 supportingContent = { Text(section.keys.take(3).map { stringResource(it) }.joinToString(", "), maxLines = 2) },

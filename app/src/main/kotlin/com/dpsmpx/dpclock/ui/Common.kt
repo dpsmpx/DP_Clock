@@ -6,6 +6,10 @@ import android.app.NotificationManager
 import android.media.AudioManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
+import android.os.PowerManager
+import com.dpsmpx.dpclock.platform.PhoneVendor
 import android.content.pm.PackageManager
 import android.content.res.Resources
 import android.os.Build
@@ -107,13 +111,22 @@ data class Reliability(
     val notifications: Boolean,
     val fullScreen: Boolean,
     val exactAlarms: Boolean,
-    val isXiaomi: Boolean,
+    /** Оболочка с жёсткими фоновыми ограничениями: Xiaomi, Samsung, Huawei… (D-036, п. 4). */
+    val vendor: PhoneVendor,
     /** Громкость потока будильника и её предел. */
     val alarmVolume: Int,
     val alarmVolumeMax: Int,
     /** «Не беспокоить» сейчас не пропускает будильники. */
     val dndBlocksAlarms: Boolean,
+    /** Заряд, %; null — неизвестен. */
+    val batteryPercent: Int? = null,
+    val charging: Boolean = false,
+    /** Приложение исключено из экономии батареи Android. */
+    val batteryUnrestricted: Boolean = false,
 ) {
+    /** Телефону нужны подсказки про автозапуск и батарею. */
+    val needsVendorSetup: Boolean get() = vendor != PhoneVendor.OTHER
+
     val volumeOff: Boolean get() = alarmVolume == 0
     val volumeLow: Boolean get() = !volumeOff && alarmVolume * 5 <= alarmVolumeMax
 
@@ -124,22 +137,32 @@ data class Reliability(
         if (volumeOff) add(Issue.VOLUME_OFF)
         if (volumeLow) add(Issue.VOLUME_LOW)
         if (dndBlocksAlarms) add(Issue.DND)
-        if (isXiaomi && !xiaomiHintsDone) add(Issue.XIAOMI)
+        if (needsVendorSetup && !xiaomiHintsDone) add(Issue.XIAOMI)
     }
 
     companion object {
         fun read(context: Context): Reliability {
             val notifications = context.getSystemService(NotificationManager::class.java)
             val audio = context.getSystemService(AudioManager::class.java)
+            // Заряд — из последнего системного сообщения о батарее; приёмник не нужен.
+            val battery = runCatching { context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) }.getOrNull()
             return Reliability(
                 notifications = notifications.areNotificationsEnabled(),
                 fullScreen = Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE || notifications.canUseFullScreenIntent(),
                 exactAlarms = context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms(),
-                isXiaomi = Build.MANUFACTURER.equals("xiaomi", ignoreCase = true) ||
-                    Build.BRAND.lowercase() in setOf("xiaomi", "redmi", "poco"),
+                vendor = PhoneVendor.of(Build.MANUFACTURER.orEmpty(), Build.BRAND.orEmpty()),
                 alarmVolume = audio.getStreamVolume(AudioManager.STREAM_ALARM),
                 alarmVolumeMax = audio.getStreamMaxVolume(AudioManager.STREAM_ALARM),
                 dndBlocksAlarms = dndBlocksAlarms(notifications),
+                batteryPercent = battery?.let { state ->
+                    val level = state.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+                    val scale = state.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+                    if (level >= 0 && scale > 0) level * 100 / scale else null
+                },
+                charging = (battery?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0,
+                batteryUnrestricted = runCatching {
+                    context.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(context.packageName)
+                }.getOrDefault(false),
             )
         }
 
@@ -152,6 +175,16 @@ data class Reliability(
             }
         }.getOrDefault(false)
     }
+}
+
+/** Что настроить на телефоне этого производителя, чтобы будильник не усыпили. */
+fun vendorHints(vendor: PhoneVendor): Int = when (vendor) {
+    PhoneVendor.XIAOMI -> R.string.xiaomi_hints
+    PhoneVendor.SAMSUNG -> R.string.vendor_samsung_hints
+    PhoneVendor.HUAWEI -> R.string.vendor_huawei_hints
+    PhoneVendor.OPPO -> R.string.vendor_oppo_hints
+    PhoneVendor.VIVO -> R.string.vendor_vivo_hints
+    PhoneVendor.OTHER -> R.string.vendor_other_hints
 }
 
 /** Состояние надёжности; перечитывается при возврате на экран и раз в 2 с, пока экран открыт: громкость меняют и кнопками. */

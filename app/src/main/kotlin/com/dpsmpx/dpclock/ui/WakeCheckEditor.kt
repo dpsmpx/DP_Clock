@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
@@ -49,7 +48,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.dpsmpx.dpclock.R
-import com.dpsmpx.dpclock.model.PhotoSignature
 import com.dpsmpx.dpclock.model.WakeCheck
 import com.dpsmpx.dpclock.model.WakeLevel
 import com.dpsmpx.dpclock.model.WakeMethod
@@ -81,7 +79,7 @@ fun WakeCheckEditor(initial: WakeCheck, onDismiss: () -> Unit, onDone: (WakeChec
 
     fun choose(method: WakeMethod) {
         noCamera = false
-        val camera = method == WakeMethod.QR || method == WakeMethod.PHOTO
+        val camera = method == WakeMethod.QR
         if (camera && !context.hasCamera()) {
             pendingMethod = method
             cameraPermission.launch(Manifest.permission.CAMERA)
@@ -147,25 +145,21 @@ fun WakeCheckEditor(initial: WakeCheck, onDismiss: () -> Unit, onDone: (WakeChec
                             TextButton(enabled = check.tasks < WakeCheck.MAX_TASKS, onClick = { check = check.copy(tasks = check.tasks + 1) }) { Text("+") }
                         }
                     }
-                    if (check.method == WakeMethod.QR || check.method == WakeMethod.PHOTO) {
+                    if (check.method == WakeMethod.QR) {
                         ListItem(
                             headlineContent = {
-                                Text(stringResource(if (check.method == WakeMethod.QR) R.string.wake_reference_code else R.string.wake_reference_photo))
+                                Text(stringResource(R.string.wake_reference_code))
                             },
                             supportingContent = {
                                 Text(
-                                    when {
-                                        check.reference.isEmpty() -> stringResource(R.string.wake_reference_missing)
-                                        check.method == WakeMethod.QR -> check.reference
-                                        else -> stringResource(R.string.wake_reference_photo_ready)
-                                    },
+                                    check.reference.ifEmpty { stringResource(R.string.wake_reference_missing) },
                                     maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             },
                             trailingContent = {
                                 FilledTonalButton(onClick = { capture = true }) {
-                                    Text(stringResource(if (check.method == WakeMethod.QR) R.string.wake_scan else R.string.wake_take))
+                                    Text(stringResource(R.string.wake_scan))
                                 }
                             },
                         )
@@ -206,7 +200,6 @@ fun WakeCheckEditor(initial: WakeCheck, onDismiss: () -> Unit, onDone: (WakeChec
 
     if (capture) {
         ReferenceCapture(
-            method = check.method,
             onDismiss = { capture = false },
             onCaptured = { reference ->
                 capture = false
@@ -223,18 +216,16 @@ fun WakeCheckEditor(initial: WakeCheck, onDismiss: () -> Unit, onDone: (WakeChec
     }
 }
 
-/** Снять образец: QR-код — первый найденный; снимок — по кнопке, если в кадре есть детали. */
+/** Снять образец: первый найденный QR-код или штрихкод. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ReferenceCapture(method: WakeMethod, onDismiss: () -> Unit, onCaptured: (String) -> Unit) {
-    var latest by remember { mutableStateOf<IntArray?>(null) }
+private fun ReferenceCapture(onDismiss: () -> Unit, onCaptured: (String) -> Unit) {
     var failed by remember { mutableStateOf(false) }
-    var flat by remember { mutableStateOf(false) }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { TitleText(stringResource(if (method == WakeMethod.QR) R.string.wake_reference_code else R.string.wake_reference_photo)) },
+                    title = { TitleText(stringResource(R.string.wake_reference_code)) },
                     navigationIcon = {
                         IconButton(onClick = onDismiss) { Icon(AppIcons.Close, contentDescription = stringResource(R.string.cancel)) }
                     },
@@ -246,29 +237,15 @@ private fun ReferenceCapture(method: WakeMethod, onDismiss: () -> Unit, onCaptur
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(stringResource(if (method == WakeMethod.QR) R.string.wake_reference_code_hint else R.string.wake_reference_photo_hint))
+                Text(stringResource(R.string.wake_reference_code_hint))
                 if (failed) {
                     Text(stringResource(R.string.wake_camera_failed), color = MaterialTheme.colorScheme.error)
                 } else {
                     CameraScanner(
-                        mode = if (method == WakeMethod.QR) CameraMode.CODE else CameraMode.PHOTO,
-                        onResult = { found ->
-                            when (found) {
-                                is CameraResult.Code -> onCaptured(found.text)
-                                is CameraResult.Signature -> latest = found.value
-                            }
-                        },
+                        onCode = onCaptured,
                         onError = { failed = true },
                         modifier = Modifier.fillMaxWidth().aspectRatio(3f / 4f),
                     )
-                }
-                if (flat) Text(stringResource(R.string.wake_reference_flat), color = MaterialTheme.colorScheme.error)
-                if (method == WakeMethod.PHOTO) {
-                    Button(enabled = latest != null, onClick = {
-                        val signature = latest ?: return@Button
-                        if (PhotoSignature.detail(signature) < PhotoSignature.MIN_DETAIL) flat = true
-                        else onCaptured(PhotoSignature.encode(signature))
-                    }) { Text(stringResource(R.string.wake_take)) }
                 }
             }
         }
@@ -281,7 +258,6 @@ private fun methodTitle(method: WakeMethod): Int = when (method) {
     WakeMethod.CODE -> R.string.wake_code
     WakeMethod.SHAKE -> R.string.wake_shake_title
     WakeMethod.QR -> R.string.wake_qr
-    WakeMethod.PHOTO -> R.string.wake_photo
 }
 
 private fun methodText(method: WakeMethod): Int = when (method) {
@@ -290,7 +266,6 @@ private fun methodText(method: WakeMethod): Int = when (method) {
     WakeMethod.CODE -> R.string.wake_code_text
     WakeMethod.SHAKE -> R.string.wake_shake_text
     WakeMethod.QR -> R.string.wake_qr_text
-    WakeMethod.PHOTO -> R.string.wake_photo_text
 }
 
 private fun levelTitle(method: WakeMethod, level: WakeLevel): Int = when (method) {

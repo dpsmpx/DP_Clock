@@ -42,6 +42,9 @@ data class AlarmTemplate(val id: String, val name: String, val alarms: List<Alar
             "am" to alarm.after.reminderMinutes.toString(),
             "aa" to alarm.after.app,
             "wn" to Warnings.encode(alarm.warnings),
+            "k" to if (alarm.key) "1" else "0",
+            "se" to (alarm.sun?.event?.name ?: ""),
+            "so" to (alarm.sun?.offsetMinutes ?: 0).toString(),
         ).joinToString("&") { (k, v) -> k + "=" + URLEncoder.encode(v, "UTF-8") }
     }
 
@@ -70,8 +73,8 @@ data class AlarmTemplate(val id: String, val name: String, val alarms: List<Alar
                     rampSeconds = f["ra"]?.toIntOrNull() ?: 0,
                     snoozeMinutes = f["sn"]?.toIntOrNull(),
                     honorExceptions = f["ex"] != "0",
-                    wakeCheck = WakeCheck(
-                        method = WakeMethod.entries.firstOrNull { it.name == f["w"] } ?: WakeMethod.NONE,
+                    wakeCheck = WakeCheck.stored(
+                        method = f["w"].orEmpty(),
                         level = WakeLevel.entries.firstOrNull { it.name == f["wl"] } ?: WakeLevel.MEDIUM,
                         tasks = f["wt"]?.toIntOrNull()?.coerceIn(1, WakeCheck.MAX_TASKS) ?: 1,
                         reference = f["wr"].orEmpty(),
@@ -86,6 +89,9 @@ data class AlarmTemplate(val id: String, val name: String, val alarms: List<Alar
                         app = f["aa"].orEmpty(),
                     ),
                     warnings = Warnings.decode(f["wn"].orEmpty()),
+                    key = f["k"] == "1",
+                    sun = SunEvent.entries.firstOrNull { it.name == f["se"] }
+                        ?.let { SunTime(it, (f["so"]?.toIntOrNull() ?: 0).coerceIn(-SunTime.MAX_OFFSET, SunTime.MAX_OFFSET)) },
                 )
             }
         }

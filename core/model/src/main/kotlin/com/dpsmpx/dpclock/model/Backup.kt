@@ -231,8 +231,11 @@ object BackupFormat {
     private fun alarm(alarm: Alarm, blueprint: Boolean): Map<String, Any?> {
         val out = linkedMapOf<String, Any?>()
         if (!blueprint) out["id"] = alarm.id
-        out["hour"] = alarm.hour
-        out["minute"] = alarm.minute
+        // У времени по солнцу час и минута — у каждого телефона свои и меняются каждый день:
+        // в файл и синхронизацию идёт условное время, настоящее телефон посчитает сам (D-038).
+        val sunTime = alarm.sun?.takeIf { SunAlarmRules.applies(alarm) }?.nominal
+        out["hour"] = sunTime?.hour ?: alarm.hour
+        out["minute"] = sunTime?.minute ?: alarm.minute
         out["repeat"] = repeat(alarm.repeat)
         if (!blueprint) {
             out["enabled"] = alarm.enabled
@@ -264,6 +267,8 @@ object BackupFormat {
             mapOf("presetId" to it.presetId, "reminder" to it.reminder, "reminderMinutes" to it.reminderMinutes, "app" to it.app)
         }
         out["warnings"] = alarm.warnings
+        out["key"] = alarm.key
+        alarm.sun?.let { out["sun"] = mapOf("event" to it.event.name, "offsetMinutes" to it.offsetMinutes) }
         return out
     }
 
@@ -342,6 +347,7 @@ object BackupFormat {
                 "dnd" to it.dnd,
             )
         },
+        "sun" to settings.sun.toMap(),
         "signalStyle" to settings.signalStyle.name,
         "volumeButtons" to settings.volumeButtons.name,
         "holidaysRu" to settings.holidaysRu,
@@ -398,8 +404,8 @@ object BackupFormat {
             honorExceptions = o.bool("honorExceptions", true),
             groupId = if (blueprint) null else o.stringOrNull("groupId"),
             wakeCheck = wake?.let {
-                WakeCheck(
-                    method = it.enum("method", WakeMethod.NONE),
+                WakeCheck.stored(
+                    method = it.string("method", WakeMethod.NONE.name),
                     level = it.enum("level", WakeLevel.MEDIUM),
                     tasks = it.int("tasks", 1).coerceIn(1, WakeCheck.MAX_TASKS),
                     reference = it.string("reference", ""),
@@ -417,6 +423,8 @@ object BackupFormat {
                 )
             } ?: AfterAlarm(),
             warnings = Warnings.normalize(o.list("warnings").map { (it as? Long)?.toInt() ?: 0 }),
+            key = o.bool("key", false),
+            sun = o.obj("sun")?.let { SunTime(it.enum("event", SunEvent.SUNRISE), it.int("offsetMinutes", 0).coerceIn(-SunTime.MAX_OFFSET, SunTime.MAX_OFFSET)) },
         )
     }
 
@@ -510,6 +518,7 @@ object BackupFormat {
                     dnd = it.bool("dnd", base.dnd),
                 )
             } ?: defaults.pomodoro,
+            sun = (o.raw["sun"] as? Map<*, *>)?.let(SunSignals::fromMap) ?: defaults.sun,
             signalStyle = o.enum("signalStyle", defaults.signalStyle),
             volumeButtons = o.enum("volumeButtons", defaults.volumeButtons),
             holidaysRu = o.bool("holidaysRu", defaults.holidaysRu),

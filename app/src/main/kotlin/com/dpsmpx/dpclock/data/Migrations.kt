@@ -244,3 +244,27 @@ val MIGRATION_17_18 = SqlMigration(
         "CREATE INDEX IF NOT EXISTS `index_task_mark_taskId` ON `task_mark` (`taskId`)",
     ),
 )
+
+/** 0.22.0 (D-035): сигналы на восходе и закате — выключены. */
+val MIGRATION_18_19 = SqlMigration(
+    18,
+    19,
+    listOf("ALTER TABLE `settings` ADD COLUMN `sun` TEXT NOT NULL DEFAULT ''"),
+)
+
+/** 0.25.0 (D-037): ключевые будильники — пока ни одного. */
+val MIGRATION_19_20 = SqlMigration(
+    19,
+    20,
+    listOf("ALTER TABLE `alarm` ADD COLUMN `keyAlarm` INTEGER NOT NULL DEFAULT 0"),
+)
+
+/** 0.28.0 (D-038): время будильника по солнцу — у прежних будильников по часам. */
+val MIGRATION_20_21 = SqlMigration(
+    20,
+    21,
+    listOf(
+        "ALTER TABLE `alarm` ADD COLUMN `sunEvent` TEXT",
+        "ALTER TABLE `alarm` ADD COLUMN `sunOffset` INTEGER NOT NULL DEFAULT 0",
+    ),
+)

@@ -155,6 +155,11 @@
             android:name=".platform.SyncJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- Резервная копия по расписанию (D-036). -->
+        <service
+            android:name=".platform.AutoBackupJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <!-- Виджеты (D-020). -->
         <receiver

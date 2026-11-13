@@ -34,6 +34,8 @@ data class Settings(
     val chimes: Chimes = Chimes(),
     /** Последние настройки помидора (D-025, п. 1). */
     val pomodoro: Pomodoro = Pomodoro(),
+    /** Уведомления и будильники на восходе и закате (D-035). */
+    val sun: SunSignals = SunSignals(),
 ) {
     companion object {
         const val DEFAULT_SNOOZE = 10

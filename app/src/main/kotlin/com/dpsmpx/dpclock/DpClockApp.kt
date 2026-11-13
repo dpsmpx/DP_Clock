@@ -7,9 +7,12 @@ import androidx.camera.core.CameraXConfig
 import com.dpsmpx.dpclock.data.CalendarStore
 import com.dpsmpx.dpclock.data.ClockDatabase
 import com.dpsmpx.dpclock.data.ClockRepository
+import com.dpsmpx.dpclock.data.SunStore
 import com.dpsmpx.dpclock.data.WeatherStore
+import com.dpsmpx.dpclock.platform.AutoBackup
 import com.dpsmpx.dpclock.platform.Clocks
 import com.dpsmpx.dpclock.platform.CloudSync
+import com.dpsmpx.dpclock.platform.Crashes
 import com.dpsmpx.dpclock.platform.Notifier
 import com.dpsmpx.dpclock.platform.Scheduler
 import com.dpsmpx.dpclock.platform.Surfaces
@@ -33,7 +36,10 @@ class AppGraph(context: Context) {
 
     /** Календарь телефона (D-023): выбор календарей и даты исключений. */
     val calendar = CalendarStore(context)
-    val repository: ClockRepository = ClockRepository(context, ClockDatabase.open(context), scheduler, notifier, calendar) {
+
+    /** Место для восхода и заката (D-035): последняя геолокация телефона. */
+    val sun = SunStore(context)
+    val repository: ClockRepository = ClockRepository(context, ClockDatabase.open(context), scheduler, notifier, calendar, sun) {
         Surfaces.changed(context)
         cloud.changed()
     }
@@ -44,6 +50,9 @@ class AppGraph(context: Context) {
     /** Задачи Google и показ задач (D-032); свои задачи — в [repository]. */
     val tasks: TaskStore by lazy { TaskStore(context, notifier, repository) }
 
+    /** Резервная копия по расписанию (D-036, п. 4). */
+    val autoBackup: AutoBackup by lazy { AutoBackup(context, repository) }
+
     /** Погода нужна только экрану «Мировые часы» (D-019). */
     val weather by lazy { WeatherStore(context, repository) }
 }
@@ -51,6 +60,8 @@ class AppGraph(context: Context) {
 class DpClockApp : Application(), CameraXConfig.Provider {
     override fun onCreate() {
         super.onCreate()
+        // Первым делом: сбой при запуске тоже попадает в журнал (D-036).
+        Crashes.install(this)
         Clocks.init(this)
         graph(this).notifier.createChannels()
     }

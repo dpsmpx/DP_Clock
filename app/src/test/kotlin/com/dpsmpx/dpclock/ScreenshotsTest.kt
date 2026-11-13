@@ -36,6 +36,7 @@ import com.dpsmpx.dpclock.ui.AppIcons
 import com.dpsmpx.dpclock.ui.FullScreenTime
 import com.dpsmpx.dpclock.ui.NewAlarmDialog
 import com.dpsmpx.dpclock.ui.OnboardingContent
+import com.dpsmpx.dpclock.ui.AlarmCheckDialog
 import com.dpsmpx.dpclock.ui.SettingsScreen
 import com.dpsmpx.dpclock.ui.SyncConflictsDialog
 import com.dpsmpx.dpclock.ui.TaskEditor
@@ -57,6 +58,14 @@ import org.robolectric.shadows.ShadowAlarmManager
 import org.robolectric.shadows.ShadowChoreographer
 import org.robolectric.shadows.ShadowDialog
 import org.robolectric.shadows.ShadowNotificationManager
+import com.dpsmpx.dpclock.model.SunMoment
+import com.dpsmpx.dpclock.model.SunSignal
+import com.dpsmpx.dpclock.model.SunSignalKind
+import com.dpsmpx.dpclock.model.SunSignals
+import com.dpsmpx.dpclock.model.Exceptions
+import com.dpsmpx.dpclock.model.SunEvent
+import com.dpsmpx.dpclock.model.SunTime
+import com.dpsmpx.dpclock.ui.AlarmEditor
 import java.io.File
 import java.time.DayOfWeek
 import java.time.Duration
@@ -137,6 +146,8 @@ class ScreenshotsTest {
             for (ago in listOf(30 * day, 19 * day)) repository.addMark("p3", now - ago)
         }
         shoot("tasks-permanent") { DpClockTheme { TasksScreen(SnackbarHostState(), initialTab = 1) } }
+        // Доска — за настройкой (D-036).
+        DpClockApp.graph(app).tasks.preview(TaskPrefs(advanced = true))
         shoot("tasks-board") { DpClockTheme { TasksScreen(SnackbarHostState(), initialTab = 2) } }
         shoot("tasks-editor-permanent") { DpClockTheme { TaskEditor(flowers, today, onDismiss = {}) } }
         runBlocking { (own + permanent).forEach { repository.deleteTask(it.id) } }
@@ -158,6 +169,44 @@ class ScreenshotsTest {
         shoot("settings") { DpClockTheme { SettingsScreen(onBack = {}) } }
         shoot("settings-appearance") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_appearance) } }
         shoot("settings-sync") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_sync) } }
+    }
+
+    /** Редактор будильника со временем по солнцу (D-038). */
+    @Test
+    fun alarmBySun() {
+        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
+        DpClockApp.graph(app).sun.setLocation("Москва", 55.7558, 37.6173, System.currentTimeMillis())
+        val alarm = Alarm("s", 18, 0, Repeat.Weekly(DayOfWeek.entries.take(5).toSet()), enabled = true, createdAt = 1L, label = "Закат", sun = SunTime(SunEvent.SUNSET, -10), key = true)
+        shoot("alarm-editor-sun") {
+            DpClockTheme { AlarmEditor(alarm, Settings(), emptyList(), Exceptions.NONE, onDismiss = {}, onSave = {}, onDelete = {}) }
+        }
+    }
+
+    /** Самопроверка «прозвонит ли будильник» (D-036, п. 4). */
+    @Test
+    fun alarmCheck() {
+        seed()
+        // Строка «Будильник в Android» на снимке — «проблема»: `getNextAlarmClock()` у Robolectric
+        // отдаёт не самый ранний будильник. На телефоне Android отдаёт ближайший.
+        shoot("alarm-check") { DpClockTheme { AlarmCheckDialog(onDismiss = {}) } }
+    }
+
+    /** Восход и закат (D-035): место по геолокации, времена на сегодня, сигналы и мелодия будильника. */
+    @Test
+    fun sun() {
+        shadowOf(app).grantPermissions(Manifest.permission.ACCESS_COARSE_LOCATION)
+        DpClockApp.graph(app).sun.setLocation("Москва", 55.7558, 37.6173, System.currentTimeMillis())
+        runBlocking {
+            DpClockApp.graph(app).repository.updateSettings {
+                it.copy(
+                    sun = SunSignals(
+                        sunrise = SunSignal(enabled = true, moments = listOf(SunMoment(5), SunMoment(0, SunSignalKind.ALARM))),
+                        sunset = SunSignal(enabled = true),
+                    ),
+                )
+            }
+        }
+        shoot("settings-sun") { DpClockTheme { SettingsScreen(onBack = {}, initialSection = R.string.settings_sun) } }
     }
 
     /** Синхронизация (D-030): окно расхождений с будильником и настройками. */
@@ -204,7 +253,8 @@ class ScreenshotsTest {
         val workdays = DayOfWeek.entries.take(5).toSet()
         repository.addAlarm(7, 0)
         val first = repository.surfaceData().alarms.first()
-        repository.saveAlarm(first.copy(label = "Подъём", repeat = Repeat.Weekly(workdays)))
+        // Ключевой (D-037): выделен в списке.
+        repository.saveAlarm(first.copy(label = "Подъём", repeat = Repeat.Weekly(workdays), key = true))
         repository.addAlarm(9, 30)
         val second = repository.surfaceData().alarms.first { it.hour == 9 }
         repository.saveAlarm(second.copy(label = "Выходные", repeat = Repeat.Weekly(setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)), enabled = false))

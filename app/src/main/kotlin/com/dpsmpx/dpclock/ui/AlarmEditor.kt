@@ -62,6 +62,10 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
+import android.content.Context
+import com.dpsmpx.dpclock.model.SunTime
+import com.dpsmpx.dpclock.model.SunEvent
+import com.dpsmpx.dpclock.model.SunAlarmRules
 import com.dpsmpx.dpclock.model.Alarm
 import com.dpsmpx.dpclock.model.AlarmGroup
 import com.dpsmpx.dpclock.model.AlarmRules
@@ -137,6 +141,12 @@ fun AlarmEditor(
     var cycleDays by remember { mutableStateOf(initialCycle?.days ?: emptyList()) }
     var rules by remember { mutableStateOf(alarm.repeat as? Repeat.Rules) }
     var warnings by remember { mutableStateOf(alarm.warnings) }
+    var key by rememberSaveable { mutableStateOf(alarm.key) }
+    // Время по солнцу (D-038): на восходе или закате со сдвигом — для места телефона.
+    var sun by remember { mutableStateOf(alarm.sun) }
+    val sunSettings by DpClockApp.graph(context).repository.settings.collectAsStateWithLifecycle(Settings())
+    val sunLocation by DpClockApp.graph(context).sun.location.collectAsStateWithLifecycle()
+    val sunPlace = remember(sunLocation, sunSettings.weather) { DpClockApp.graph(context).sun.place(sunSettings) }
     var label by rememberSaveable { mutableStateOf(alarm.label) }
     var sound by remember { mutableStateOf(alarm.sound) }
     var vibrate by rememberSaveable { mutableStateOf(alarm.vibrate) }
@@ -164,8 +174,13 @@ fun AlarmEditor(
             ?.let { Repeat.Cycle(LocalDate.ofEpochDay(anchorDay), it) }
         RepeatMode.RULES -> rules
     }
+    // У графика и правил время — у каждого дня своё: по солнцу они не ходят.
+    val activeSun = sun.takeIf { mode != RepeatMode.CYCLE && mode != RepeatMode.RULES }
     val draft = repeat?.let { r ->
-        val base = AlarmRules.normalized(alarm.copy(hour = hour, minute = minute, repeat = r)).copy(
+        // Час и минуту будильника по солнцу приложение посчитает, когда поставит его; здесь — условные.
+        val base = AlarmRules.normalized(
+            alarm.copy(hour = activeSun?.nominal?.hour ?: hour, minute = activeSun?.nominal?.minute ?: minute, repeat = r, sun = activeSun),
+        ).copy(
             label = label.trim(),
             sound = sound,
             vibrate = vibrate,
@@ -178,14 +193,25 @@ fun AlarmEditor(
             gentleMinutes = gentleMinutes,
             after = after,
             warnings = warnings,
+            key = key,
             skipTime = null,
         )
         val now = Instant.now()
         // Пропуск — ближайшее срабатывание по новым правилам (D-013, п. 3); у сложного повтора — и его время (D-025).
-        val skipAt = if (skipNext && r.isRepeating) AlarmRules.nextIgnoringSkip(base, now, zone, exceptions) else null
+        val skipAt = when {
+            !skipNext || !r.isRepeating -> null
+            // По солнцу ближайшее срабатывание — для места телефона, а не по условному времени.
+            activeSun != null && sunPlace != null -> SunAlarmRules.next(base, sunPlace.latitude, sunPlace.longitude, now, zone, exceptions)
+            else -> AlarmRules.nextIgnoringSkip(base, now, zone, exceptions)
+        }
         if (skipAt != null) AlarmRules.skipping(base, skipAt, zone) else base
     }
-    val next = draft?.let { AlarmRules.nextTrigger(it, Instant.now(), zone, exceptions) }
+    val sunNext = if (draft != null && activeSun != null && sunPlace != null) {
+        SunAlarmRules.next(draft, sunPlace.latitude, sunPlace.longitude, Instant.now(), zone, exceptions)
+    } else {
+        null
+    }
+    val next = if (activeSun != null && sunPlace != null) sunNext else draft?.let { AlarmRules.nextTrigger(it, Instant.now(), zone, exceptions) }
 
     val body: @Composable () -> Unit = {
         Scaffold(
@@ -216,8 +242,41 @@ fun AlarmEditor(
             ) {
                 // У графика и правил время — у каждого дня или правила своё.
                 if (mode != RepeatMode.CYCLE && mode != RepeatMode.RULES) {
-                    TextButton(onClick = { dialog = "time" }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                        FitText(TimeText.time(context, hour, minute), style = MaterialTheme.typography.displayLarge)
+                    if (activeSun == null) {
+                        TextButton(onClick = { dialog = "time" }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                            FitText(TimeText.time(context, hour, minute), style = MaterialTheme.typography.displayLarge)
+                        }
+                    } else {
+                        // Время ближайшего срабатывания по солнцу; место неизвестно — условное.
+                        FitText(
+                            if (sunNext != null) TimeText.time(context, sunNext.toEpochMilli()) else TimeText.time(context, activeSun.nominal.hour, activeSun.nominal.minute),
+                            style = MaterialTheme.typography.displayLarge,
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                        )
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                        FilterChip(selected = sun == null, onClick = { sun = null }, label = { Text(stringResource(R.string.alarm_time_clock)) })
+                        for (event in SunEvent.entries) {
+                            FilterChip(
+                                selected = sun?.event == event,
+                                onClick = { sun = SunTime(event, sun?.offsetMinutes ?: 0) },
+                                label = { Text(stringResource(if (event == SunEvent.SUNRISE) R.string.alarm_time_sunrise else R.string.alarm_time_sunset)) },
+                            )
+                        }
+                    }
+                    if (activeSun != null) {
+                        ChoiceStepper(
+                            stringResource(R.string.alarm_sun_offset),
+                            SunTime.OFFSET_CHOICES,
+                            SunTime.OFFSET_CHOICES.minBy { kotlin.math.abs(it - activeSun.offsetMinutes) },
+                            text = { sunOffsetText(context, it) },
+                        ) { sun = activeSun.copy(offsetMinutes = it) }
+                        Text(
+                            if (sunPlace == null) stringResource(R.string.alarm_sun_no_place)
+                            else stringResource(R.string.alarm_sun_place, sunPlace.name.ifBlank { stringResource(R.string.alarm_sun_place_here) }),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (sunPlace == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
                 OutlinedTextField(
@@ -288,7 +347,8 @@ fun AlarmEditor(
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (repeat != null && next == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (draft != null && draft.repeat.isRepeating && next != null) {
+                // У времени по солнцу следующие срабатывания — каждый день свои: списка нет.
+                if (draft != null && draft.repeat.isRepeating && next != null && activeSun == null) {
                     // У сложного повтора срабатываний в день бывает несколько — показать больше.
                     val upcoming = AlarmRules.upcoming(draft, Instant.now(), zone, exceptions, if (draft.repeat is Repeat.Rules) 6 else 4)
                     Text(
@@ -311,6 +371,8 @@ fun AlarmEditor(
                     )
                 }
 
+                // Ключевой будильник (D-037): по нему — «Пора ложиться»; в списке выделен.
+                SwitchRow(stringResource(R.string.alarm_key), key, stringResource(R.string.alarm_key_text)) { key = it }
                 // Предупреждения до сигнала (D-025, п. 5) — на виду: их ставят часто.
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.warnings)) },
@@ -650,3 +712,15 @@ fun rampText(seconds: Int): String = when {
 @Composable
 private fun snoozeText(minutes: Int?, common: Int): String =
     if (minutes == null) stringResource(R.string.snooze_common, common) else stringResource(R.string.minutes_value, minutes)
+
+/** «за 10 мин до», «в момент», «через 10 мин после» — сдвиг времени по солнцу (D-038). */
+fun sunOffsetText(context: Context, minutes: Int): String = when {
+    minutes == 0 -> context.getString(R.string.alarm_sun_offset_none)
+    minutes < 0 -> context.getString(R.string.alarm_sun_offset_before, leadText(context, -minutes))
+    else -> context.getString(R.string.alarm_sun_offset_after, leadText(context, minutes))
+}
+
+/** «На восходе · за 10 мин до» — пометка в строке будильника. */
+fun sunTimeText(context: Context, sun: SunTime): String =
+    context.getString(if (sun.event == SunEvent.SUNRISE) R.string.alarm_time_sunrise else R.string.alarm_time_sunset) +
+        if (sun.offsetMinutes == 0) "" else " · " + sunOffsetText(context, sun.offsetMinutes)

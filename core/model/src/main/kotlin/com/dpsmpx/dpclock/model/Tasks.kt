@@ -356,6 +356,11 @@ data class TaskPrefs(
     val showAfterAlarm: Boolean = true,
     val showWidget: Boolean = true,
     val notifiedOn: LocalDate? = null,
+    /**
+     * Доска, сложность, срочность и добавление подзадач (D-036, п. 3): по умолчанию
+     * спрятаны. Данные не трогаются: уже созданные подзадачи видны всегда.
+     */
+    val advanced: Boolean = false,
 ) {
     companion object {
         fun encode(prefs: TaskPrefs): String = Json.write(
@@ -364,6 +369,7 @@ data class TaskPrefs(
                 "showAfterAlarm" to prefs.showAfterAlarm,
                 "showWidget" to prefs.showWidget,
                 "notifiedOn" to prefs.notifiedOn?.toString(),
+                "advanced" to prefs.advanced,
             ),
         )
 
@@ -375,6 +381,7 @@ data class TaskPrefs(
                 showAfterAlarm = root["showAfterAlarm"] as? Boolean ?: true,
                 showWidget = root["showWidget"] as? Boolean ?: true,
                 notifiedOn = (root["notifiedOn"] as? String)?.let { LocalDate.parse(it) },
+                advanced = root["advanced"] as? Boolean ?: false,
             )
         }.getOrDefault(TaskPrefs())
     }

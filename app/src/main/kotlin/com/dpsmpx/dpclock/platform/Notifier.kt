@@ -15,7 +15,9 @@ import com.dpsmpx.dpclock.Section
 import com.dpsmpx.dpclock.model.Alarm
 import com.dpsmpx.dpclock.model.DayTask
 import com.dpsmpx.dpclock.model.Moment
+import com.dpsmpx.dpclock.data.SunPlace
 import com.dpsmpx.dpclock.model.Stopwatch
+import com.dpsmpx.dpclock.model.SunFire
 import com.dpsmpx.dpclock.model.StopwatchState
 import com.dpsmpx.dpclock.model.Task
 import com.dpsmpx.dpclock.model.TaskStats
@@ -23,6 +25,7 @@ import com.dpsmpx.dpclock.model.TimerRun
 import com.dpsmpx.dpclock.model.TimerState
 import com.dpsmpx.dpclock.ui.elapsedText
 import com.dpsmpx.dpclock.ui.leadText
+import com.dpsmpx.dpclock.ui.sunTitle
 
 /** Уведомления (SCREEN_MAP.md, п. 11). */
 class Notifier(private val context: Context) {
@@ -47,6 +50,8 @@ class Notifier(private val context: Context) {
                 NotificationChannel(CHANNEL_TASK_REMINDERS, text(R.string.channel_task_reminders), NotificationManager.IMPORTANCE_HIGH),
                 // Постоянные задачи (D-033; выбор автора — мягко, без звука).
                 NotificationChannel(CHANNEL_TASK_NUDGES, text(R.string.channel_task_nudges), NotificationManager.IMPORTANCE_LOW),
+                // Восход и закат (D-035): уведомление со звуком канала; будильник звонит каналом сигнала.
+                NotificationChannel(CHANNEL_SUN, text(R.string.channel_sun), NotificationManager.IMPORTANCE_DEFAULT),
             ),
         )
     }
@@ -101,6 +106,10 @@ class Notifier(private val context: Context) {
                 .setContentTitle(text(R.string.recheck_title))
                 .setContentText(alarmTitle(item.label) + " · " + TimeText.time(context, item.hour, item.minute))
                 .addAction(action(text(R.string.recheck_awake), ringAction(RingService.ACTION_RECHECK_OK, item.alarmId)))
+            is SunRing -> builder
+                .setContentTitle(sunTitle(context, item.event, item.minutes))
+                .setContentText(TimeText.time(context, item.eventAt))
+                .addAction(action(text(R.string.dismiss), ringAction(RingService.ACTION_SUN_STOP, item.event.name)))
             is RingItem.TimerRing -> builder
                 .setContentTitle(timerTitle(item.name))
                 .setContentText(text(if (item.finished) R.string.ring_timer_finished else R.string.ring_step_finished))
@@ -201,6 +210,28 @@ class Notifier(private val context: Context) {
             .build(),
         tag = "missed:${alarm.id}",
     )
+
+    // Восход и закат (D-035)
+
+    /**
+     * «Восход через 5 мин» или «Восход»: время события и место. Заранее — с обратным
+     * отсчётом; уведомление «в момент» заменяет прежнее и исчезает само через час.
+     */
+    fun sun(fire: SunFire, place: SunPlace) {
+        val eventAt = fire.eventAt.toEpochMilli()
+        val builder = Notification.Builder(context, CHANNEL_SUN)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setCategory(Notification.CATEGORY_REMINDER)
+            .setContentTitle(sunTitle(context, fire.event, fire.minutes))
+            .setContentText(listOf(TimeText.time(context, eventAt), place.name).filter { it.isNotBlank() }.joinToString(" · "))
+            .setContentIntent(openApp(Section.CLOCK))
+            .setWhen(eventAt)
+            .setShowWhen(true)
+            .setAutoCancel(true)
+            .setTimeoutAfter((eventAt - System.currentTimeMillis()).coerceAtLeast(0L) + SUN_TIMEOUT_MILLIS)
+        if (fire.minutes > 0) builder.setUsesChronometer(true).setChronometerCountDown(true)
+        show(ID_SUN, builder.build(), tag = "sun:${fire.event.name}")
+    }
 
     // Синхронизация (D-030)
 
@@ -494,6 +525,11 @@ class Notifier(private val context: Context) {
         private const val ID_TASK = 9
         private const val CHANNEL_TASK_REMINDERS = "task-reminders"
         private const val CHANNEL_TASK_NUDGES = "task-nudges"
+        private const val ID_SUN = 10
+        private const val CHANNEL_SUN = "sun"
+
+        /** Уведомление о восходе или закате живёт час после события. */
+        private const val SUN_TIMEOUT_MILLIS = 3_600_000L
         private const val STOPWATCH_REQUEST = 100
         private const val TASK_LINES = 5
         private const val CHANNEL_WARNING = "warning"

@@ -80,7 +80,6 @@ abstract class SceneRenderer {
             ClockBackground.POLAR_CLOCK -> PolarClockScene()
             ClockBackground.HOURGLASS -> HourglassScene()
             ClockBackground.MECHANISM -> MechanismScene()
-            ClockBackground.DIGIT_RAIN -> DigitRainScene()
             else -> null
         }
     }
@@ -496,106 +495,5 @@ private class MechanismScene : SceneRenderer() {
             if (k == 0) spiral.moveTo(px, py) else spiral.lineTo(px, py)
         }
         canvas.drawPath(spiral, stroke)
-    }
-}
-
-/**
- * «Дождь цифр» (D-024, п. 8): падают цифры; посередине они задерживаются и
- * складываются в настоящее время; в начале минуты рассыпаются и собираются снова.
- */
-private class DigitRainScene : SceneRenderer() {
-    override val usesTilt = false
-    private var columns = 0
-    private var rows = 0
-    private var cell = 0f
-    private var heads = FloatArray(0)
-    private var speeds = FloatArray(0)
-    private var lengths = FloatArray(0)
-    private var glyphs = CharArray(0)
-    private var mask = BooleanArray(0)
-    private var maskFor = ""
-    private var order = FloatArray(0)
-    private val random = Random(17)
-    private var last = -1f
-
-    override fun draw(canvas: Canvas, width: Int, height: Int, t: Float, now: Long, input: SceneInput, palette: ScenePalette) {
-        canvas.drawColor(palette.background)
-        if (width == 0 || height == 0) return
-        val size = min(width, height) / 22f
-        if (size != cell) {
-            cell = size
-            columns = (width / cell).toInt().coerceAtLeast(1)
-            rows = (height / cell).toInt().coerceAtLeast(1)
-            heads = FloatArray(columns) { random.nextFloat() * rows }
-            speeds = FloatArray(columns) { 4f + random.nextFloat() * 8f }
-            lengths = FloatArray(columns) { 6f + random.nextFloat() * 12f }
-            glyphs = CharArray(columns * rows) { ('0' + random.nextInt(10)) }
-            order = FloatArray(columns * rows) { random.nextFloat() }
-            maskFor = ""
-        }
-        val time = local(now)
-        val hour = if (input.is24Hour) time.hour else (time.hour + 11) % 12 + 1
-        val label = String.format(Locale.ROOT, if (input.is24Hour) "%02d:%02d" else "%d:%02d", hour, time.minute)
-        if (label != maskFor) {
-            mask = maskOf(label)
-            maskFor = label
-        }
-        val dt = if (last < 0) 0f else (t - last).coerceIn(0f, 0.1f)
-        last = t
-        // Первые 2 с минуты время рассыпается, следующие 3 — собирается.
-        val second = time.second + time.nano / 1e9f
-        val shown = when {
-            second < 2f -> 1 - second / 2f
-            second < 5f -> (second - 2f) / 3f
-            else -> 1f
-        }
-        text.textSize = cell * 0.9f
-        text.typeface = Typeface.MONOSPACE
-        for (c in 0 until columns) {
-            heads[c] += speeds[c] * dt
-            if (heads[c] - lengths[c] > rows) {
-                heads[c] = -random.nextFloat() * rows * 0.5f
-                speeds[c] = 4f + random.nextFloat() * 8f
-            }
-            if (random.nextFloat() < 0.05f) glyphs[c * rows + random.nextInt(rows)] = '0' + random.nextInt(10)
-            val x = c * cell + cell / 2
-            for (r in 0 until rows) {
-                val index = c * rows + r
-                val inTime = mask[index] && order[index] < shown
-                val behind = heads[c] - r
-                val y = r * cell + cell * 0.85f
-                when {
-                    inTime -> {
-                        text.color = palette.tint(mix(palette.accent, WHITE, 0.7f), 1f)
-                        canvas.drawText(glyphs[index].toString(), x, y, text)
-                    }
-                    behind >= 0 && behind < lengths[c] -> {
-                        val fade = 1 - behind / lengths[c]
-                        text.color = if (behind < 1) palette.tint(WHITE, 0.9f) else palette.tint(palette.accent, 0.15f + 0.6f * fade)
-                        canvas.drawText(glyphs[index].toString(), x, y, text)
-                    }
-                }
-            }
-        }
-    }
-
-    /** Клетки, на которые падает время: текст рисуется в маленькую картинку размером с сетку. */
-    private fun maskOf(label: String): BooleanArray {
-        val bitmap = createBitmap(columns, rows, Bitmap.Config.ALPHA_8)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            textAlign = Paint.Align.CENTER
-            typeface = Typeface.DEFAULT_BOLD
-            textSize = rows.toFloat()
-        }
-        // Размер — во всю ширину с полями.
-        paint.textSize = paint.textSize * (columns * 0.86f / paint.measureText(label)).coerceAtMost(1f)
-        Canvas(bitmap).drawText(label, columns / 2f, rows / 2f + paint.textSize * 0.36f, paint)
-        val result = BooleanArray(columns * rows) { index ->
-            val c = index / rows
-            val r = index % rows
-            (bitmap[c, r] ushr 24) > 110
-        }
-        bitmap.recycle()
-        return result
     }
 }

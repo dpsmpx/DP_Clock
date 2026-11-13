@@ -28,6 +28,9 @@ import com.dpsmpx.dpclock.model.SignalSource
 import com.dpsmpx.dpclock.model.SignalStyle
 import com.dpsmpx.dpclock.model.Stopwatch
 import com.dpsmpx.dpclock.model.StopwatchState
+import com.dpsmpx.dpclock.model.SunEvent
+import com.dpsmpx.dpclock.model.SunSignals
+import com.dpsmpx.dpclock.model.SunTime
 import com.dpsmpx.dpclock.model.Task
 import com.dpsmpx.dpclock.model.TaskLevel
 import com.dpsmpx.dpclock.model.TaskMark
@@ -75,8 +78,8 @@ fun AlarmEntity.toModel() = Alarm(
     skipTime = skipTime?.takeIf { it in 0 until 24 * 60 }?.let { LocalTime.of(it / 60, it % 60) },
     honorExceptions = honorExceptions,
     groupId = groupId,
-    wakeCheck = WakeCheck(
-        method = enumOr(wakeMethod, WakeMethod.NONE),
+    wakeCheck = WakeCheck.stored(
+        method = wakeMethod,
         level = enumOr(wakeLevel, WakeLevel.MEDIUM),
         tasks = wakeTasks.coerceIn(1, WakeCheck.MAX_TASKS),
         reference = wakeReference,
@@ -87,6 +90,8 @@ fun AlarmEntity.toModel() = Alarm(
     after = AfterAlarm(afterPresetId, afterReminder, afterReminderMinutes.coerceAtLeast(0), afterApp),
     calendarEventAt = calendarEventAt,
     warnings = Warnings.decode(warnings),
+    key = keyAlarm,
+    sun = SunEvent.entries.firstOrNull { it.name == sunEvent }?.let { SunTime(it, sunOffset.coerceIn(-SunTime.MAX_OFFSET, SunTime.MAX_OFFSET)) },
 )
 
 fun Alarm.toEntity() = AlarmEntity(
@@ -124,6 +129,9 @@ fun Alarm.toEntity() = AlarmEntity(
     repeatRules = (repeat as? Repeat.Rules)?.let(RulesCode::encode),
     skipTime = skipTime?.let { it.hour * 60 + it.minute },
     warnings = Warnings.encode(warnings),
+    keyAlarm = key,
+    sunEvent = sun?.event?.name,
+    sunOffset = sun?.offsetMinutes ?: 0,
 )
 
 fun GroupEntity.toModel() = AlarmGroup(id, name, createdAt)
@@ -275,6 +283,7 @@ fun SettingsEntity?.toModel(): Settings = if (this == null) Settings() else Sett
     warningSound = warningSound,
     chimes = Chimes.decode(chimes),
     pomodoro = Pomodoro.decode(pomodoro),
+    sun = SunSignals.decode(sun),
 )
 
 fun Settings.toEntity() = SettingsEntity(
@@ -312,6 +321,7 @@ fun Settings.toEntity() = SettingsEntity(
     warningSound = warningSound,
     chimes = chimes.encode(),
     pomodoro = pomodoro.encode(),
+    sun = sun.encode(),
 )
 
 /** Неизвестное значение (например, из копии новой версии) — значение по умолчанию. */

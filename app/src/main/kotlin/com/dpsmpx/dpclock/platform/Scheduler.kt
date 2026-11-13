@@ -89,6 +89,31 @@ class Scheduler(private val context: Context) {
             .putExtra(AlarmReceiver.EXTRA_SCHEDULED_AT, at),
     )
 
+    /**
+     * Сигнал восхода или заката в [at] (D-035); один на приложение — следующий ставится,
+     * когда придёт этот. [alarm] — среди сигналов есть будильник: он ставится как
+     * будильник, `setAlarmClock()`, и не откладывается режимом сна телефона.
+     */
+    fun setSun(at: Long, alarm: Boolean) {
+        val operation = sunIntent(at)
+        alarmManager.cancel(operation)
+        if (alarm && canScheduleExact()) {
+            val show = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+            alarmManager.setAlarmClock(AlarmManager.AlarmClockInfo(at, show), operation)
+        } else {
+            setExact(at, operation)
+        }
+    }
+
+    fun cancelSun() = alarmManager.cancel(sunIntent(0L))
+
+    private fun sunIntent(at: Long): PendingIntent = broadcast(
+        Intent(context, AlarmReceiver::class.java)
+            .setAction(AlarmReceiver.ACTION_SUN)
+            .setData("dpclock://sun".toUri())
+            .putExtra(AlarmReceiver.EXTRA_SCHEDULED_AT, at),
+    )
+
     /** Мягкое пробуждение (D-017, п. 3): в [at] — свет и тихий звук до будильника в [alarmAt]. */
     fun setGentle(alarmId: String, at: Long, alarmAt: Long) = setExact(at, gentleIntent(alarmId, alarmAt))
 

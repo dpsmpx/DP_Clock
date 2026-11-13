@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dpsmpx.dpclock.DpClockApp
 import com.dpsmpx.dpclock.R
+import com.dpsmpx.dpclock.model.SunAlarmRules
 import com.dpsmpx.dpclock.QuickAction
 import com.dpsmpx.dpclock.QuickRequest
 import com.dpsmpx.dpclock.model.Alarm
@@ -283,12 +284,14 @@ fun AlarmsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(vertical = 8.dp),
                     )
-                    // Время сна включено и будильник скоро — сколько выйдет сна (D-017, п. 2).
-                    if (nearest != null && settings.bedtime.mode != BedtimeMode.OFF && nearest.toEpochMilli() - now <= SLEEP_HINT_MILLIS) {
+                    // Время сна включено и будильник скоро — сколько выйдет сна (D-017, п. 2);
+                    // при ключевых будильниках — до ближайшего ключевого (D-037).
+                    val wake = AlarmRules.nearest(AlarmRules.forSleep(list), nowInstant, zone, exceptions)
+                    if (wake != null && settings.bedtime.mode != BedtimeMode.OFF && wake.toEpochMilli() - now <= SLEEP_HINT_MILLIS) {
                         Text(
                             stringResource(
                                 R.string.sleep_if_now,
-                                durationText(resources, SleepRules.sleepIfNow(nowInstant, nearest)),
+                                durationText(resources, SleepRules.sleepIfNow(nowInstant, wake)),
                                 sleepText(settings.bedtime.sleepMinutes),
                             ),
                             style = MaterialTheme.typography.bodyMedium,
@@ -673,7 +676,12 @@ private fun AlarmRow(
     Surface(
         shape = MaterialTheme.shapes.large,
         color = if (alarm.enabled) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-        border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+        // Ключевой будильник (D-037) — тонкая рамка цвета приложения и звезда у названия.
+        border = when {
+            isSelected -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+            alarm.key -> BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = if (alarm.enabled) 0.7f else 0.35f))
+            else -> null
+        },
         modifier = Modifier
             .fillMaxWidth()
             // Долгое касание — меню: копировать, удалить (D-029, п. 4).
@@ -704,7 +712,20 @@ private fun AlarmRow(
         }
         Row(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                if (alarm.label.isNotBlank()) {
+                if (alarm.key) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(AppIcons.Star, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                        Text(
+                            // TalkBack читает «Ключевой» вместе со строкой.
+                            if (alarm.label.isBlank()) stringResource(R.string.alarm_key_mark) else alarm.label + " · " + stringResource(R.string.alarm_key_mark),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 4.dp),
+                        )
+                    }
+                } else if (alarm.label.isNotBlank()) {
                     Text(alarm.label, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 // У сменного графика и сложного повтора времён несколько — крупно время ближайшего.
@@ -749,6 +770,8 @@ private fun AlarmRow(
                         )
                     }
                 }
+                // Время по солнцу (D-038): крупно — время ближайшего срабатывания.
+                alarm.sun?.takeIf { SunAlarmRules.applies(alarm) }?.let { Note(sunTimeText(context, it)) }
                 // Поставил календарь (D-023, п. 3): изменить — станет обычным, удалить — в этот день не вернётся.
                 if (alarm.calendarEventAt != null) Note(stringResource(R.string.calendar_alarm_note))
                 val skipDate = alarm.skipDate

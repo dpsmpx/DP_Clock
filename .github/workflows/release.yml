@@ -1,0 +1,84 @@
+# Выпуск (D-039): проверки, сборка APK выпуска и отладочного, выпуск GitHub с описанием
+# из docs/RELEASE_NOTES/<версия>.md и суммами SHA-256. Запускается, когда в любой ветке
+# появляется или меняется описание выпуска, по тегу `v<версия>` или вручную (вручную GitHub
+# запускает только процесс, который уже есть в main). Тег выпуска ставит сам процесс.
+name: Release
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+    paths: ['docs/RELEASE_NOTES/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Версия и описание
+        id: version
+        run: |
+          VERSION="$(sed -n 's/^ *versionName = "\(.*\)"$/\1/p' app/build.gradle.kts)"
+          NOTES="docs/RELEASE_NOTES/$VERSION.md"
+          # Тег должен называть ту версию, что в сборке; у версии должно быть описание.
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            echo "✗ тег $GITHUB_REF_NAME, а версия в app/build.gradle.kts — $VERSION"; exit 1
+          fi
+          [ -f "$NOTES" ] || { echo "✗ нет описания выпуска $NOTES"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "notes=$NOTES" >> "$GITHUB_OUTPUT"
+      - name: Android SDK
+        run: tools/setup-android-sdk.sh
+      - name: Тесты и Lint
+        run: ./gradlew --console=plain :core:model:test :app:testDebugUnitTest :app:lintDebug
+      - name: Сборка
+        run: ./gradlew --console=plain :app:assembleRelease :app:assembleDebug
+      - name: Файлы выпуска
+        id: files
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p build/release
+          cp app/build/outputs/apk/release/app-release.apk "build/release/dp-clock-$VERSION.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "build/release/dp-clock-$VERSION-debug.apk"
+          cp "${{ steps.version.outputs.notes }}" build/release/notes.md
+          {
+            echo
+            echo "## Файлы"
+            echo
+            echo "- \`dp-clock-$VERSION.apk\` — сборка выпуска: её и ставить."
+            echo "- \`dp-clock-$VERSION-debug.apk\` — отладочная, для разбора ошибок."
+            echo
+            echo "Собрано GitHub Actions из коммита \`$GITHUB_SHA\`. SHA-256:"
+            echo
+            echo '```'
+            (cd build/release && sha256sum dp-clock-*.apk)
+            echo '```'
+          } >> build/release/notes.md
+      - name: Выпуск GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v$VERSION"
+          # Повторный запуск обновляет тот же выпуск, а не падает.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" build/release/dp-clock-*.apk --clobber
+            gh release edit "$TAG" --title "DP Clock $VERSION" --notes-file build/release/notes.md
+          else
+            gh release create "$TAG" build/release/dp-clock-*.apk \
+              --target "$GITHUB_SHA" --title "DP Clock $VERSION" --notes-file build/release/notes.md
+          fi

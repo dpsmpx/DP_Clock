@@ -148,9 +148,8 @@
     <string name="issue_full_screen_text">A ringing alarm will not appear over the lock screen.</string>
     <string name="issue_exact">Exact alarms are off</string>
     <string name="issue_exact_text">Alarms may ring late.</string>
-    <string name="issue_xiaomi">Set up your Xiaomi phone</string>
+    <string name="issue_xiaomi">Set up autostart and battery</string>
     <string name="issue_xiaomi_text">Autostart and battery settings may stop alarms.</string>
-    <string name="xiaomi_title">Xiaomi, Redmi, POCO</string>
     <string name="xiaomi_hints">In the app settings: turn on Autostart; set Battery saver to No restrictions; in Recents, lock DP Clock.</string>
     <string name="xiaomi_done">I did it</string>
     <string name="xiaomi_not_done">Show the reminder again</string>
@@ -252,27 +251,21 @@
     <string name="wake_wrong">Wrong — here is a new one</string>
     <string name="wake_shake">Shake the phone</string>
     <string name="wake_scan_code">Point the camera at your code</string>
-    <string name="wake_scan_place">Point the camera at the place from the sample</string>
     <string name="wake_other_code">This is a different code</string>
     <string name="wake_check">Wake-up check</string>
     <string name="wake_no_camera">Without camera access this method is unavailable.</string>
     <string name="wake_level">Persistence</string>
     <string name="wake_tasks">Tasks in a row</string>
     <string name="wake_reference_code">Sample code</string>
-    <string name="wake_reference_photo">Sample photo</string>
     <string name="wake_reference_missing">Not taken yet</string>
-    <string name="wake_reference_photo_ready">Taken. Only a 16×16 grid of brightness is kept, not the photo.</string>
     <string name="wake_scan">Scan</string>
-    <string name="wake_take">Take</string>
     <string name="wake_snooze_free">Snooze without the check</string>
     <string name="recheck">Are-you-awake re-check</string>
     <string name="recheck_text">A few minutes after you dismiss the alarm. No answer within a minute — the alarm rings again.</string>
     <string name="recheck_in">re-check: %1$d min</string>
     <string name="wake_try">Try it</string>
     <string name="wake_reference_code_hint">Point the camera at a QR code or a barcode — for example, one printed and stuck in the kitchen.</string>
-    <string name="wake_reference_photo_hint">Point the camera at a place you will have to walk to, with details and in good light, and tap Take.</string>
     <string name="wake_camera_failed">The camera did not open.</string>
-    <string name="wake_reference_flat">Too plain: choose a place with more detail.</string>
     <string name="wake_none">None</string>
     <string name="wake_none_text">Dismiss with one tap</string>
     <string name="wake_math">Example</string>
@@ -283,8 +276,6 @@
     <string name="wake_shake_text">Shake the phone a number of times</string>
     <string name="wake_qr">QR code or barcode</string>
     <string name="wake_qr_text">Scan your code: put it where you have to walk to</string>
-    <string name="wake_photo">Photo of a place</string>
-    <string name="wake_photo_text">Aim the camera at the place from the sample</string>
     <string name="wake_shakes_easy">20 times</string>
     <string name="wake_shakes_medium">40 times</string>
     <string name="wake_shakes_hard">70 times</string>
@@ -639,7 +630,6 @@
     <string name="background_polar_clock">Polar clock — rings of time</string>
     <string name="background_hourglass">Hourglass — sand pours over an hour</string>
     <string name="background_mechanism">Clock mechanism — gears and balance</string>
-    <string name="background_digit_rain">Digit rain — digits gather into the time</string>
     <string name="app_background_text">Everywhere: bright in Clock, barely visible behind lists, dim red in the night clock</string>
     <string name="app_background">App background</string>
     <string name="wallpaper">Live wallpaper</string>
@@ -996,4 +986,143 @@
         <item quantity="one">%1$d mo</item>
         <item quantity="other">%1$d mo</item>
     </plurals>
+
+    <!-- Sunrise and sunset (D-035) -->
+    <string name="settings_sun">Sunrise and sunset</string>
+    <string name="channel_sun">Sunrise and sunset</string>
+    <string name="sun_sunrise">Sunrise</string>
+    <string name="sun_sunset">Sunset</string>
+    <string name="sun_in">%1$s in %2$s</string>
+    <string name="sun_sunrise_signal">Signal at sunrise</string>
+    <string name="sun_sunset_signal">Signal at sunset</string>
+    <string name="sun_signal_off">Off</string>
+    <string name="sun_moment_before_sunrise">%1$s before sunrise</string>
+    <string name="sun_moment_before_sunset">%1$s before sunset</string>
+    <string name="sun_moment_at_sunrise">At sunrise</string>
+    <string name="sun_moment_at_sunset">At sunset</string>
+    <string name="sun_at_moment">at the moment</string>
+    <string name="sun_kind_notification">Notification</string>
+    <string name="sun_kind_notification_text">with the notification sound, no alarm screen</string>
+    <string name="sun_kind_alarm">Alarm</string>
+    <string name="sun_kind_alarm_text">rings until you dismiss it or it stops by itself</string>
+    <string name="sun_add">Add a signal</string>
+    <string name="sun_add_minutes">Minutes before the event</string>
+    <string name="sun_add_hint">0 means at the moment; 720 (12 hours) at most</string>
+    <string name="sun_remove">Remove the signal</string>
+    <string name="sun_place">Place</string>
+    <string name="sun_place_location">%1$s · by location</string>
+    <string name="sun_place_location_unnamed">By location</string>
+    <string name="sun_place_weather">%1$s · weather city</string>
+    <string name="sun_place_zone">%1$s · by time zone</string>
+    <string name="sun_place_unknown">Place unknown</string>
+    <string name="sun_place_allow">Tap and allow location: the times will be for where you are</string>
+    <string name="sun_place_refresh">Tap to refresh</string>
+    <string name="sun_today">Today</string>
+    <string name="sun_sunrise_at">Sunrise %1$s</string>
+    <string name="sun_sunset_at">Sunset %1$s</string>
+    <string name="sun_no_sunrise">No sunrise</string>
+    <string name="sun_no_sunset">No sunset</string>
+    <string name="sun_next">Next signal</string>
+    <string name="sun_next_none">Not expected: the sun neither rises nor sets</string>
+    <string name="sun_sound">Sunrise and sunset alarm sound</string>
+    <string name="sun_vibrate">Sunrise and sunset alarm vibration</string>
+    <string name="sun_hint">The place is your approximate location; it is refreshed while the app is open and stays on the phone. Times are for a flat horizon, accurate to about a minute. After a trip, open the app and the signals move to the new place.</string>
+
+    <!-- Crash log (D-036) -->
+    <string name="crashes">Crash log</string>
+    <string name="crashes_text">App errors; kept on the phone</string>
+    <string name="crashes_empty">No crashes so far.</string>
+    <string name="crashes_hint">The last 20 crashes, newest first: time, version, phone and the place in the code. The log is not sent anywhere; you can share it.</string>
+    <string name="crashes_share">Share the crash log</string>
+    <string name="crashes_clear">Clear</string>
+
+    <!-- Tasks: board, difficulty, subtasks behind a setting (D-036) -->
+    <string name="tasks_advanced">Board, difficulty, urgency and subtasks</string>
+    <string name="tasks_advanced_text">The “Board” tab, task ratings and “Add a subtask”</string>
+
+    <!-- Simple settings mode (D-036) -->
+    <string name="settings_advanced">Advanced</string>
+
+    <!-- Key alarms (D-037) -->
+    <string name="alarm_key">Key alarm</string>
+    <string name="alarm_key_text">Must not be missed: “Time for bed” follows key alarms, and it stands out in the list</string>
+    <string name="alarm_key_mark">key</string>
+
+    <!-- Self-check and help (D-036) -->
+    <string name="vendor_setup">Autostart and battery</string>
+    <string name="vendor_samsung_hints">In the app settings: set Battery to Unrestricted. In Device care → Battery → Background usage limits, remove DP Clock from sleeping apps and add it to Never sleeping apps.</string>
+    <string name="vendor_huawei_hints">Settings → Battery → App launch: turn off Manage automatically for DP Clock and turn on all three switches: auto-launch, secondary launch, run in background. In Recents, lock DP Clock.</string>
+    <string name="vendor_oppo_hints">In the app settings: turn on Auto-launch; under Battery usage allow background activity without limits. In Recents, lock DP Clock.</string>
+    <string name="vendor_vivo_hints">In the app settings: turn on Autostart; under Battery → High background power consumption allow DP Clock. In Recents, lock DP Clock.</string>
+    <string name="vendor_other_hints">Android battery saving does not stop alarms. If signals still come late, exclude DP Clock from battery optimisation.</string>
+    <string name="check_title">Will the alarm ring</string>
+    <string name="check_text">Self-check, and what to do if it did not ring</string>
+    <string name="check_verdict_ok">All good: the alarm will ring.</string>
+    <string name="check_verdict_warnings">The alarm will ring, but there are remarks: %1$d.</string>
+    <string name="check_verdict_problems">The alarm may not ring. Problems: %1$d.</string>
+    <string name="check_status_ok">OK</string>
+    <string name="check_status_warning">Remark</string>
+    <string name="check_status_problem">Problem</string>
+    <string name="check_alarm">Next alarm</string>
+    <string name="check_alarm_key">Next key alarm</string>
+    <string name="check_signal">Signal</string>
+    <string name="check_signal_none">No sound and no vibration: nobody will notice it</string>
+    <string name="check_signal_vibration">No sound, vibration only</string>
+    <string name="check_signal_sound">Sound, no vibration</string>
+    <string name="check_signal_sound_vibration">Sound and vibration</string>
+    <string name="check_scheduled">The alarm in Android</string>
+    <string name="check_scheduled_ok">Set: Android will wake the app on time</string>
+    <string name="check_scheduled_missing">Android does not know about it; this happens after the app is force-stopped</string>
+    <string name="check_allowed">Allowed</string>
+    <string name="check_battery">Battery</string>
+    <string name="check_battery_ok">%1$d%%</string>
+    <string name="check_battery_charging">%1$d%%, charging</string>
+    <string name="check_battery_low">%1$d%% and the phone is not charging: it may not last until morning</string>
+    <string name="check_battery_saving">Battery saving</string>
+    <string name="check_vendor">%1$s phone</string>
+    <string name="check_vendor_done">Autostart and battery are marked as set up</string>
+    <string name="check_open">Open</string>
+    <string name="check_journal">Past signals</string>
+    <string name="check_journal_ok">Alarm signals in 30 days: %1$d, all on time</string>
+    <string name="check_journal_bad">Alarm signals in 30 days: %1$d; late: %2$d; missed: %3$d. See the signal log for details</string>
+    <string name="help_title">If the alarm did not ring</string>
+    <string name="help_q_killed">The phone killed the app</string>
+    <string name="help_a_killed">Xiaomi, Samsung, Huawei, OPPO and vivo close background apps. Turn on autostart, remove battery restrictions and lock DP Clock in Recents, as the line about your phone above says. The Force stop button in the app settings cancels all alarms until DP Clock is opened again.</string>
+    <string name="help_q_silent">It rang but I did not hear it</string>
+    <string name="help_a_silent">The alarm plays at the alarm volume, not the media volume: check it above. Do Not Disturb may block alarms. The alarm itself may be set to silent or to a quiet sound with a slow ramp. Headphones and Bluetooth speakers do not take the alarm sound, but check this on your phone.</string>
+    <string name="help_q_late">It rang late</string>
+    <string name="help_a_late">Without the exact alarms permission Android delays the signal. On Android 12 you grant it in settings; from Android 13 it is granted at install. Delays are visible in the signal log.</string>
+    <string name="help_q_reboot">The phone was rebooted or switched off</string>
+    <string name="help_a_reboot">After a reboot the alarms are set again even before the phone is unlocked. If the phone was off at the alarm time, a signal that is more than 10 minutes late does not ring: you get a Missed alarm notification.</string>
+    <string name="help_q_skipped">The alarm was on but stayed silent that day</string>
+    <string name="help_a_skipped">Check the alarm row: a skipped next occurrence, Do not ring on exceptions (holidays, your own dates, calendar events), a shift schedule or repeat rules. Turn on the full date in the alarm settings to see when it will actually ring.</string>
+    <string name="help_q_report">Nothing helped</string>
+    <string name="help_a_report">Open the signal log and the crash log in settings and share them with the developer: they show when the signal was expected, when it sounded and what went wrong.</string>
+
+    <!-- Scheduled backup (D-036) -->
+    <string name="auto_backup">Scheduled backup</string>
+    <string name="auto_backup_off">Off</string>
+    <string name="auto_backup_daily">Once a day</string>
+    <string name="auto_backup_weekly">Once a week</string>
+    <string name="auto_backup_folder">Backup folder</string>
+    <string name="auto_backup_no_folder">Not chosen. Tap to choose: without a folder nothing is saved</string>
+    <string name="auto_backup_failed">The last backup could not be written. Tap and choose the folder again</string>
+    <string name="auto_backup_last">Last backup: %1$s. Copies kept: %2$d</string>
+    <string name="auto_backup_pending">No backups yet</string>
+
+    <!-- Alarm time by the sun (D-038) -->
+    <string name="alarm_time_clock">By the clock</string>
+    <string name="alarm_time_sunrise">At sunrise</string>
+    <string name="alarm_time_sunset">At sunset</string>
+    <string name="alarm_sun_offset">Shift</string>
+    <string name="alarm_sun_offset_none">at the moment</string>
+    <string name="alarm_sun_offset_before">%1$s before</string>
+    <string name="alarm_sun_offset_after">%1$s after</string>
+    <string name="alarm_sun_place">Place: %1$s. The time is recalculated every day; the place is set under Sunrise and sunset in settings</string>
+    <string name="alarm_sun_place_here">by location</string>
+    <string name="alarm_sun_no_place">Place unknown: the alarm will ring at a nominal time. Allow location under Sunrise and sunset in settings</string>
+
+    <!-- App license (D-039) -->
+    <string name="app_license">License</string>
+    <string name="app_license_text">DP Clock is free software under the GNU General Public License version 3. There is no warranty. Source code: github.com/dpsmpx/DP_Clock</string>
 </resources>

@@ -45,7 +45,7 @@ class BackupTest {
                 label = "Работа \"рано\"\nстрока", sound = AlarmSound.Builtin("dawn"), vibrate = false, rampSeconds = 60,
                 snoozeMinutes = 5, skipDate = LocalDate.of(2026, 10, 30), honorExceptions = false, groupId = "g1",
                 wakeCheck = WakeCheck(WakeMethod.QR, WakeLevel.HARD, tasks = 3, reference = "КОД-42", snoozeAllowed = false, recheckMinutes = 5),
-                gentleMinutes = 20, after = AfterAlarm("p1", "Таблетки", 15, "org.example.app"),
+                gentleMinutes = 20, after = AfterAlarm("p1", "Таблетки", 15, "org.example.app"), key = true,
             ),
             Alarm("a3", 9, 15, Repeat.OnDate(LocalDate.of(2026, 12, 31)), enabled = true, createdAt = 3L, sound = AlarmSound.Silent),
             Alarm(
@@ -54,6 +54,8 @@ class BackupTest {
             ),
             Alarm("a5", 7, 45, Repeat.Workdays, enabled = true, createdAt = 5L, sound = AlarmSound.File("content://files/x.mp3", "Свой файл")),
             Alarm("a6", 9, 0, rules, enabled = true, createdAt = 6L, skipDate = LocalDate.of(2026, 11, 2), skipTime = LocalTime.of(9, 30), warnings = listOf(1440, 45, 5)),
+            // Время по солнцу (D-038): в файле — условное время и привязка.
+            Alarm("a7", 18, 0, Repeat.Once, enabled = true, createdAt = 7L, sun = SunTime(SunEvent.SUNSET, -30)),
         ),
         groups = listOf(AlarmGroup("g1", "Будни", 10L)),
         templates = listOf(
@@ -83,6 +85,12 @@ class BackupTest {
             showAlarmDate = true, defaultWarnings = listOf(60, 5), warningSound = true, haptics = false,
             chimes = Chimes(ChimeEvery.HALF_HOUR, vibrate = true, countHours = false, quiet = true, LocalTime.of(23, 30), LocalTime.of(7, 15), setOf(DayOfWeek.SATURDAY)),
             pomodoro = Pomodoro(50, 10, 30, 3, 2, autoAdvance = true, dnd = true),
+            sun = SunSignals(
+                sunrise = SunSignal(enabled = true, moments = listOf(SunMoment(15, SunSignalKind.ALARM), SunMoment(0))),
+                sunset = SunSignal(enabled = true),
+                sound = AlarmSound.Builtin("dawn"),
+                vibrate = false,
+            ),
         ),
         worldCities = listOf("Asia/Tokyo", "Europe/London"),
     )

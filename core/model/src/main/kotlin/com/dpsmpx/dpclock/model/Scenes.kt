@@ -19,7 +19,6 @@ object Scenes {
         ClockBackground.POLAR_CLOCK,
         ClockBackground.HOURGLASS,
         ClockBackground.MECHANISM,
-        ClockBackground.DIGIT_RAIN,
     )
 }
 

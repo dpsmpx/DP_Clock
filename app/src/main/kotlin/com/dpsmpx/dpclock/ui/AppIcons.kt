@@ -46,6 +46,7 @@ object AppIcons {
     val Up = icon("Up", "M12 19V5 M6 11l6 -6l6 6")
     val Down = icon("Down", "M12 5v14 M6 13l6 6l6 -6")
     val More = icon("More", "M12 6v0.01 M12 12v0.01 M12 18v0.01", width = 3f)
+    val Star = icon("Star", "M12 3.5l2.6 5.4l5.9 0.8l-4.3 4.1l1 5.9L12 17l-5.2 2.7l1 -5.9L3.5 9.7l5.9 -0.8z", filled = true)
     val Moon = icon("Moon", "M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z")
     val Sun = icon(
         "Sun",

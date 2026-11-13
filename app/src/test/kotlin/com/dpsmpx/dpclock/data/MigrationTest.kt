@@ -438,6 +438,57 @@ class MigrationTest {
         assertEquals(emptyList<Map<String, String?>>(), rows(db, "SELECT * FROM task_mark"))
     }
 
+    @Test
+    fun migration18To19KeepsSettingsAndLeavesSunSignalsOff() = withDb { db ->
+        SchemaFile.read(18).create(db)
+        db.execSQL(
+            "INSERT INTO settings (id, snoozeMinutes, autoStopMinutes, alarmOrder, showAlarmCountdown, xiaomiHintsDone, signalStyle, volumeButtons, " +
+                "holidaysRu, bedtimeMode, sleepMinutes, bedtimeHour, bedtimeMinute, bedtimeDays, bedtimeLeadMinutes, " +
+                "weatherMode, weatherPlace, weatherLat, weatherLon, theme, seedColor, clockStyle, clockFont, clockSize, " +
+                "nightNoise, background, highContrast, nightBackground, appBackground, wallpaper, showAlarmDate, defaultWarnings, " +
+                "warningSound, chimes, pomodoro, onboardingDone, haptics) VALUES " +
+                "(0, 15, NULL, 'NEXT', 0, 1, 'NOTIFICATION', 'NOTHING', 1, 'SCHEDULE', 450, 22, 30, 3, 30, " +
+                "'CITY', 'Tula', 54.1931, 37.6177, 'DARK', NULL, 'DIGITS', 'BOLD', 90, 'PINK', 'STARS', 1, 'NONE', 'NONE', " +
+                "'CONSTELLATION', 0, '', 0, '', '', 1, 1)",
+        )
+
+        MIGRATION_18_19.migrate(db)
+
+        val settings = row(db, "SELECT * FROM settings")
+        assertEquals("15", settings["snoozeMinutes"])
+        assertEquals("Tula", settings["weatherPlace"])
+        assertEquals("", settings["sun"])
+    }
+
+    @Test
+    fun migration19To20KeepsAlarmsAndNoneIsKey() = withDb { db ->
+        SchemaFile.read(19).create(db)
+        val columns = rows(db, "PRAGMA table_info(alarm)").filter { it["notnull"] == "1" && it["dflt_value"] == null }.map { it["name"]!! }
+        val values = columns.joinToString(", ") { if (it == "id") "'a'" else if (it == "hour") "7" else "0" }
+        db.execSQL("INSERT INTO alarm (${columns.joinToString(", ")}) VALUES ($values)")
+
+        MIGRATION_19_20.migrate(db)
+
+        val alarm = row(db, "SELECT * FROM alarm")
+        assertEquals("7", alarm["hour"])
+        assertEquals("0", alarm["keyAlarm"])
+    }
+
+    @Test
+    fun migration20To21KeepsAlarmsByTheClock() = withDb { db ->
+        SchemaFile.read(20).create(db)
+        val columns = rows(db, "PRAGMA table_info(alarm)").filter { it["notnull"] == "1" && it["dflt_value"] == null }.map { it["name"]!! }
+        val values = columns.joinToString(", ") { if (it == "id") "'a'" else if (it == "hour") "7" else "0" }
+        db.execSQL("INSERT INTO alarm (${columns.joinToString(", ")}) VALUES ($values)")
+
+        MIGRATION_20_21.migrate(db)
+
+        val alarm = row(db, "SELECT * FROM alarm")
+        assertEquals("7", alarm["hour"])
+        assertEquals(null, alarm["sunEvent"])
+        assertEquals("0", alarm["sunOffset"])
+    }
+
     private data class Column(val type: String, val notNull: Boolean, val primaryKey: Int, val default: String?)
 
     private data class Table(val columns: Map<String, Column>, val indices: Set<String>, val foreignKeys: Set<String>)

@@ -17,10 +17,13 @@
 | `./gradlew :app:lintDebug` | Lint; предупреждения — ошибки |
 | `./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*ScreenshotsTest*'` | снимки экранов на JVM (Robolectric, D-029) — `app/build/screenshots/*.png`; первый раз Gradle качает образ Android 16 (213 МБ) |
 | `./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*SyncRepositoryTest*'` | синхронизация в базе (Robolectric, D-030); тот же образ Android |
+| `./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*SunRepositoryTest*'` | сигналы восхода и заката в будильниках Android (Robolectric, D-035); тот же образ Android |
 | `python3 tools/check-core-api.py` | после сборки `:core:model`: вызовы Java в модели есть в Android minSdk (31) — Lint этот модуль не проверяет (D-020, п. 7) |
 | `python3 tools/make-zones.py` | пересобрать таблицу поясов мировых часов из `zone.tab` базы tz (D-019) |
 | `tools/debug-apk.sh` | APK из закоммиченного дерева — `build/debug-apk/debug-<коммит>.apk` и его SHA-256 |
 | `tools/debug-apk.sh --publish` | то же и новым коммитом в ветку `debug-builds` |
+| `./gradlew :app:assembleRelease` | APK выпуска (D-036) — `app/build/outputs/apk/release/app-release.apk`: код и ресурсы сжаты (около 7 МБ против 46 МБ), имена не скрыты (`app/proguard-rules.pro`), подпись — общим отладочным ключом |
+| `tools/debug-apk.sh --release [--publish]` | то же, что для отладочного, — `release-<коммит>.apk` |
 
 ## Отладочные сборки
 
@@ -30,6 +33,23 @@
 - Строки, которые нужно дописать в конец сообщения коммита сборки (например, подпись автора коммита), передаются переменной `DEBUG_APK_TRAILERS`.
 
 Поставить на телефон: открыть файл в ветке `debug-builds` на GitHub, скачать и открыть его на телефоне; при первой установке разрешить установку из этого источника.
+
+## Сборка выпуска и CI
+
+- Сборка выпуска (D-036, п. 2) — для повседневного использования: меньше и быстрее отладочной. Магазинов нет (D-026), поэтому ключ тот же, `app/debug.keystore`: `release-…apk` ставится поверх `debug-…apk` и наоборот.
+- R8 убирает неиспользуемый код; имена классов остаются — журнал сбоев («Настройки» → «О приложении») читается без таблицы соответствия.
+- Тесты идут на отладочном варианте. Сборку выпуска проверяет только телефон: пункт И1 плана проверки.
+- CI — `.github/workflows/ci.yml`: на push в `main` и на pull request — тесты, Lint, `tools/check-core-api.py`, отладочная сборка и сборка выпуска. Тесты базы и будильников Android на Robolectric (`*RepositoryTest*`, `-Pscreenshots`) идут отдельным шагом; снимки экранов — нет. Без `-Pscreenshots` классы на Robolectric в проверку не входят (список — в `app/build.gradle.kts`): без образа Android они падают до начала теста.
+
+## Выпуск на GitHub
+
+Решение — [D-039](../../DECISIONS/D-039-LICENSE-AND-RELEASES.md). Чтобы выпустить версию:
+
+1. `versionName` и `versionCode` в `app/build.gradle.kts`; запись в `CHANGELOG.md`.
+2. Описание выпуска — `docs/RELEASE_NOTES/<версия>.md`: что нового человеческими словами.
+3. Отправить коммит с описанием на GitHub: процесс **Release** запускается, когда меняется файл в `docs/RELEASE_NOTES/`, и сам ставит тег `v<версия>`. Запустить можно и тегом (`git tag v0.28.1 && git push origin v0.28.1`), и кнопкой «Run workflow».
+
+Процесс `.github/workflows/release.yml` проверит тег и описание, прогонит тесты и Lint, соберёт оба APK и создаст выпуск с описанием и суммами SHA-256. Повторный запуск обновляет тот же выпуск.
 
 ## Сбои загрузки
 

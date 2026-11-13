@@ -122,7 +122,7 @@ fun ClockBackdrop(kind: ClockBackground, active: Boolean, modifier: Modifier = M
         ClockBackground.PARTICLES -> ParticlesBackdrop(animate, interactive, modifier)
         // Эффекты-обои (D-024): тот же рисунок, что на обоях Android.
         ClockBackground.CONSTELLATION, ClockBackground.HYPERCUBE, ClockBackground.POLAR_CLOCK,
-        ClockBackground.HOURGLASS, ClockBackground.MECHANISM, ClockBackground.DIGIT_RAIN,
+        ClockBackground.HOURGLASS, ClockBackground.MECHANISM,
         -> SceneBackdrop(kind, animate, rememberScenePalette(SceneLook.CLOCK), modifier, interactive)
     }
 }

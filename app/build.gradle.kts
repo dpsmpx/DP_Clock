@@ -25,8 +25,8 @@ android {
         applicationId = "com.dpsmpx.dpclock"
         minSdk = 31
         targetSdk = 37
-        versionCode = 27
-        versionName = "0.21.0"
+        versionCode = 35
+        versionName = "0.28.1"
     }
 
     signingConfigs {
@@ -38,6 +38,17 @@ android {
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+        }
+    }
+
+    buildTypes {
+        // Сборка выпуска (D-036, п. 2): со сжатием кода и ресурсов. Магазинов нет (D-026),
+        // поэтому подпись — тем же общим ключом, что у отладочных (D-005): ставится поверх них.
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
@@ -69,7 +80,13 @@ android {
             // Образ Android — из папки, куда его положил Gradle: Robolectric сам в сеть не ходит.
             test.systemProperty("robolectric.offline", "true")
             test.systemProperty("robolectric.dependency.dir", robolectricJars.get().asFile.path)
-            if (screenshots) test.dependsOn(copyRobolectricSdk)
+            if (screenshots) {
+                test.dependsOn(copyRobolectricSdk)
+            } else {
+                // Без образа Android Robolectric падает ещё до теста — на чистой машине (CI) эти
+                // классы в обычную проверку не входят. Новый тест на Robolectric — в этот список.
+                test.exclude("**/ScreenshotsTest*", "**/SyncRepositoryTest*", "**/SunRepositoryTest*")
+            }
             // Robolectric пишет в поля FileDescriptor через SharedSecrets — на Java 17+ их надо открыть.
             test.jvmArgs("--add-opens=java.base/java.io=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
         }

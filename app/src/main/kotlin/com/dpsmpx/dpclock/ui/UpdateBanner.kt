@@ -7,20 +7,22 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,31 +37,48 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.dpsmpx.dpclock.R
 import com.dpsmpx.dpclock.update.UpdateChecker
 import com.dpsmpx.dpclock.update.UpdateDownloader
-import com.dpsmpx.dpclock.update.UpdateInfo
 import com.dpsmpx.dpclock.update.UpdatePrefs
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
-/** Автоскрытие баннера, как у всплывающего уведомления. */
 private const val AUTO_HIDE_MS = 30_000L
 private const val SWIPE_DISMISS_PX = 120f
 
-/**
- * Небольшой баннер поверх интерфейса (не сдвигает раскладку): «Обновить» / «Скрыть»,
- * смахивание в сторону, сам исчезает через 30 с.
- */
+/** Строки обновлений: RU по умолчанию, EN если язык не русский. */
+private class UpdateStrings(ru: Boolean) {
+    val check = if (ru) "Проверять обновления" else "Check for updates"
+    val checkText = if (ru) "Раз в сутки спрашивать у GitHub, не вышла ли новая версия. Никаких сведений о вас в запросе нет." else "Once a day, ask GitHub if a new version is out. Nothing about you is sent."
+    val now = if (ru) "Проверить сейчас" else "Check now"
+    val nowText = if (ru) "Сверить с последним выпуском на GitHub" else "Compare with the latest GitHub release"
+    val action = if (ru) "Обновить" else "Update"
+    val dismiss = if (ru) "Скрыть" else "Hide"
+    fun available(v: String) = if (ru) "Доступна версия $v" else "Version $v is available"
+    val checking = if (ru) "Проверка…" else "Checking…"
+    fun downloading(p: Int) = if (ru) "Скачивание… $p%" else "Downloading… $p%"
+    val upToDate = if (ru) "У вас уже последняя версия" else "You already have the latest version"
+    val failed = if (ru) "Не удалось проверить или скачать обновление" else "Could not check or download the update"
+    val needPermission = if (ru) "Разрешите установку из DP Clock, затем снова нажмите «Обновить»" else "Allow installing apps from DP Clock, then tap Update again"
+}
+
+@Composable
+private fun rememberUpdateStrings(): UpdateStrings {
+    val lang = LocalConfiguration.current.locales[0].language
+    return remember(lang) { UpdateStrings(lang == "ru") }
+}
+
 @Composable
 fun UpdateBannerHost(snackbar: SnackbarHostState? = null) {
     val context = LocalContext.current
+    val s = rememberUpdateStrings()
     val prefs = remember { UpdatePrefs.get(context) }
     val available by prefs.available.collectAsStateWithLifecycle()
     val update = remember(available) { UpdateChecker.pending(context, available) }
@@ -111,16 +130,14 @@ fun UpdateBannerHost(snackbar: SnackbarHostState? = null) {
         ) {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 Text(
-                    stringResource(R.string.update_available, info.version),
+                    s.available(info.version),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
                 if (downloading) {
                     LinearProgressIndicator(
                         progress = { progress / 100f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                     )
                 }
                 Row(
@@ -129,12 +146,9 @@ fun UpdateBannerHost(snackbar: SnackbarHostState? = null) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     TextButton(
-                        onClick = {
-                            prefs.dismiss()
-                            visible = false
-                        },
+                        onClick = { prefs.dismiss(); visible = false },
                         enabled = !downloading,
-                    ) { Text(stringResource(R.string.update_dismiss)) }
+                    ) { Text(s.dismiss) }
                     TextButton(
                         onClick = {
                             if (downloading) return@TextButton
@@ -155,22 +169,19 @@ fun UpdateBannerHost(snackbar: SnackbarHostState? = null) {
                                     }
                                     is UpdateDownloader.Outcome.NeedInstallPermission -> {
                                         downloading = false
-                                        snackbar?.showSnackbar(context.getString(R.string.update_need_permission))
+                                        snackbar?.showSnackbar(s.needPermission)
                                         UpdateDownloader.openInstallPermissionSettings(context)
                                     }
                                     is UpdateDownloader.Outcome.Failed -> {
                                         downloading = false
-                                        snackbar?.showSnackbar(context.getString(R.string.update_failed))
+                                        snackbar?.showSnackbar(s.failed)
                                     }
                                 }
                             }
                         },
                         enabled = !downloading,
                     ) {
-                        Text(
-                            if (downloading) stringResource(R.string.update_downloading, progress)
-                            else stringResource(R.string.update_action),
-                        )
+                        Text(if (downloading) s.downloading(progress) else s.action)
                     }
                 }
             }
@@ -178,7 +189,6 @@ fun UpdateBannerHost(snackbar: SnackbarHostState? = null) {
     }
 }
 
-/** Плановая проверка при открытии приложения и показ баннера при новой версии. */
 @Composable
 fun RememberUpdateCheck() {
     val context = LocalContext.current
@@ -187,10 +197,10 @@ fun RememberUpdateCheck() {
     }
 }
 
-/** Блок в «О приложении»: переключатель, проверка, скачивание. */
 @Composable
 fun UpdateSettingsItems(snackbar: SnackbarHostState) {
     val context = LocalContext.current
+    val s = rememberUpdateStrings()
     val prefs = remember { UpdatePrefs.get(context) }
     val enabled by prefs.enabled.collectAsStateWithLifecycle()
     val available by prefs.available.collectAsStateWithLifecycle()
@@ -199,49 +209,42 @@ fun UpdateSettingsItems(snackbar: SnackbarHostState) {
     var downloading by remember { mutableStateOf(false) }
     var progress by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
-    val upToDate = stringResource(R.string.update_up_to_date)
-    val failed = stringResource(R.string.update_failed)
 
-    androidx.compose.material3.ListItem(
-        headlineContent = { Text(stringResource(R.string.update_check)) },
-        supportingContent = { Text(stringResource(R.string.update_check_text)) },
-        trailingContent = {
-            androidx.compose.material3.Switch(checked = enabled, onCheckedChange = null)
-        },
-        modifier = androidx.compose.foundation.selection.toggleable(
-            value = enabled,
-            role = androidx.compose.ui.semantics.Role.Switch,
-        ) { on -> prefs.setEnabled(on) },
+    ListItem(
+        headlineContent = { Text(s.check) },
+        supportingContent = { Text(s.checkText) },
+        trailingContent = { Switch(checked = enabled, onCheckedChange = null) },
+        modifier = Modifier.toggleable(value = enabled, role = Role.Switch) { on -> prefs.setEnabled(on) },
     )
-    androidx.compose.material3.ListItem(
-        headlineContent = { Text(stringResource(R.string.update_now)) },
+    ListItem(
+        headlineContent = { Text(s.now) },
         supportingContent = {
             Text(
                 when {
-                    downloading -> stringResource(R.string.update_downloading, progress)
-                    checking -> stringResource(R.string.update_checking)
-                    update != null -> stringResource(R.string.update_available, update.version)
-                    else -> stringResource(R.string.update_now_text)
+                    downloading -> s.downloading(progress)
+                    checking -> s.checking
+                    update != null -> s.available(update.version)
+                    else -> s.nowText
                 },
             )
         },
-        modifier = androidx.compose.foundation.clickable(enabled = !checking && !downloading) {
+        modifier = Modifier.clickable(enabled = !checking && !downloading) {
             scope.launch {
                 checking = true
                 when (UpdateChecker.check(context, manual = true)) {
                     UpdateChecker.Result.UPDATE_AVAILABLE -> Unit
-                    UpdateChecker.Result.UP_TO_DATE -> snackbar.showSnackbar(upToDate)
-                    UpdateChecker.Result.FAILED -> snackbar.showSnackbar(failed)
+                    UpdateChecker.Result.UP_TO_DATE -> snackbar.showSnackbar(s.upToDate)
+                    UpdateChecker.Result.FAILED -> snackbar.showSnackbar(s.failed)
                 }
                 checking = false
             }
         },
     )
     if (update != null) {
-        androidx.compose.material3.ListItem(
-            headlineContent = { Text(stringResource(R.string.update_action)) },
-            supportingContent = { Text(stringResource(R.string.update_available, update.version)) },
-            modifier = androidx.compose.foundation.clickable(enabled = !downloading) {
+        ListItem(
+            headlineContent = { Text(s.action) },
+            supportingContent = { Text(s.available(update.version)) },
+            modifier = Modifier.clickable(enabled = !downloading) {
                 if (!update.url.endsWith(".apk")) {
                     context.startActivity(
                         Intent(Intent.ACTION_VIEW, Uri.parse(update.url))
@@ -256,12 +259,12 @@ fun UpdateSettingsItems(snackbar: SnackbarHostState) {
                         is UpdateDownloader.Outcome.Ready -> downloading = false
                         is UpdateDownloader.Outcome.NeedInstallPermission -> {
                             downloading = false
-                            snackbar.showSnackbar(context.getString(R.string.update_need_permission))
+                            snackbar.showSnackbar(s.needPermission)
                             UpdateDownloader.openInstallPermissionSettings(context)
                         }
                         is UpdateDownloader.Outcome.Failed -> {
                             downloading = false
-                            snackbar.showSnackbar(failed)
+                            snackbar.showSnackbar(s.failed)
                         }
                     }
                 }

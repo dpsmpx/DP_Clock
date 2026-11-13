@@ -56,7 +56,7 @@ private const val AUTO_HIDE_MS = 30_000L
 private const val SWIPE_DISMISS_PX = 120f
 
 /** Строки обновлений: RU по умолчанию, EN если язык не русский. */
-private class UpdateStrings(ru: Boolean) {
+private class UpdateStrings(private val ru: Boolean) {
     val check = if (ru) "Проверять обновления" else "Check for updates"
     val checkText = if (ru) "Раз в сутки спрашивать у GitHub, не вышла ли новая версия. Никаких сведений о вас в запросе нет." else "Once a day, ask GitHub if a new version is out. Nothing about you is sent."
     val now = if (ru) "Проверить сейчас" else "Check now"

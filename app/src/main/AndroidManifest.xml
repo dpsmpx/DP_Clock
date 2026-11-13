@@ -2,9 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Разрешения — по D-008 и правилам Google Play (D-006, п. 10). -->
-    <!-- Будильники и таймеры: точное время; выдаётся при установке, отозвать нельзя. -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-    <!-- Android 12–12L: USE_EXACT_ALARM там нет, точные будильники разрешает человек. -->
     <uses-permission
         android:name="android.permission.SCHEDULE_EXACT_ALARM"
         android:maxSdkVersion="32" />
@@ -15,30 +13,22 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- Подтверждение пробуждения QR-кодом или снимком (D-015); спрашивается, только когда выбран такой способ. -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- Погода вашего города в «Мировых часах» (D-019): только запросы к MET Norway. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Задание синхронизации ждёт сети (D-030): без этого разрешения Android 14+ его не ставит. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- Погода по геолокации (D-019): приблизительное место, спрашивается, только когда выбран такой способ. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <!-- Календарь телефона (D-023): только чтение, спрашивается, когда выбирают календари. События не покидают телефон. -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
-    <!-- Свои задачи с флажком «В календарь» (D-032): спрашивается, только когда флажок ставят. -->
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
-    <!-- «Не беспокоить» на работу помидора (D-025): доступ даёт человек в настройках Android, когда включает флажок. -->
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
-    <!-- Живые обои (D-024) — по желанию: без них приложение ставится. -->
+    <!-- Установка APK обновления из кэша (UpdateDownloader). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-feature
         android:name="android.software.live_wallpaper"
         android:required="false" />
-    <!-- Без камеры приложение ставится: остаются другие способы проверки. -->
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />
 
-    <!-- «После будильника — открыть приложение» (D-017): список приложений с иконкой на рабочем столе. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
@@ -46,7 +36,6 @@
         </intent>
     </queries>
 
-    <!-- Будильники, пресеты и настройки — в системной копии и при переносе на новое устройство (D-006, п. 9). -->
     <application
         android:name=".DpClockApp"
         android:allowBackup="true"
@@ -63,16 +52,11 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Ярлыки на иконке (D-020). -->
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
         </activity>
 
-        <!--
-          Стандартные команды Android (D-020): ассистент и другие приложения ставят
-          будильник и таймер. Вызвать могут только приложения с разрешением SET_ALARM.
-        -->
         <activity
             android:name=".AssistantActivity"
             android:excludeFromRecents="true"
@@ -93,7 +77,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Экран сигнала: поверх блокировки и до первой разблокировки после перезагрузки (D-008, п. 5). -->
         <activity
             android:name=".RingActivity"
             android:directBootAware="true"
@@ -104,7 +87,6 @@
             android:taskAffinity=""
             android:turnScreenOn="true" />
 
-        <!-- Ночные часы (D-017): из раздела «Часы» и заставкой Android на зарядке. -->
         <activity
             android:name=".NightClockActivity"
             android:excludeFromRecents="true"
@@ -128,10 +110,6 @@
             android:exported="false"
             android:foregroundServiceType="systemExempted" />
 
-        <!--
-          Живые обои DP Clock (D-024): эффект из настроек на рабочем столе и экране
-          блокировки. Настройки — в базе хранилища устройства: рисуются и до разблокировки.
-        -->
         <service
             android:name=".platform.ClockWallpaper"
             android:directBootAware="true"
@@ -146,7 +124,6 @@
                 android:resource="@xml/wallpaper" />
         </service>
 
-        <!-- Календарь телефона изменился или прошло полдня — перечитать (D-023, п. 6). -->
         <service
             android:name=".platform.CalendarJob"
             android:exported="false"
@@ -155,13 +132,11 @@
             android:name=".platform.SyncJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
-        <!-- Резервная копия по расписанию (D-036). -->
         <service
             android:name=".platform.AutoBackupJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
 
-        <!-- Виджеты (D-020). -->
         <receiver
             android:name=".platform.ClockWidget"
             android:exported="false"
@@ -210,7 +185,6 @@
                 android:resource="@xml/widget_world_info" />
         </receiver>
 
-        <!-- Плитки быстрых настроек (D-020). -->
         <service
             android:name=".platform.SleepTimerTile"
             android:exported="true"
@@ -265,7 +239,6 @@
             android:directBootAware="true"
             android:exported="false" />
 
-        <!-- Пересчёт расписаний: загрузка, смена времени и пояса, обновление (D-008, п. 5). -->
         <receiver
             android:name=".platform.SystemEventsReceiver"
             android:directBootAware="true"
@@ -279,6 +252,16 @@
                 <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

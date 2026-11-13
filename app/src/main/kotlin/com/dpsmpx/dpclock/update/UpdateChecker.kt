@@ -104,7 +104,7 @@ object UpdateChecker {
         val tag = jsonString(body, "tag_name") ?: return null
         val version = tag.removePrefix("v").takeIf { parseVersion(it) != null } ?: return null
         var apkUrl: String? = null
-        val urlRegex = Regex("\"""browser_download_url\"\\s*:\\s*\"([^\"]+)\"\""")
+        val urlRegex = Regex("\"browser_download_url\"\\s*:\\s*\"([^\"]+)\"")
         for (match in urlRegex.findAll(body)) {
             val url = match.groupValues[1]
             if (!url.startsWith(DOWNLOAD_PREFIX) || !url.endsWith(".apk")) continue
@@ -117,12 +117,12 @@ object UpdateChecker {
         return UpdateInfo(version, apkUrl ?: RELEASES_PAGE)
     }
 
-    /** true, если в JSON на верхнем уровне поле [name] — true. */
+    /** true, если в JSON поле [name] равно true. */
     private fun jsonFlag(body: String, name: String): Boolean =
-        Regex("\"""$name\"\\s*:\\s*true\""").containsMatchIn(body)
+        Regex("\"$name\"\\s*:\\s*true").containsMatchIn(body)
 
     private fun jsonString(body: String, name: String): String? =
-        Regex("\"""$name\"\\s*:\\s*\"([^\"]*)\"\""").find(body)?.groupValues?.get(1)
+        Regex("\"$name\"\\s*:\\s*\"([^\"]*)\"").find(body)?.groupValues?.get(1)
 
     /** «1.2.10» → [1, 2, 10]; суффиксы и мусор не разбираются. */
     internal fun parseVersion(version: String): List<Int>? {

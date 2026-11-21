@@ -68,13 +68,11 @@ import com.dpsmpx.dpclock.ui.AppIcons
 import com.dpsmpx.dpclock.ui.ExceptionsScreen
 import com.dpsmpx.dpclock.ui.FitText
 import com.dpsmpx.dpclock.ui.OnboardingDialog
-import com.dpsmpx.dpclock.ui.RememberUpdateCheck
 import com.dpsmpx.dpclock.ui.SettingsScreen
 import com.dpsmpx.dpclock.ui.StatsScreen
 import com.dpsmpx.dpclock.ui.TasksScreen
 import com.dpsmpx.dpclock.ui.TimersSection
 import com.dpsmpx.dpclock.ui.TitleText
-import com.dpsmpx.dpclock.ui.UpdateBannerHost
 import com.dpsmpx.dpclock.ui.WorldClockScreen
 import com.dpsmpx.dpclock.ui.isShown
 import com.dpsmpx.dpclock.ui.orderTitle
@@ -237,8 +235,6 @@ private fun AppRoot(request: SectionRequest) {
         )
     }
 
-    RememberUpdateCheck()
-
     if (settingsOpen) {
         BackHandler { settingsOpen = false }
         SettingsScreen(onBack = { settingsOpen = false }, initialSection = settingsSection)
@@ -353,7 +349,6 @@ private fun AppRoot(request: SectionRequest) {
                 }
             }
         }
-        UpdateBannerHost(snackbar)
     }
 }
 

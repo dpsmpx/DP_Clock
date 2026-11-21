@@ -20,8 +20,6 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
-    <!-- Установка APK обновления из кэша (UpdateDownloader). -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-feature
         android:name="android.software.live_wallpaper"
         android:required="false" />
@@ -253,15 +251,6 @@
             </intent-filter>
         </receiver>
 
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.files"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-        </provider>
     </application>
 
 </manifest>

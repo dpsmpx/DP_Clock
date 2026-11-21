@@ -37,6 +37,8 @@ jobs:
         run: python3 tools/check-core-api.py
       - name: Сборка
         run: ./gradlew --console=plain :app:assembleDebug :app:assembleRelease
+      - name: Проверка разрешений готовых APK (RuStore)
+        run: bash tools/check-no-install-packages.sh app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/release/app-release.apk
       - name: Отчёты при сбое
         if: failure()
         # Хранилище артефактов бывает заполнено — отчёт не должен скрывать настоящую причину сбоя.

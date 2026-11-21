@@ -530,8 +530,6 @@ fun SettingsScreen(onBack: () -> Unit, initialSection: Int? = null) {
                     headlineContent = { Text(stringResource(R.string.app_name)) },
                     supportingContent = { Text(stringResource(R.string.version_value, BuildConfig.VERSION_NAME)) },
                 )
-                // Проверка обновлений из GitHub Releases (0.29.0).
-                UpdateSettingsItems(snackbar)
                 // Журнал сбоев (D-036): остаётся на телефоне, делится им человек сам.
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.crashes)) },

@@ -74,6 +74,9 @@ jobs:
       - name: Сборка
         run: ./gradlew --console=plain :app:assembleRelease :app:assembleDebug
 
+      - name: Проверка разрешений готовых APK (RuStore)
+        run: bash tools/check-no-install-packages.sh app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/release/app-release.apk
+
       - name: Файлы выпуска
         run: |
           VERSION="${{ steps.version.outputs.version }}"

@@ -115,6 +115,8 @@ android {
         // Сверяет версии с сетью: новый выпуск чужой библиотеки ронял бы сборку без
         // изменений в коде. Версии меняются осознанно, в gradle/libs.versions.toml.
         disable += "NewerVersionAvailable"
+        // Android Lint 2026 also reports dependency updates as GradleDependency.
+        disable += "GradleDependency"
         // То же для самого Android Gradle Plugin: выход AGP 9.5.0 ронял Lint на нетронутом коде.
         disable += "AndroidGradlePluginVersion"
     }
